@@ -1,2 +1,2 @@
 # ai-bookkeping-ui
-ai-bookkeepinh-ui
+ai-bookkeeping-ui
