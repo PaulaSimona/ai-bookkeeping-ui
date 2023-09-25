@@ -1,27 +1,33 @@
-# React + TypeScript + Vite
+# AI BOOKKEEPING UI
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React application for AI BOOKKEEPING
 
-Currently, two official plugins are available:
+## Getting starting
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Clone the project
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type aware lint rules:
-
-- Configure the top-level `parserOptions` property like this:
-
-```js
-   parserOptions: {
-    ecmaVersion: 'latest',
-    sourceType: 'module',
-    project: ['./tsconfig.json', './tsconfig.node.json'],
-    tsconfigRootDir: __dirname,
-   },
+```
+git clone https://[GITHUB_TOKEN]@github.com/PaulaSimona/ai-bookkeeping-ui.git
 ```
 
-- Replace `plugin:@typescript-eslint/recommended` to `plugin:@typescript-eslint/recommended-type-checked` or `plugin:@typescript-eslint/strict-type-checked`
-- Optionally add `plugin:@typescript-eslint/stylistic-type-checked`
-- Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and add `plugin:react/recommended` & `plugin:react/jsx-runtime` to the `extends` list
+Install dependencies
+
+```
+cd ai-bookkeeping-ui
+npm install 
+```
+
+Run the project locally
+
+```
+npm run dev
+```
+
+## Commands
+
+* `npm run dev`: Run react application.
+* `npm run build`: Build the static files for the application.
+* `npm run format`: Run Prettier for format all the code.
+* `npm run lint`: Check any Lint issue.
+* `npm run lint:fix`: Review and fix any Lint issue.
+
