@@ -1,0 +1,22 @@
+.layout{
+    &-wrapper{
+        display: flex;
+    }
+    &-top-nav{
+        height: calc(100% - 70px);
+        min-height: 100%;
+        position: fixed;
+        width: 100%;
+    }
+    &-sidebar{
+        min-height: calc(100vh - 71px);
+        transition: all .3s;
+        width: 18rem!important;
+    }
+    &-content{
+        background-color: #f8f9fa;
+        overflow-x: hidden;
+        width: 100%;
+        padding: 1rem;
+    }
+}
