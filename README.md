@@ -17,6 +17,14 @@ cd ai-bookkeeping-ui
 npm install 
 ```
 
+Create a file `.env.development` with all necessary environment variables on `ai-bookkeeping-ui` root directory.
+
+```
+VITE_API_DOMAIN=http://localhost:8000
+VITE_ENVIRONMENT=DEV
+DISABLE_ESLINT_PLUGIN=true
+```
+
 Run the project locally
 
 ```

@@ -1,0 +1,1 @@
+export const API_DOMAIN: string = import.meta.env.VITE_API_DOMAIN;
