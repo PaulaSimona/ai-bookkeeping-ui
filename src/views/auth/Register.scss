@@ -1,0 +1,15 @@
+.register{
+    position: relative;
+    height: 100vh;
+    width: 100%;
+    &-wrapper{
+        position: absolute;
+        top: calc(50% - 80px - 1rem);
+        left: 50%;
+        transform: translateY(-50%) translateX(-50%);
+        min-width: 550px;
+    }
+    .card{
+        min-width: 450px;
+    }
+}
