@@ -1,0 +1,12 @@
+.loader{
+    &-full{
+        position: fixed;
+    }
+    &-wrapper{
+        width: 100vw;
+        height: 100vh;
+        text-align: center;
+        display: table-cell;
+        vertical-align: middle;
+    }
+}

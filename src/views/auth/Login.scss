@@ -1,0 +1,21 @@
+.login{
+    position: relative;
+    height: 100vh;
+    width: 100%;
+    &-wrapper{
+        position: absolute;
+        top: calc(50% - 80px - 1rem);
+        left: 50%;
+        transform: translateY(-50%) translateX(-50%);
+    }
+    .card{
+        min-width: 450px;
+    }
+    .logo-wrapper{
+        text-align: center;
+        padding-bottom: 1rem;
+        img{
+            width: 250px;
+        }
+    }
+}

@@ -1,0 +1,27 @@
+.nav{
+    &-container{
+        padding: 1rem 0;
+        border-bottom: 1px solid rgba(0,0,0,0.2);
+    }
+    .dropdown-toggle::after{
+        display: none;
+    }
+    .logo{
+        width: 200px;
+    }
+}
+.nav-user{
+    padding-right: 1rem;
+    &-name{
+      margin-right: 1rem;
+    }
+    div{
+      display: inline-block;
+    }
+    &-avatar{
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+  }

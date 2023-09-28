@@ -1,0 +1,30 @@
+.sidebar{
+    &-wrapper{
+        padding: 0;
+    }
+    ul{
+        margin: 0;
+        padding: 0;
+        li{
+            border-bottom: 1px solid rgba(0,0,0,0.2);
+            a{
+                display: block;
+                padding: 0.5rem 1rem;
+                width: 100%;
+                text-decoration: none;
+                color: rgba(0,0,0,0.8);
+                &:hover{
+                    color: rgba(0,0,0,1);
+                }
+                &.selected{
+                    background-color: rgba(0,0,0,0.1);
+                    font-weight: bold;
+                    &:hover{
+                        color: rgba(0,0,0,0.8);
+                    }
+                }
+            }
+            
+        }
+    }
+}
