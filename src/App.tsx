@@ -16,6 +16,7 @@ import { Toast } from './components/Toast';
 
 import { type RootState } from './store/store';
 import { updateShow } from './store/features/layoutSlice';
+import { Register } from './views/auth/Register';
 
 const App: FC = () => {
   const { getUser } = useUser();
@@ -37,14 +38,14 @@ const App: FC = () => {
             </RedirectPage>
           }
         />
-        {/* <Route
+        <Route
           path="/register"
           element={
             <RedirectPage>
               <Register getUser={getUser} />
             </RedirectPage>
           }
-        /> */}
+        />
         <Route element={<Layout sidebar={<Sidebar />} />}>
           <Route
             path="/"
