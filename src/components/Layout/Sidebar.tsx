@@ -30,7 +30,11 @@ export const Sidebar: FC = () => {
   const { user } = useUser();
   const sidebarList = [
     { path: '/', icon: 'home', label: 'Home' },
-    { path: '/file_upload', icon: 'file-upload', label: 'Upload documents' },
+    {
+      path: '/upload_documents',
+      icon: 'file-upload',
+      label: 'Upload documents',
+    },
     { path: '/profile', icon: 'user', label: 'My profile' },
     {
       path: '/payments_and_invoices',
