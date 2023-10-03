@@ -27,7 +27,7 @@ const SidebarItem: FC<SidebarItemType> = ({ path, icon, label }) => {
 };
 
 export const Sidebar: FC = () => {
-  const { user } = useUser();
+  const { user } = useUser(false);
   const sidebarList = [
     { path: '/', icon: 'home', label: 'Home' },
     {

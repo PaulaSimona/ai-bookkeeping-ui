@@ -24,7 +24,7 @@ import { Feedback } from './views/feedback';
 import { Contact } from './views/contact';
 
 const App: FC = () => {
-  const { getUser } = useUser();
+  const { getUser } = useUser(true);
   const layout = useSelector((s: RootState) => s.layout);
   const dispatch = useDispatch();
   const updateToast = (value: boolean): void => {
