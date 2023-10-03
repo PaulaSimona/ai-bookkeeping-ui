@@ -57,12 +57,12 @@ export const Login: FC<LoginProps> = ({ getUser }) => {
 
   return (
     <div className="container login">
-      <div className="login-wrapper">
+      <div>
         <div className="logo-wrapper mt-4 text-center">
           <img className="logo" src={logo} alt="AI BOOKKEEPING" />
         </div>
         <div style={{ maxWidth: 500, margin: '0 auto' }} className="mt-4">
-          <Card className="login_box p-4">
+          <Card className="login_box p-4  mb-4">
             <h2>Login</h2>
             <form onSubmit={onLogin}>
               {error && <Alert variant="danger">{error}</Alert>}

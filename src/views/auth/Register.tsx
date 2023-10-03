@@ -69,82 +69,86 @@ export const Register: FC<RegisterType> = ({ getUser }) => {
         <div className="logo-wrapper mt-4 text-center">
           <img className="logo" src={logo} alt="AI BOOKKEEPING" />
         </div>
-        <Card className="p-4 mt-4">
-          <h2>Register</h2>
-          {error && (
-            <Alert variant="danger">Something is wrong, try again later</Alert>
-          )}
-          <Form onSubmit={onRegister}>
+        <div style={{ maxWidth: 500, margin: '0 auto' }}>
+          <Card className="p-4 mt-4 mb-4">
+            <h2>Register</h2>
+            {error && (
+              <Alert variant="danger">
+                Something is wrong, try again later
+              </Alert>
+            )}
+            <Form onSubmit={onRegister}>
+              <div className="mt-4">
+                <FormInput
+                  type="text"
+                  fieldName="first_name"
+                  placeholder="First Name"
+                  value={data.first_name}
+                  onChange={onHandleChange}
+                  errors={[...errorFields.first_name, ...errors.first_name]}
+                />
+              </div>
+              <div className="mt-4">
+                <FormInput
+                  type="text"
+                  fieldName="last_name"
+                  placeholder="Last Name"
+                  value={data.last_name}
+                  onChange={onHandleChange}
+                  errors={[...errorFields.last_name, ...errors.last_name]}
+                />
+              </div>
+              <div className="mt-4">
+                <FormInput
+                  type="text"
+                  fieldName="email"
+                  placeholder="e-mail"
+                  value={data.email}
+                  onChange={onHandleChange}
+                  errors={[...errorFields.email, ...errors.email]}
+                />
+              </div>
+              <div className="mt-4">
+                <FormInput
+                  type="text"
+                  fieldName="phone_number"
+                  placeholder="Phone Number"
+                  value={data.phone_number}
+                  onChange={onHandleChange}
+                  errors={[...errorFields.phone_number, ...errors.phone_number]}
+                />
+              </div>
+              <div className="mt-4">
+                <FormInput
+                  type="password"
+                  fieldName="password"
+                  placeholder="Contraseña"
+                  value={data.password}
+                  onChange={onHandleChange}
+                  errors={[...errorFields.password, ...errors.password]}
+                />
+              </div>
+              <div className="mt-4">
+                <FormInput
+                  type="password"
+                  fieldName="confirm"
+                  placeholder="Confirmar Contraseña"
+                  value={data.confirm}
+                  onChange={onHandleChange}
+                  errors={[...errorFields.confirm, ...errors.confirm]}
+                />
+              </div>
+              <div className="d-grid gap-2 mt-4">
+                <Button disabled={inProgress} type="submit">
+                  Registrarse
+                </Button>
+              </div>
+            </Form>
             <div className="mt-4">
-              <FormInput
-                type="text"
-                fieldName="first_name"
-                placeholder="First Name"
-                value={data.first_name}
-                onChange={onHandleChange}
-                errors={[...errorFields.first_name, ...errors.first_name]}
-              />
+              Have an account? <NavLink to="/login">Login</NavLink>
             </div>
-            <div className="mt-4">
-              <FormInput
-                type="text"
-                fieldName="last_name"
-                placeholder="Last Name"
-                value={data.last_name}
-                onChange={onHandleChange}
-                errors={[...errorFields.last_name, ...errors.last_name]}
-              />
-            </div>
-            <div className="mt-4">
-              <FormInput
-                type="text"
-                fieldName="email"
-                placeholder="e-mail"
-                value={data.email}
-                onChange={onHandleChange}
-                errors={[...errorFields.email, ...errors.email]}
-              />
-            </div>
-            <div className="mt-4">
-              <FormInput
-                type="text"
-                fieldName="phone_number"
-                placeholder="Phone Number"
-                value={data.phone_number}
-                onChange={onHandleChange}
-                errors={[...errorFields.phone_number, ...errors.phone_number]}
-              />
-            </div>
-            <div className="mt-4">
-              <FormInput
-                type="password"
-                fieldName="password"
-                placeholder="Contraseña"
-                value={data.password}
-                onChange={onHandleChange}
-                errors={[...errorFields.password, ...errors.password]}
-              />
-            </div>
-            <div className="mt-4">
-              <FormInput
-                type="password"
-                fieldName="confirm"
-                placeholder="Confirmar Contraseña"
-                value={data.confirm}
-                onChange={onHandleChange}
-                errors={[...errorFields.confirm, ...errors.confirm]}
-              />
-            </div>
-            <div className="d-grid gap-2 mt-4">
-              <Button disabled={inProgress} type="submit">
-                Registrarse
-              </Button>
-            </div>
-          </Form>
-          <div className="mt-4">
-            Have an account? <NavLink to="/login">Login</NavLink>
-          </div>
-        </Card>
+          </Card>
+        </div>
       </div>
     </div>
   );
