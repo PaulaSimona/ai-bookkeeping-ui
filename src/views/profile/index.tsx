@@ -1,4 +1,4 @@
-import { BaseSyntheticEvent, useState, FC } from 'react';
+import { BaseSyntheticEvent, useState, FC, useEffect } from 'react';
 import { Container, Row, Col, FormLabel } from 'react-bootstrap';
 
 import { FormInput } from '../../components/Form/FormInput';
@@ -7,6 +7,7 @@ import { Modal } from '../../components/Modal';
 import { isValid, validate } from '../../utils/validator';
 import { ChangePassword } from './components/ChangePassword';
 import { DeleteProfile } from './components/DeleteProfile';
+import { useProfile } from '../../api/user/useProfile';
 
 export const UserProfile: FC = () => {
   const [showChangePassword, setShowChangePassword] = useState(false);
@@ -27,6 +28,7 @@ export const UserProfile: FC = () => {
     last_name: [],
     phone_number: [],
   };
+  const { profile, getProfile } = useProfile();
 
   const onHandleChange = (event: BaseSyntheticEvent) => {
     setProfileData({ ...profileData, [event.target.name]: event.target.value });
@@ -39,6 +41,23 @@ export const UserProfile: FC = () => {
       // updateProfile(profileData);
     }
   };
+
+  useEffect(() => {
+    if (!profile) {
+      getProfile();
+    }
+  }, [profile, getProfile]);
+
+  useEffect(() => {
+    if (profile) {
+      setProfileData({
+        company_name: profile['company_name'],
+        first_name: profile['first_name'],
+        last_name: profile['last_name'],
+        phone_number: profile['phone_number'],
+      });
+    }
+  }, [profile]);
 
   return (
     <Container style={{ maxWidth: 960 }} className="my-4">
