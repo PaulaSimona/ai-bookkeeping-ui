@@ -1,0 +1,11 @@
+.toast{
+  &_container{
+    position: fixed;
+    bottom: 1rem;
+    right: 1rem;
+    z-index: 1110;
+    .toast.bg-success .toast-body{
+      color: white;
+    }
+  }
+}

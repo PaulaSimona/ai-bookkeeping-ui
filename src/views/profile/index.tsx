@@ -1,5 +1,5 @@
 import { BaseSyntheticEvent, useState, FC, useEffect } from 'react';
-import { Container, Row, Col, FormLabel } from 'react-bootstrap';
+import { Container, Row, Col, FormLabel, Form } from 'react-bootstrap';
 
 import { FormInput } from '../../components/Form/FormInput';
 import { Button } from '../../components/Button/Button';
@@ -8,11 +8,12 @@ import { isValid, validate } from '../../utils/validator';
 import { ChangePassword } from './components/ChangePassword';
 import { DeleteProfile } from './components/DeleteProfile';
 import { useProfile } from '../../api/user/useProfile';
+import { profileType } from '../../types/user';
 
 export const UserProfile: FC = () => {
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showDeleteProfile, setShowDeleteProfile] = useState(false);
-  const [profileData, setProfileData] = useState({
+  const [profileData, setProfileData] = useState<profileType>({
     company_name: '',
     first_name: '',
     last_name: '',
@@ -28,17 +29,18 @@ export const UserProfile: FC = () => {
     last_name: [],
     phone_number: [],
   };
-  const { profile, getProfile } = useProfile();
+  const { profile, getProfile, updateProfile } = useProfile();
 
   const onHandleChange = (event: BaseSyntheticEvent) => {
     setProfileData({ ...profileData, [event.target.name]: event.target.value });
   };
 
-  const onSave = () => {
+  const onSave = (event: BaseSyntheticEvent) => {
+    event.preventDefault();
     const newError = validate(profileData, fields);
     setErrors(newError);
     if (isValid(newError)) {
-      // updateProfile(profileData);
+      updateProfile(profileData);
     }
   };
 
@@ -63,7 +65,7 @@ export const UserProfile: FC = () => {
     <Container style={{ maxWidth: 960 }} className="my-4">
       <Row className="mb-2">
         <Col xl="12">
-          <form className="px-2">
+          <Form className="px-2" onSubmit={onSave}>
             <Row>
               <Col sm="12">
                 <FormInput
@@ -118,10 +120,10 @@ export const UserProfile: FC = () => {
 
             <div className="mt-4 d-flex flex-row-reverse">
               <div className="d-grid gap-2" style={{ width: 200 }}>
-                <Button onClick={onSave} value="Save" />
+                <Button type="submit" value="Save" />
               </div>
             </div>
-          </form>
+          </Form>
           <hr />
           <Row>
             <Col>

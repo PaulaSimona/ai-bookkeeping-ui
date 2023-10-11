@@ -8,7 +8,6 @@ export const Feedback: FC = () => {
 
   const onSubmitFeedback = (event: BaseSyntheticEvent) => {
     event.preventDefault();
-    console.log('onSubmit', feedbackText);
   };
   return (
     <Container>
