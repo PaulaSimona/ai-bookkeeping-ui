@@ -9,25 +9,52 @@ import { ChangePassword } from './components/ChangePassword';
 import { DeleteProfile } from './components/DeleteProfile';
 import { useProfile } from '../../api/user/useProfile';
 import { profileType } from '../../types/user';
+import { Card } from '../../components/Card';
 
 export const UserProfile: FC = () => {
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showDeleteProfile, setShowDeleteProfile] = useState(false);
   const [profileData, setProfileData] = useState<profileType>({
     company_name: '',
+    company_bn: '',
+    company_address_street: '',
+    company_address_no: '',
+    company_address_province: '',
+    company_address_city: '',
+    company_address_postal_code: '',
+
     first_name: '',
     last_name: '',
     phone_number: '',
+    email: '',
   });
   const [errors, setErrors] = useState<{ [k: string]: string[] }>({
+    company_name: [],
+    company_bn: [],
+    company_address_street: [],
+    company_address_no: [],
+    company_address_province: [],
+    company_address_city: [],
+    company_address_postal_code: [],
+
     first_name: [],
     last_name: [],
     phone_number: [],
+    email: [],
   });
   const fields = {
+    company_name: [],
+    company_bn: [],
+    company_address_street: [],
+    company_address_no: [],
+    company_address_province: [],
+    company_address_city: [],
+    company_address_postal_code: [],
+
     first_name: [],
     last_name: [],
     phone_number: [],
+    email: [],
   };
   const { profile, getProfile, updateProfile } = useProfile();
 
@@ -52,12 +79,13 @@ export const UserProfile: FC = () => {
 
   useEffect(() => {
     if (profile) {
-      setProfileData({
+      setProfileData((pd) => ({
+        ...pd,
         company_name: profile['company_name'],
         first_name: profile['first_name'],
         last_name: profile['last_name'],
         phone_number: profile['phone_number'],
-      });
+      }));
     }
   }, [profile]);
 
@@ -66,58 +94,140 @@ export const UserProfile: FC = () => {
       <Row className="mb-2">
         <Col xl="12">
           <Form className="px-2" onSubmit={onSave}>
-            <Row>
-              <Col sm="12">
-                <FormInput
-                  label="Company Name - Optional"
-                  fieldName="company_name"
-                  value={profileData.company_name}
-                  placeholder="First Name"
-                  onChange={onHandleChange}
-                  errors={errors.company_name}
-                  classes="mt-2"
-                />
-              </Col>
-            </Row>
-            <Row>
-              <Col sm="6">
-                <FormInput
-                  label="First Name"
-                  fieldName="first_name"
-                  value={profileData.first_name}
-                  placeholder="First Name"
-                  onChange={onHandleChange}
-                  errors={errors.first_name}
-                  classes="mt-2"
-                />
-              </Col>
-              <Col sm="6">
-                <FormInput
-                  label="Last Name"
-                  fieldName="last_name"
-                  value={profileData.last_name}
-                  placeholder="Last Name"
-                  onChange={onHandleChange}
-                  errors={errors.last_name}
-                  classes="mt-2"
-                />
-              </Col>
-            </Row>
+            <Card>
+              <Row>
+                <Col sm="6">
+                  <FormInput
+                    label="Company Name:"
+                    fieldName="company_name"
+                    value={profileData.company_name}
+                    placeholder=""
+                    onChange={onHandleChange}
+                    errors={errors.company_name}
+                    classes="mt-2"
+                  />
+                </Col>
+                <Col sm="6">
+                  <FormInput
+                    label="BN:"
+                    fieldName="company_bn"
+                    value={profileData.company_bn}
+                    placeholder=""
+                    onChange={onHandleChange}
+                    errors={errors.company_bn}
+                    classes="mt-2"
+                  />
+                </Col>
+              </Row>
+              <Row className="align-items-end">
+                <Col sm="6">
+                  <FormInput
+                    label="Company Address:"
+                    fieldName="company_address_street"
+                    value={profileData.company_address_street}
+                    placeholder="Street"
+                    onChange={onHandleChange}
+                    errors={errors.company_address_street}
+                    classes="mt-2"
+                  />
+                </Col>
+                <Col sm="6">
+                  <FormInput
+                    label=""
+                    fieldName="company_address_no"
+                    value={profileData.company_address_no}
+                    placeholder="No."
+                    onChange={onHandleChange}
+                    errors={errors.company_address_no}
+                    classes="mt-2"
+                  />
+                </Col>
+              </Row>
+              <Row className="mt-4">
+                <Col sm="3">
+                  <FormInput
+                    fieldName="company_address_province"
+                    value={profileData.company_address_province}
+                    placeholder="Province"
+                    onChange={onHandleChange}
+                    errors={errors.company_address_province}
+                    classes="mt-2"
+                  />
+                </Col>
+                <Col sm="3">
+                  <FormInput
+                    fieldName="company_address_city"
+                    value={profileData.company_address_city}
+                    placeholder="City"
+                    onChange={onHandleChange}
+                    errors={errors.company_address_city}
+                    classes="mt-2"
+                  />
+                </Col>
+                <Col sm="6">
+                  <FormInput
+                    label=""
+                    fieldName="company_address_postal_code"
+                    value={profileData.company_address_postal_code}
+                    placeholder="Postal Code"
+                    onChange={onHandleChange}
+                    errors={errors.company_address_postal_code}
+                    classes="mt-2"
+                  />
+                </Col>
+              </Row>
+            </Card>
+            <Card className="mt-4">
+              <Row>
+                <Col sm="6">
+                  <FormInput
+                    label="First Name"
+                    fieldName="first_name"
+                    value={profileData.first_name}
+                    placeholder=""
+                    onChange={onHandleChange}
+                    errors={errors.first_name}
+                    classes="mt-2"
+                  />
+                </Col>
+                <Col sm="6">
+                  <FormInput
+                    label="Last Name"
+                    fieldName="last_name"
+                    value={profileData.last_name}
+                    placeholder=""
+                    onChange={onHandleChange}
+                    errors={errors.last_name}
+                    classes="mt-2"
+                  />
+                </Col>
+              </Row>
 
-            <Row>
-              <Col sm="6">
-                <FormInput
-                  label="Phone Number"
-                  fieldName="phone_number"
-                  value={profileData.phone_number}
-                  placeholder="Phone Number"
-                  onChange={onHandleChange}
-                  errors={errors.phone_number}
-                  classes="mt-2"
-                />
-              </Col>
-            </Row>
-
+              <Row>
+                <Col sm="6">
+                  <FormInput
+                    label="Phone Number"
+                    fieldName="phone_number"
+                    value={profileData.phone_number}
+                    placeholder=""
+                    onChange={onHandleChange}
+                    errors={errors.phone_number}
+                    classes="mt-2"
+                  />
+                </Col>
+                <Col sm="6">
+                  <FormInput
+                    label="E-mail address"
+                    fieldName="email"
+                    value={profileData.email}
+                    placeholder=""
+                    onChange={onHandleChange}
+                    errors={errors.email}
+                    classes="mt-2"
+                  />
+                </Col>
+              </Row>
+            </Card>
             <div className="mt-4 d-flex flex-row-reverse">
               <div className="d-grid gap-2" style={{ width: 200 }}>
                 <Button type="submit" value="Save" />
