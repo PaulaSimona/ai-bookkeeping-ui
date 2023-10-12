@@ -1,5 +1,5 @@
 import { BaseSyntheticEvent, useState, FC, useEffect } from 'react';
-import { Container, Row, Col, FormLabel, Form } from 'react-bootstrap';
+import { Container, Row, Col, Form } from 'react-bootstrap';
 
 import { FormInput } from '../../components/Form/FormInput';
 import { Button } from '../../components/Button/Button';
@@ -12,8 +12,9 @@ import { profileType } from '../../types/user';
 import { Card } from '../../components/Card';
 
 export const UserProfile: FC = () => {
-  const [showChangePassword, setShowChangePassword] = useState(false);
   const [showDeleteProfile, setShowDeleteProfile] = useState(false);
+  const [errorDelete, setErrorDelete] = useState<string[]>([]);
+  const [deleteInput, setDeleteInput] = useState('');
   const [profileData, setProfileData] = useState<profileType>({
     company_name: '',
     company_bn: '',
@@ -89,12 +90,22 @@ export const UserProfile: FC = () => {
     }
   }, [profile]);
 
+  const onClickDeleteButton = (e: BaseSyntheticEvent) => {
+    e.preventDefault();
+    if (deleteInput == 'delete') {
+      setShowDeleteProfile(true);
+    } else {
+      setErrorDelete([`this field must be "delete"`]);
+    }
+  };
+
   return (
     <Container style={{ maxWidth: 960 }} className="my-4">
       <Row className="mb-2">
         <Col xl="12">
+          <h2 className="px-2 mb-4">My Profile</h2>
           <Form className="px-2" onSubmit={onSave}>
-            <Card>
+            <Card className="p-2">
               <Row>
                 <Col sm="6">
                   <FormInput
@@ -177,7 +188,7 @@ export const UserProfile: FC = () => {
                 </Col>
               </Row>
             </Card>
-            <Card className="mt-4">
+            <Card className="mt-4 p-2">
               <Row>
                 <Col sm="6">
                   <FormInput
@@ -234,52 +245,56 @@ export const UserProfile: FC = () => {
               </div>
             </div>
           </Form>
+
           <hr />
-          <Row>
-            <Col>
-              <div className="mt-4">
-                <FormLabel>Change Password</FormLabel>
-                <br />
-                <div className="d-grid gap-2" style={{ width: 200 }}>
-                  <Button
-                    onClick={() => {
-                      setShowChangePassword(true);
-                    }}
-                    value="Change Password"
-                  />
-                </div>
-              </div>
-            </Col>
-            <Col>
-              <div className="mt-4">
-                <FormLabel>Delete Profile</FormLabel>
-                <br />
-                <div className="d-grid gap-2" style={{ width: 200 }}>
-                  <Button
-                    onClick={() => {
-                      setShowDeleteProfile(true);
-                    }}
-                    value="Delete"
-                    variant="danger"
-                    style={{ with: 200 }}
-                  />
-                </div>
-              </div>
-            </Col>
-          </Row>
-          {/* <Notifications /> */}
+
+          <div className="px-2">
+            <Row>
+              <Col>
+                <ChangePassword handleClose={() => {}} />
+              </Col>
+            </Row>
+          </div>
+
+          <hr />
+
+          <div className="px-2">
+            <Row>
+              <Col>
+                <Card>
+                  <h3 className="mb-4">Delete Profile</h3>
+                  <Form onSubmit={onClickDeleteButton}>
+                    <Row className="mt-2">
+                      <Col md="6" className="mb-4">
+                        <FormInput
+                          fieldName="email"
+                          value={deleteInput}
+                          placeholder={`write: "delete"`}
+                          onChange={(e) => {
+                            setDeleteInput(e.target.value);
+                          }}
+                          errors={errorDelete}
+                        />
+                      </Col>
+                      <Col md="6">
+                        <div style={{ float: 'right' }}>
+                          <Button
+                            type="submit"
+                            value="Delete Profile"
+                            variant="danger"
+                            style={{ width: 200 }}
+                          />
+                        </div>
+                      </Col>
+                    </Row>
+                  </Form>
+                </Card>
+              </Col>
+            </Row>
+          </div>
         </Col>
       </Row>
-      <Modal
-        opened={showChangePassword}
-        title="Change Password"
-        contain={
-          <ChangePassword handleClose={() => setShowChangePassword(false)} />
-        }
-        handleClose={() => setShowChangePassword(false)}
-        onAccept={() => setShowChangePassword(false)}
-        noActions
-      />
+
       <Modal
         opened={showDeleteProfile}
         title="Delete Profile?"

@@ -2,12 +2,10 @@ import { BaseSyntheticEvent, FC, useState } from 'react';
 import { Button } from '../../../components/Button/Button';
 import { FormInput } from '../../../components/Form/FormInput';
 import { isValid, validate, VALIDATION } from '../../../utils/validator';
+import { Col, Form, Row } from 'react-bootstrap';
+import { Card } from '../../../components/Card';
 
-interface ChangePasswordType {
-  handleClose: () => any;
-}
-
-export const ChangePassword: FC<ChangePasswordType> = ({ handleClose }) => {
+export const ChangePassword: FC = () => {
   const [data, setData] = useState({
     old_password: '',
     new_password: '',
@@ -42,63 +40,63 @@ export const ChangePassword: FC<ChangePasswordType> = ({ handleClose }) => {
   };
 
   return (
-    <form onSubmit={onAccept}>
-      <div>
-        <FormInput
-          label="Current Password"
-          fieldName="old_password"
-          value={data.old_password}
-          placeholder="Current Password"
-          type="password"
-          onChange={onHandleChange}
-          errors={[
-            ...errors.old_password /* , ...src/views/profile/components/.old_password */,
-          ]}
-          classes="mb-1"
-        />
+    <Card className="p-2">
+      <Form onSubmit={onAccept}>
+        <Row className="align-items-end">
+          <Col md="6">
+            <h3>Change Password</h3>
+            <FormInput
+              label="Current Password"
+              fieldName="old_password"
+              value={data.old_password}
+              placeholder="Current Password"
+              type="password"
+              onChange={onHandleChange}
+              errors={[
+                ...errors.old_password /* , ...src/views/profile/components/.old_password */,
+              ]}
+              classes="mb-1"
+            />
 
-        <FormInput
-          label="New Password"
-          fieldName="new_password"
-          value={data.new_password}
-          placeholder="New Password"
-          type="password"
-          onChange={onHandleChange}
-          errors={[
-            ...errors.new_password /* , ...src/views/profile/components/.new_password */,
-          ]}
-          classes="my-1"
-        />
+            <FormInput
+              label="New Password"
+              fieldName="new_password"
+              value={data.new_password}
+              placeholder="New Password"
+              type="password"
+              onChange={onHandleChange}
+              errors={[
+                ...errors.new_password /* , ...src/views/profile/components/.new_password */,
+              ]}
+              classes="my-1"
+            />
 
-        <FormInput
-          label="Confirm New Password"
-          fieldName="new_password2"
-          value={data.new_password2}
-          placeholder="Confirm New Password"
-          type="password"
-          onChange={onHandleChange}
-          errors={[...errors.new_password2 /* , ...errorField.new_password2 */]}
-          classes="my-1"
-        />
-      </div>
-      <div className="modal-actions mt-4">
-        <div className="d-inline-block">
-          <Button
-            className="mr-2"
-            variant="secondary"
-            onClick={handleClose}
-            value="Cancel"
-          />
-        </div>
-        <div className="d-inline-block" style={{ float: 'right' }}>
-          <Button
-            className="ml-2 float-right"
-            variant="primary"
-            /* disabled={loading} */ type="submit"
-            value="Change Password"
-          />
-        </div>
-      </div>
-    </form>
+            <FormInput
+              label="Confirm New Password"
+              fieldName="new_password2"
+              value={data.new_password2}
+              placeholder="Confirm New Password"
+              type="password"
+              onChange={onHandleChange}
+              errors={[
+                ...errors.new_password2 /* , ...errorField.new_password2 */,
+              ]}
+              classes="my-1"
+            />
+          </Col>
+          <Col className="modal-actions mt-4 " md={6}>
+            <div className="d-inline-block" style={{ float: 'right' }}>
+              <Button
+                className="ml-2 float-right"
+                variant="primary"
+                /* disabled={loading} */ type="submit"
+                value="Change Password"
+                style={{ width: 200 }}
+              />
+            </div>
+          </Col>
+        </Row>
+      </Form>
+    </Card>
   );
 };
