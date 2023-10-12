@@ -17,26 +17,28 @@ export const UserProfile: FC = () => {
   const [deleteInput, setDeleteInput] = useState('');
   const [profileData, setProfileData] = useState<profileType>({
     company_name: '',
-    company_bn: '',
-    company_address_street: '',
-    company_address_no: '',
-    company_address_province: '',
-    company_address_city: '',
-    company_address_postal_code: '',
+    company_business_number: '',
+    company_address: '',
+    company_number: '',
+    company_province: '',
+    company_city: '',
+    company_postal_code: '',
 
     first_name: '',
     last_name: '',
     phone_number: '',
     email: '',
+    role: '',
+    is_active: true,
   });
   const [errors, setErrors] = useState<{ [k: string]: string[] }>({
     company_name: [],
-    company_bn: [],
-    company_address_street: [],
-    company_address_no: [],
-    company_address_province: [],
-    company_address_city: [],
-    company_address_postal_code: [],
+    company_business_number: [],
+    company_address: [],
+    company_number: [],
+    company_province: [],
+    company_city: [],
+    company_postal_code: [],
 
     first_name: [],
     last_name: [],
@@ -45,12 +47,12 @@ export const UserProfile: FC = () => {
   });
   const fields = {
     company_name: [],
-    company_bn: [],
-    company_address_street: [],
-    company_address_no: [],
-    company_address_province: [],
-    company_address_city: [],
-    company_address_postal_code: [],
+    company_business_number: [],
+    company_address: [],
+    company_number: [],
+    company_province: [],
+    company_city: [],
+    company_postal_code: [],
 
     first_name: [],
     last_name: [],
@@ -80,13 +82,7 @@ export const UserProfile: FC = () => {
 
   useEffect(() => {
     if (profile) {
-      setProfileData((pd) => ({
-        ...pd,
-        company_name: profile['company_name'],
-        first_name: profile['first_name'],
-        last_name: profile['last_name'],
-        phone_number: profile['phone_number'],
-      }));
+      setProfileData(profile);
     }
   }, [profile]);
 
@@ -121,11 +117,11 @@ export const UserProfile: FC = () => {
                 <Col sm="6">
                   <FormInput
                     label="BN:"
-                    fieldName="company_bn"
-                    value={profileData.company_bn}
+                    fieldName="company_business_number"
+                    value={profileData.company_business_number}
                     placeholder=""
                     onChange={onHandleChange}
-                    errors={errors.company_bn}
+                    errors={errors.company_business_number}
                     classes="mt-2"
                   />
                 </Col>
@@ -134,22 +130,22 @@ export const UserProfile: FC = () => {
                 <Col sm="6">
                   <FormInput
                     label="Company Address:"
-                    fieldName="company_address_street"
-                    value={profileData.company_address_street}
+                    fieldName="company_address"
+                    value={profileData.company_address}
                     placeholder="Street"
                     onChange={onHandleChange}
-                    errors={errors.company_address_street}
+                    errors={errors.company_address}
                     classes="mt-2"
                   />
                 </Col>
                 <Col sm="6">
                   <FormInput
                     label=""
-                    fieldName="company_address_no"
-                    value={profileData.company_address_no}
+                    fieldName="company_number"
+                    value={profileData.company_number}
                     placeholder="No."
                     onChange={onHandleChange}
-                    errors={errors.company_address_no}
+                    errors={errors.company_number}
                     classes="mt-2"
                   />
                 </Col>
@@ -157,32 +153,32 @@ export const UserProfile: FC = () => {
               <Row className="mt-4">
                 <Col sm="3">
                   <FormInput
-                    fieldName="company_address_province"
-                    value={profileData.company_address_province}
+                    fieldName="company_province"
+                    value={profileData.company_province}
                     placeholder="Province"
                     onChange={onHandleChange}
-                    errors={errors.company_address_province}
+                    errors={errors.company_province}
                     classes="mt-2"
                   />
                 </Col>
                 <Col sm="3">
                   <FormInput
-                    fieldName="company_address_city"
-                    value={profileData.company_address_city}
+                    fieldName="company_city"
+                    value={profileData.company_city}
                     placeholder="City"
                     onChange={onHandleChange}
-                    errors={errors.company_address_city}
+                    errors={errors.company_city}
                     classes="mt-2"
                   />
                 </Col>
                 <Col sm="6">
                   <FormInput
                     label=""
-                    fieldName="company_address_postal_code"
-                    value={profileData.company_address_postal_code}
+                    fieldName="company_postal_code"
+                    value={profileData.company_postal_code}
                     placeholder="Postal Code"
                     onChange={onHandleChange}
-                    errors={errors.company_address_postal_code}
+                    errors={errors.company_postal_code}
                     classes="mt-2"
                   />
                 </Col>
@@ -251,7 +247,7 @@ export const UserProfile: FC = () => {
           <div className="px-2">
             <Row>
               <Col>
-                <ChangePassword handleClose={() => {}} />
+                <ChangePassword />
               </Col>
             </Row>
           </div>
