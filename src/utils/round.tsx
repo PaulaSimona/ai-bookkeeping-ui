@@ -23,7 +23,7 @@ export const roundDown: functionType = (num) => Math.floor(num);
  * @param {number} dec: number of decimals, default = 2
  * @return number: rounded with a number of decimals
  */
-export const round: (num: number, dec: number) => number = (
+export const round: (num: number, dec?: number) => number = (
   num: number,
   dec: number = 2,
 ) => Math.round(num * 10 ** dec) / 10 ** dec;
