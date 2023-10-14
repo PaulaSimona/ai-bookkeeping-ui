@@ -10,6 +10,7 @@ import { DeleteProfile } from './components/DeleteProfile';
 import { useProfile } from '../../api/user/useProfile';
 import { profileType } from '../../types/user';
 import { Card } from '../../components/Card';
+import flag from '../../assets/flag.svg';
 
 export const UserProfile: FC = () => {
   const [showDeleteProfile, setShowDeleteProfile] = useState(false);
@@ -96,12 +97,15 @@ export const UserProfile: FC = () => {
   };
 
   return (
-    <Container style={{ maxWidth: 960 }} className="my-4">
+    <Container style={{ maxWidth: 960 }} className="my-4 profile">
       <Row className="mb-2">
         <Col xl="12">
           <h2 className="px-2 mb-4">My Profile</h2>
           <Form className="px-2" onSubmit={onSave}>
-            <Card className="p-2">
+            <Card className="p-2 position-relative">
+              <div className="position-absolute flag-wrapper">
+                <img src={flag} />
+              </div>
               <Row>
                 <Col sm="6">
                   <FormInput
@@ -114,7 +118,7 @@ export const UserProfile: FC = () => {
                     classes="mt-2"
                   />
                 </Col>
-                <Col sm="6">
+                <Col md={3} sm={6}>
                   <FormInput
                     label="BN:"
                     fieldName="company_business_number"
@@ -138,7 +142,7 @@ export const UserProfile: FC = () => {
                     classes="mt-2"
                   />
                 </Col>
-                <Col sm="6">
+                <Col md={3} sm={6}>
                   <FormInput
                     label=""
                     fieldName="company_number"
@@ -171,7 +175,7 @@ export const UserProfile: FC = () => {
                     classes="mt-2"
                   />
                 </Col>
-                <Col sm="6">
+                <Col md={3} sm={6}>
                   <FormInput
                     label=""
                     fieldName="company_postal_code"
