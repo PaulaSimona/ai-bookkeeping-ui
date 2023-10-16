@@ -166,14 +166,6 @@ export const UserProfile: FC = () => {
                     onChange={onHandleChange}
                     errors={errors.company_province}
                   />
-                  {/* <FormInput
-                    fieldName="company_province"
-                    value={profileData.company_province}
-                    placeholder="Province"
-                    onChange={onHandleChange}
-                    errors={errors.company_province}
-                    classes="mt-2"
-                  /> */}
                 </Col>
                 <Col sm="3">
                   <FormInput
