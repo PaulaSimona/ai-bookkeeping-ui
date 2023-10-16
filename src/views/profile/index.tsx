@@ -11,6 +11,8 @@ import { useProfile } from '../../api/user/useProfile';
 import { profileType } from '../../types/user';
 import { Card } from '../../components/Card';
 import flag from '../../assets/flag.svg';
+import { FormSelect } from '../../components/Form/FormSelect';
+import { PROVINCES_CANADA_LIST } from '../../utils/constants';
 
 export const UserProfile: FC = () => {
   const [showDeleteProfile, setShowDeleteProfile] = useState(false);
@@ -156,14 +158,22 @@ export const UserProfile: FC = () => {
               </Row>
               <Row className="mt-4">
                 <Col sm="3">
-                  <FormInput
+                  <FormSelect
+                    classes="mt-2"
+                    fieldName="company_province"
+                    value={profileData.company_province}
+                    options={PROVINCES_CANADA_LIST}
+                    onChange={onHandleChange}
+                    errors={errors.company_province}
+                  />
+                  {/* <FormInput
                     fieldName="company_province"
                     value={profileData.company_province}
                     placeholder="Province"
                     onChange={onHandleChange}
                     errors={errors.company_province}
                     classes="mt-2"
-                  />
+                  /> */}
                 </Col>
                 <Col sm="3">
                   <FormInput
