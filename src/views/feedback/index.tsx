@@ -2,13 +2,19 @@ import { BaseSyntheticEvent, FC, useState } from 'react';
 import { Col, Container, Row } from 'react-bootstrap';
 import Form from 'react-bootstrap/Form';
 import { Button } from '../../components/Button/Button';
+import { useFeedback } from '../../api/feedback/useFeedback';
 
 export const Feedback: FC = () => {
   const [feedbackText, setFeedbackText] = useState('');
+  const { sendFeedback } = useFeedback();
 
   const onSubmitFeedback = (event: BaseSyntheticEvent) => {
     event.preventDefault();
+    sendFeedback({ feedback: feedbackText }).then(() => {
+      setFeedbackText('');
+    });
   };
+
   return (
     <Container>
       <Row className="mb-2">
