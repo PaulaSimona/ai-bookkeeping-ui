@@ -10,7 +10,7 @@ export const useFeedback = () => {
   const sendFeedback = async (data: feedbackType) => {
     return api.post('/api/feedback', data).then(() => {
       showToast({
-        title: 'Updated',
+        title: 'Feedback sent',
         message: 'Feedback was sent successfully.',
         variant: 'success',
       });
