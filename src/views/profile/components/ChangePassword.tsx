@@ -4,8 +4,10 @@ import { FormInput } from '../../../components/Form/FormInput';
 import { isValid, validate, VALIDATION } from '../../../utils/validator';
 import { Col, Form, Row } from 'react-bootstrap';
 import { Card } from '../../../components/Card';
+import { useChangePassword } from '../../../api/user/useChangePassword';
 
 export const ChangePassword: FC = () => {
+  const { changePassword } = useChangePassword();
   const [data, setData] = useState({
     old_password: '',
     new_password: '',
@@ -35,7 +37,21 @@ export const ChangePassword: FC = () => {
     setErrors(newErrors);
     if (isValid(newErrors)) {
       // TODO: update when API is ready
-      // changePassword(data);
+      changePassword(data).then((response) => {
+        if (response.status === 200) {
+          setData({
+            old_password: '',
+            new_password: '',
+            new_password2: '',
+          });
+        } else {
+          console.log(response.data);
+          setErrors({
+            ...errors,
+            ...response.data,
+          });
+        }
+      });
     }
   };
 
