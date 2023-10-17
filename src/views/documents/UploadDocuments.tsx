@@ -103,10 +103,10 @@ export const UploadDocuments: FC = () => {
         </Col>
       </Row>
       <Row>
-        <Col xs={12} lg={6} className="mb-4">
-          <div className="text-center">
+        <Col xs={12} className="mb-4">
+          <div className="d-grid gap-2">
             <Button
-              variant="outline-primary"
+              variant="primary"
               icon="upload"
               value="UPLOAD DOCUMENTS"
               onClick={onUploadDocuments}
@@ -114,8 +114,21 @@ export const UploadDocuments: FC = () => {
             />
           </div>
         </Col>
+      </Row>
+      <Row>
         <Col xs={12} lg={6} className="mb-4">
-          <div className="text-center">
+          <div className="d-grid gap-2">
+            <Button
+              variant="outline-primary"
+              icon="eye"
+              value="VIEW DOCUMENTS"
+              onClick={onUploadDocuments}
+              disabled={files.length == 0}
+            />
+          </div>
+        </Col>
+        <Col xs={12} lg={6} className="mb-4">
+          <div className="d-grid gap-2">
             <Button
               variant="success"
               icon="download"
