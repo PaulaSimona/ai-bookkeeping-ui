@@ -11,12 +11,16 @@
     &-sidebar{
         min-height: calc(100vh - 71px);
         transition: all .3s;
-        width: 18rem!important;
-    }
-    &-content{
-        background-color: #f8f9fa;
-        overflow-x: hidden;
-        width: 100%;
-        padding: 1rem;
-    }
+        width: 20rem !important;
+        font-size: 1rem;
+        padding: 1.5rem;
+        background: rgb(170 225 255);
+        color: white !important;
+        }
+        &-content{
+            background-color: #f8f9fa;
+            overflow-x: hidden;
+            width: 100%;
+            padding: 1rem;
+        }
 }

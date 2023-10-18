@@ -62,7 +62,7 @@ export const UserProfile: FC = () => {
     phone_number: [],
     email: [],
   };
-  const { profile, getProfile, updateProfile } = useProfile();
+  const { profile, getProfile, updateProfile, deleteProfile } = useProfile();
 
   const onHandleChange = (event: BaseSyntheticEvent) => {
     setProfileData({ ...profileData, [event.target.name]: event.target.value });
@@ -92,10 +92,15 @@ export const UserProfile: FC = () => {
   const onClickDeleteButton = (e: BaseSyntheticEvent) => {
     e.preventDefault();
     if (deleteInput == 'delete') {
+      setErrorDelete([]);
       setShowDeleteProfile(true);
     } else {
       setErrorDelete([`this field must be "delete"`]);
     }
+  };
+
+  const onDeleteAccount = () => {
+    deleteProfile({ command: deleteInput });
   };
 
   return (
@@ -305,6 +310,7 @@ export const UserProfile: FC = () => {
             handleClose={() => {
               setShowDeleteProfile(false);
             }}
+            handleOnAccept={onDeleteAccount}
           />
         }
         handleClose={() => setShowDeleteProfile(false)}

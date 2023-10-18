@@ -4,11 +4,15 @@ import api from '../../utils/api';
 import { setProfile } from '../../store/features/profileSlice';
 import { profileType } from '../../types/user';
 import { useToast } from '../../hooks/useToast';
+import { removeAuth } from '../../utils/auth';
+import { setUser } from '../../store/features/authSlice';
+import { useNavigate } from 'react-router-dom';
 
 export const useProfile = () => {
   const profile = useSelector((s: RootState) => s.profile.profile);
   const dispatch = useDispatch();
   const { showToast } = useToast();
+  const navigate = useNavigate();
 
   const getProfile = () => {
     api.get('/api/user/profile').then((response) => {
@@ -84,9 +88,27 @@ export const useProfile = () => {
       });
   };
 
+  const deleteProfile = async (data: { command: string }) => {
+    return api.post('/api/user/deactivate-user', data).then((response) => {
+      if (response.status === 200) {
+        showToast({
+          title: 'Deleted',
+          message: 'Profile was deleted successfully.',
+          variant: 'success',
+        });
+        setTimeout(() => {
+          dispatch(setUser(null));
+          removeAuth();
+          navigate('/login');
+        }, 3000);
+      }
+    });
+  };
+
   return {
     profile,
     getProfile,
     updateProfile,
+    deleteProfile,
   };
 };

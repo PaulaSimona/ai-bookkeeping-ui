@@ -4,15 +4,22 @@ import { FormCheck } from 'react-bootstrap';
 
 interface ChangePasswordType {
   handleClose: () => any;
+  handleOnAccept: () => any;
 }
 
-export const DeleteProfile: FC<ChangePasswordType> = ({ handleClose }) => {
+export const DeleteProfile: FC<ChangePasswordType> = ({
+  handleClose,
+  handleOnAccept,
+}) => {
   const [agree, setAgree] = useState(false);
 
   const onAccept = (event: BaseSyntheticEvent) => {
     event.preventDefault();
     // TODO: request for Delete Profile
-    handleClose();
+    if (agree) {
+      handleOnAccept();
+      handleClose();
+    }
   };
 
   return (

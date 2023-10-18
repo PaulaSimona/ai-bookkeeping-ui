@@ -21,29 +21,7 @@ export const setRefresh = (refresh: string): void => {
 
 // remove access and refresh tokens from cookies
 export const removeAuth = (): void => {
+  console.log('removeAuth', token_name, refresh_name);
   removeCookie(refresh_name);
   removeCookie(token_name);
 };
-
-// refresh
-/* 
-{detail: "Token is invalid or expired", code: "token_not_valid"}
-code: "token_not_valid"
-detail: "Token is invalid or expired"
-*/
-
-// me
-
-/* 
-{
-    "detail": "Given token not valid for any token type",
-    "code": "token_not_valid",
-    "messages": [
-        {
-            "token_class": "AccessToken",
-            "token_type": "access",
-            "message": "Token is invalid or expired"
-        }
-    ]
-}
-*/
