@@ -60,10 +60,10 @@ export const UploadDocuments: FC = () => {
   };
 
   return (
-    <Container>
+    <Container style={{ maxWidth: 960 }} className="my-4 documents">
       <Row>
         <Col>
-          <h1 className="mb-4">Upload Documents</h1>
+          <h2 className="px-2 mb-4">Upload Documents</h2>
         </Col>
       </Row>
       <Row>

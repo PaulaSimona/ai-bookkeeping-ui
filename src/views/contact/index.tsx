@@ -28,9 +28,9 @@ export const Contact: FC = () => {
   return (
     <Container style={{ maxWidth: 960 }} className="my-4">
       <div className="pb-4">
-        <h1>Contact us</h1>
+        <h2 className="px-2 mb-4">Contact Us</h2>
       </div>
-      <p className="mt-4">
+      <div className="px-2">
         <div className="mb-4">
           <strong>Email:</strong>{' '}
           <a href="mailto:customerservice@ai-bookkeeping.ai">
@@ -66,7 +66,7 @@ export const Contact: FC = () => {
             </div>
           </Form.Group>
         </Form>
-      </p>
+      </div>
     </Container>
   );
 };

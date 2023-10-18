@@ -16,13 +16,13 @@ export const Feedback: FC = () => {
   };
 
   return (
-    <Container>
+    <Container style={{ maxWidth: 960 }} className="my-4 feedback">
       <Row className="mb-2">
         <Col>
-          <h2>Feedback</h2>
+          <h2 className="px-2 mb-4">Feedback</h2>
         </Col>
       </Row>
-      <Row>
+      <Row className="px-2">
         <Form onSubmit={onSubmitFeedback} style={{ maxWidth: 750 }}>
           <Form.Group className="mb-3" controlId="exampleForm.ControlTextarea1">
             <Form.Label>Let us know how could improve</Form.Label>

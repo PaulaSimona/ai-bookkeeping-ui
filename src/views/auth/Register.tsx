@@ -1,12 +1,13 @@
 import { type BaseSyntheticEvent, type FC, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Alert, Button, Card, Form } from 'react-bootstrap';
+import { Alert, Button, Form } from 'react-bootstrap';
 import { NavLink } from 'react-router-dom';
 import { useRegister } from '../../api/auth/useRegister';
 import { isValid, validate, VALIDATION } from '../../utils/validator';
 import { FormInput } from '../../components/Form/FormInput';
 import './Register.scss';
 import logo from '../../assets/logo.svg';
+import { Card } from '../../components/Card';
 
 const { REQUIRED, EMAIL, SECURE_PASSWORD, MATCH_PASSWORD } = VALIDATION;
 
@@ -69,7 +70,7 @@ export const Register: FC<RegisterType> = ({ getUser }) => {
         <div className="logo-wrapper mt-4 text-center">
           <img className="logo" src={logo} alt="AI BOOKKEEPING" />
         </div>
-        <div style={{ maxWidth: 500, margin: '0 auto' }}>
+        <div style={{ maxWidth: 500, margin: '0 auto' }} className="mt-4">
           <Card className="p-4 mt-4 mb-4">
             <h2>Register</h2>
             {error && (

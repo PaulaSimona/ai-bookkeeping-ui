@@ -6,7 +6,7 @@
         margin: 0;
         padding: 0;
         li{
-            border-bottom: 1px solid rgba(0,0,0,0.2);
+            // border-bottom: 1px solid rgba(0,0,0,0.1);
             a{
                 display: block;
                 padding: 0.5rem 1rem;
@@ -17,8 +17,8 @@
                     color: rgba(0,0,0,1);
                 }
                 &.selected{
-                    background-color: rgba(0,0,0,0.1);
                     font-weight: bold;
+                    border-radius: 0.5rem;
                     &:hover{
                         color: rgba(0,0,0,0.8);
                     }

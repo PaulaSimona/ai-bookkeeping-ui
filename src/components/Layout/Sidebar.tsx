@@ -1,7 +1,6 @@
 import { type FC } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useUser } from '../../api/user/useUser';
-import './Sidebar.scss';
 
 interface SidebarItemType {
   path: string;
@@ -16,7 +15,7 @@ const SidebarItem: FC<SidebarItemType> = ({ path, icon, label }) => {
         <NavLink
           to={path}
           className={({ isActive, isPending }) =>
-            isActive ? 'selected' : isPending ? 'pending' : ''
+            isActive ? 'selected bg-primary' : isPending ? 'pending' : ''
           }
         >
           <i className={`fas fa-${icon}`}></i> {label}
@@ -29,7 +28,7 @@ const SidebarItem: FC<SidebarItemType> = ({ path, icon, label }) => {
 export const Sidebar: FC = () => {
   const { user } = useUser(false);
   const sidebarList = [
-    { path: '/', icon: 'home', label: 'Home' },
+    // { path: '/', icon: 'home', label: 'Home' },
     {
       path: '/upload_documents',
       icon: 'file-upload',

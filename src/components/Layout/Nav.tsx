@@ -28,7 +28,7 @@ export const Nav: FC = () => {
   return (
     <div className="nav-container">
       <NavBase className="justify-content-between">
-        <NavBase.Item className="px-4">
+        <NavBase.Item className="px-4 logo_index">
           <NavLink to="/">
             <img className="logo sm" src={logo} alt="NeutraFog" />
           </NavLink>
@@ -37,7 +37,7 @@ export const Nav: FC = () => {
         <NavDropdown
           title={
             <div className="nav-user">
-              <div className="nav-user-name d-none d-lg-inline text-gray-600 small">
+              <div className="nav-user-name d-none d-lg-inline text-gray-600 small text-secondary">
                 {user.user.email}
               </div>
               <div className="img-profile rounded-circle profile-icon ml-2">
@@ -46,6 +46,7 @@ export const Nav: FC = () => {
             </div>
           }
           id="user-dropdown"
+          className="m_pointer"
         >
           <NavDropdown.Item onClick={onLogOut}>logout</NavDropdown.Item>
         </NavDropdown>

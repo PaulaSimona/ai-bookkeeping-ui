@@ -1,9 +1,20 @@
+// custom color bootstrap
+$theme-colors: (
+  "primary": #00A8E7,
+  "danger": #FE4365,
+  "success": #0CD39E,
+  "secondary": #3c4142
+);
+
+@import "node_modules/bootstrap/scss/bootstrap";
+
 @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=IBM+Plex+Sans:wght@300;400&family=Poppins:ital,wght@0,300;0,400;0,600;1,200&display=swap');
 @import url("https://use.fontawesome.com/releases/v5.13.0/css/all.css");
 
 @import './styles/dnd';
 @import './styles/toast';
 @import './styles/profile';
+@import './styles/sidebar';
 
 body{
     /* font-family: 'DM Serif Display', serif;
@@ -14,3 +25,9 @@ body{
     font-size: 18px;
     height: 100vh;
 }
+
+.btn.btn-primary, .btn.btn-danger, .btn.btn-secondary{
+  color: white !important;
+}
+
+.m_pointer{cursor: pointer !important;}
