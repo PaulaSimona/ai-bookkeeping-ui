@@ -5,6 +5,7 @@
     ul{
         margin: 0;
         padding: 0;
+        list-style: none;
         li{
             // border-bottom: 1px solid rgba(0,0,0,0.1);
             a{
@@ -19,6 +20,7 @@
                 &.selected{
                     font-weight: bold;
                     border-radius: 0.5rem;
+                    background-color: rgba(255,255,255,0.5);
                     &:hover{
                         color: rgba(0,0,0,0.8);
                     }

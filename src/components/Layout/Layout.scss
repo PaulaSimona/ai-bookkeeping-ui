@@ -9,11 +9,11 @@
         width: 100%;
     }
     &-sidebar{
-        min-height: calc(100vh - 71px);
+        min-height: calc(100vh - 60px);
         transition: all .3s;
         width: 20rem !important;
         font-size: 1rem;
-        padding: 1.5rem;
+        padding: 1.5rem 0.5rem;
         color: white !important;
         }
         &-content{

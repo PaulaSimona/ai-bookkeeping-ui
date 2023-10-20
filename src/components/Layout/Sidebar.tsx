@@ -15,7 +15,7 @@ const SidebarItem: FC<SidebarItemType> = ({ path, icon, label }) => {
         <NavLink
           to={path}
           className={({ isActive, isPending }) =>
-            isActive ? 'selected bg-primary' : isPending ? 'pending' : ''
+            isActive ? 'selected' : isPending ? 'pending' : ''
           }
         >
           <i className={`fas fa-${icon}`}></i> {label}
@@ -38,7 +38,7 @@ export const Sidebar: FC = () => {
     {
       path: '/payments_and_invoices',
       icon: 'money-check',
-      label: 'Payments and invoices',
+      label: 'Billing',
     },
     { path: '/feedback', icon: 'comment-dots', label: 'Feedback' },
     { path: '/contact', icon: 'envelope', label: 'Contact' },

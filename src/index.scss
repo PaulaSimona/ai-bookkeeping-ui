@@ -35,11 +35,16 @@ a{
 .btn.btn-primary, .btn.btn-danger, .btn.btn-secondary{
   color: white !important;
 }
-
-.m_pointer{cursor: pointer !important;}
 .invalid-feedback {
   color: map-get($theme-colors, "danger") !important;
 }
+.layout-sidebar{
+  background-color: rgba(map-get($theme-colors, "primary"), 0.75);
+}
+
+.m_pointer{cursor: pointer !important;}
+
 .was-validated .form-control:invalid, .form-control.is-invalid {
   border-color: map-get($theme-colors, "danger") !important;
 }
+

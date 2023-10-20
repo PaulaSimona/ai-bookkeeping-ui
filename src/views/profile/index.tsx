@@ -161,7 +161,7 @@ export const UserProfile: FC = () => {
                   />
                 </Col>
               </Row>
-              <Row className="mt-4">
+              <Row className="my-4">
                 <Col sm="3">
                   <FormSelect
                     classes="mt-2"
@@ -194,8 +194,9 @@ export const UserProfile: FC = () => {
                   />
                 </Col>
               </Row>
-            </Card>
-            <Card className="mt-4 p-2">
+              <hr />
+              {/* </Card>
+            <Card className="mt-4 p-2"> */}
               <Row>
                 <Col sm="6">
                   <FormInput
@@ -245,12 +246,12 @@ export const UserProfile: FC = () => {
                   />
                 </Col>
               </Row>
-            </Card>
-            <div className="mt-4 d-flex flex-row-reverse">
-              <div className="d-grid gap-2" style={{ width: 200 }}>
-                <Button type="submit" value="Save" />
+              <div className="mt-4  d-flex flex-row-reverse">
+                <div className="d-grid gap-2" style={{ width: 200 }}>
+                  <Button type="submit" value="Save" />
+                </div>
               </div>
-            </div>
+            </Card>
           </Form>
 
           <hr />
