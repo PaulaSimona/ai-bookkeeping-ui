@@ -3,7 +3,9 @@ $theme-colors: (
   "primary": #00A8E7,
   "danger": #FE4365,
   "success": #0CD39E,
-  "secondary": #3c4142
+  "secondary": #3c4142,
+  "form-invalid-color": #FE4365,
+  "form-invalid-border-color": #FE4365,
 );
 
 @import "node_modules/bootstrap/scss/bootstrap";
@@ -26,8 +28,18 @@ body{
     height: 100vh;
 }
 
+a{
+  color: map-get($theme-colors, "primary");
+}
+
 .btn.btn-primary, .btn.btn-danger, .btn.btn-secondary{
   color: white !important;
 }
 
 .m_pointer{cursor: pointer !important;}
+.invalid-feedback {
+  color: map-get($theme-colors, "danger") !important;
+}
+.was-validated .form-control:invalid, .form-control.is-invalid {
+  border-color: map-get($theme-colors, "danger") !important;
+}

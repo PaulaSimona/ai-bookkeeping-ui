@@ -5,9 +5,11 @@ import { Button } from '../../components/Button/Button';
 import { getSize } from '../../utils/handlers';
 import { VALID_TYPE_TO_UPLOAD } from '../../utils/constants';
 import { uploadValidator } from '../../utils/upload_validator';
+import { useDocuments } from '../../api/documents/useDocuments';
+import { getBase64 } from '../../utils/file';
 
 // TODO: update this value when user is set in the backend
-const LIMIT_FILES = 10;
+const LIMIT_FILES = 1;
 
 export const UploadDocuments: FC = () => {
   const [errors, setErrors] = useState<string[]>([]);
@@ -18,8 +20,9 @@ export const UploadDocuments: FC = () => {
     }
     return 0;
   }, [files]);
+  const { uploadDocument, isLoading } = useDocuments();
 
-  const uploadFile = (newFiles: FileList) => {
+  const uploadFile = async (newFiles: FileList) => {
     if (files.length >= LIMIT_FILES) {
       setErrors(['Max limit of files is ' + LIMIT_FILES]);
       return;
@@ -30,15 +33,25 @@ export const UploadDocuments: FC = () => {
     newFilesList = newFilesList.filter((f: File) =>
       uploadValidator(f, VALID_TYPE_TO_UPLOAD),
     );
+
+    // control the type of files
     if (filesLength != newFilesList.length) {
       setErrors([
         'There are invalid files, only accepted extension files JPG, PNG and PDF.',
       ]);
     }
+
+    // control the limit of files
     let newFilesUploaded = [...files, ...newFilesList];
     if (newFilesUploaded.length >= LIMIT_FILES) {
       setErrors(['Max limit of files is ' + LIMIT_FILES]);
       newFilesUploaded = newFilesUploaded.slice(0, 10);
+    }
+
+    // Generate the base64 for each file
+    for (let index = 0; index < newFilesUploaded.length; index++) {
+      const result = await getBase64(newFilesUploaded[index]);
+      newFilesUploaded[index]['base64'] = `${result}`.split(',')[1];
     }
 
     setFiles(newFilesUploaded);
@@ -52,7 +65,17 @@ export const UploadDocuments: FC = () => {
   };
 
   const onUploadDocuments = () => {
-    console.log('onUploadDocuments');
+    const data = {
+      image: files[0].base64,
+      type: files[0].type,
+      name: files[0].name,
+    };
+    uploadDocument(data).then((res) => {
+      if (res.status === 201) {
+        setFiles([]);
+        setErrors([]);
+      }
+    });
   };
 
   const onDownload = () => {
@@ -79,7 +102,7 @@ export const UploadDocuments: FC = () => {
             {files.length > 0 && (
               <div>
                 {files.map((file: any, index: number) => (
-                  <div className="file_item">
+                  <div className="file_item" key={file.name}>
                     <div className="file_item_name">{file.name}</div>
                     <div className="file_item_size">{getSize(file.size)}</div>
                     <div
@@ -108,9 +131,9 @@ export const UploadDocuments: FC = () => {
             <Button
               variant="primary"
               icon="upload"
-              value="UPLOAD DOCUMENTS"
+              value={isLoading ? 'UPLOADING DOCUMENTS...' : 'UPLOAD DOCUMENTS'}
               onClick={onUploadDocuments}
-              disabled={files.length == 0}
+              disabled={files.length == 0 || isLoading}
             />
           </div>
         </Col>

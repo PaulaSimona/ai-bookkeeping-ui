@@ -40,7 +40,7 @@ export const Nav: FC = () => {
               <div className="nav-user-name d-none d-lg-inline text-gray-600 small text-secondary">
                 {user.user.email}
               </div>
-              <div className="img-profile rounded-circle profile-icon ml-2">
+              <div className="img-profile rounded-circle profile-icon ml-2 text-primary">
                 <i className="fas fa-ellipsis-v"></i>
               </div>
             </div>
