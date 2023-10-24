@@ -1,11 +1,11 @@
 // custom color bootstrap
 $theme-colors: (
-  "primary": #00A8E7,
-  "danger": #FE4365,
-  "success": #0CD39E,
+  "primary": #167396,
+  "danger": #e52246,
+  "success": #0cd36c,
   "secondary": #3c4142,
-  "form-invalid-color": #FE4365,
-  "form-invalid-border-color": #FE4365,
+  "form-invalid-color": #e52246,
+  "form-invalid-border-color": #e52246,
 );
 
 @import "node_modules/bootstrap/scss/bootstrap";
@@ -23,7 +23,7 @@ body{
     font-family: 'IBM Plex Sans', sans-serif; */
     font-family: 'Poppins', sans-serif;
     font-weight: 300;
-    color: #303030;
+    color: #000;
     font-size: 18px;
     height: 100vh;
 }
@@ -39,7 +39,7 @@ a{
   color: map-get($theme-colors, "danger") !important;
 }
 .layout-sidebar{
-  background-color: rgba(map-get($theme-colors, "primary"), 0.75);
+  background-color: rgba(map-get($theme-colors, "primary"), 0.5);
 }
 
 .m_pointer{cursor: pointer !important;}
@@ -47,4 +47,6 @@ a{
 .was-validated .form-control:invalid, .form-control.is-invalid {
   border-color: map-get($theme-colors, "danger") !important;
 }
-
+.placeholder-danger::placeholder {
+  color: map-get($theme-colors, "danger");
+}

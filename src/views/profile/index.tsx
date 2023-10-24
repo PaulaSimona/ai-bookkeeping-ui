@@ -282,6 +282,7 @@ export const UserProfile: FC = () => {
                             setDeleteInput(e.target.value);
                           }}
                           errors={errorDelete}
+                          className={'placeholder-danger'}
                         />
                       </Col>
                       <Col md="6">
@@ -289,7 +290,7 @@ export const UserProfile: FC = () => {
                           <Button
                             type="submit"
                             value="Delete Profile"
-                            variant="danger"
+                            variant="primary"
                             style={{ width: 200 }}
                           />
                         </div>
