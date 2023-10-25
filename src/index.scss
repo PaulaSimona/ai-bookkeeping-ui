@@ -43,10 +43,8 @@ a{
 }
 
 .m_pointer{cursor: pointer !important;}
-.modal_no_storage{
-  // width: 600px !important;
-  max-width: 600px !important;
-}
+.modal_no_storage{max-width: 600px !important;}
+.modal_buy_additional_storage{max-width: 600px !important;}
 .was-validated .form-control:invalid, .form-control.is-invalid {
   border-color: map-get($theme-colors, "danger") !important;
 }

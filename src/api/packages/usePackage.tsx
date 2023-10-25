@@ -1,10 +1,14 @@
 import { useDispatch, useSelector } from 'react-redux';
 import api from '../../utils/api';
 import { RootState } from '../../store/store';
-import { setPackageValues } from '../../store/features/packageSlice';
+import {
+  setPackageValues,
+  setPackages,
+} from '../../store/features/packageSlice';
+import { useCallback, useEffect } from 'react';
 
 export const usePackage = () => {
-  const { number_of_documents, storage_space } = useSelector(
+  const { number_of_documents, storage_space, packages } = useSelector(
     (s: RootState) => s.package,
   );
   const dispatch = useDispatch();
@@ -21,9 +25,23 @@ export const usePackage = () => {
     });
   };
 
+  const getPackages = useCallback(async () => {
+    api.get('/api/packages').then((response) => {
+      dispatch(setPackages({ packages: response.data }));
+    });
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (packages.length === 0) {
+      getPackages();
+    }
+  }, [getPackages, packages]);
+
   return {
     getUserPackagesStatus,
+    getPackages,
     number_of_documents,
     storage_space,
+    packages,
   };
 };

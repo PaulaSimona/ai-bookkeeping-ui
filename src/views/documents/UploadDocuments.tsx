@@ -10,6 +10,7 @@ import { getBase64 } from '../../utils/file';
 import { usePackage } from '../../api/packages/usePackage';
 import { Modal } from '../../components/Modal';
 import { NoStorageAlert } from './components/NoStorageAlert';
+import { BuyAdditionalStorageSpace } from './components/BuyAdditionalStorageSpace';
 
 // TODO: update this value when user is set in the backend
 const LIMIT_FILES = 1;
@@ -17,7 +18,9 @@ const LIMIT_FILES = 1;
 export const UploadDocuments: FC = () => {
   const [errors, setErrors] = useState<string[]>([]);
   const [files, setFiles] = useState<any[]>([]);
-  const [displayNoStorageAlert, setDisplayNoStorageAlert] = useState(false);
+  const [showNoStorageAlert, setShowNoStorageAlert] = useState(false);
+  const [showBuyAdditionalStorage, setShowBuyAdditionalStorage] =
+    useState(true);
   const { getUserPackagesStatus, number_of_documents, storage_space } =
     usePackage();
 
@@ -72,8 +75,9 @@ export const UploadDocuments: FC = () => {
   };
 
   const onUploadDocuments = () => {
-    if (number_of_documents < files.length || storage_space == 0) {
-      setDisplayNoStorageAlert(true);
+    const total_size = files.reduce((res: number, file) => res + file.size, 0);
+    if (number_of_documents < files.length || storage_space < total_size) {
+      setShowNoStorageAlert(true);
       return;
     }
     const data = {
@@ -95,7 +99,7 @@ export const UploadDocuments: FC = () => {
   };
 
   const onClickBuyStorage = () => {
-    setDisplayNoStorageAlert(false);
+    setShowNoStorageAlert(false);
   };
 
   useEffect(() => {
@@ -184,11 +188,27 @@ export const UploadDocuments: FC = () => {
       </Row>
 
       <Modal
-        opened={displayNoStorageAlert}
+        opened={showNoStorageAlert}
         title="No storage available"
         dialogClassName="modal_no_storage"
         contain={<NoStorageAlert onClickButton={onClickBuyStorage} />}
-        handleClose={() => setDisplayNoStorageAlert(false)}
+        handleClose={() => setShowNoStorageAlert(false)}
+        onAccept={() => {}}
+        noActions
+      />
+
+      <Modal
+        opened={showBuyAdditionalStorage}
+        title="Buy Additional Storage Space"
+        dialogClassName="modal_buy_additional_storage"
+        contain={
+          <BuyAdditionalStorageSpace
+            onClickButton={() => {
+              setShowBuyAdditionalStorage(false);
+            }}
+          />
+        }
+        handleClose={() => setShowBuyAdditionalStorage(false)}
         onAccept={() => {}}
         noActions
       />
