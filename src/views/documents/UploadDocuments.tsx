@@ -1,4 +1,4 @@
-import { FC, useMemo, useState } from 'react';
+import { FC, useEffect, useMemo, useState } from 'react';
 import { Col, Container, Row } from 'react-bootstrap';
 import FileUploader from '../../components/DragAndDrop/FileUploader';
 import { Button } from '../../components/Button/Button';
@@ -7,6 +7,9 @@ import { VALID_TYPE_TO_UPLOAD } from '../../utils/constants';
 import { uploadValidator } from '../../utils/upload_validator';
 import { useDocuments } from '../../api/documents/useDocuments';
 import { getBase64 } from '../../utils/file';
+import { usePackage } from '../../api/packages/usePackage';
+import { Modal } from '../../components/Modal';
+import { NoStorageAlert } from './components/NoStorageAlert';
 
 // TODO: update this value when user is set in the backend
 const LIMIT_FILES = 1;
@@ -14,6 +17,10 @@ const LIMIT_FILES = 1;
 export const UploadDocuments: FC = () => {
   const [errors, setErrors] = useState<string[]>([]);
   const [files, setFiles] = useState<any[]>([]);
+  const [displayNoStorageAlert, setDisplayNoStorageAlert] = useState(false);
+  const { getUserPackagesStatus, number_of_documents, storage_space } =
+    usePackage();
+
   const total = useMemo(() => {
     if (files.length > 0) {
       return files.reduce((res: number, file) => res + file.size, 0);
@@ -65,6 +72,10 @@ export const UploadDocuments: FC = () => {
   };
 
   const onUploadDocuments = () => {
+    if (number_of_documents < files.length || storage_space == 0) {
+      setDisplayNoStorageAlert(true);
+      return;
+    }
     const data = {
       image: files[0].base64,
       type: files[0].type,
@@ -74,6 +85,7 @@ export const UploadDocuments: FC = () => {
       if (res.status === 201) {
         setFiles([]);
         setErrors([]);
+        getUserPackagesStatus();
       }
     });
   };
@@ -81,6 +93,14 @@ export const UploadDocuments: FC = () => {
   const onDownload = () => {
     console.log('onDownload');
   };
+
+  const onClickBuyStorage = () => {
+    setDisplayNoStorageAlert(false);
+  };
+
+  useEffect(() => {
+    getUserPackagesStatus();
+  }, [getUserPackagesStatus]);
 
   return (
     <Container style={{ maxWidth: 960 }} className="my-4 documents">
@@ -162,6 +182,16 @@ export const UploadDocuments: FC = () => {
           </div>
         </Col>
       </Row>
+
+      <Modal
+        opened={displayNoStorageAlert}
+        title="No storage available"
+        dialogClassName="modal_no_storage"
+        contain={<NoStorageAlert onClickButton={onClickBuyStorage} />}
+        handleClose={() => setDisplayNoStorageAlert(false)}
+        onAccept={() => {}}
+        noActions
+      />
     </Container>
   );
 };

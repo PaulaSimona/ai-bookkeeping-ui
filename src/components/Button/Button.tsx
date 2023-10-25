@@ -5,6 +5,8 @@ import { ButtonType } from './ButtonType';
 /**
  * @param {string} icon: if there icon show a icon on the left side of the button.
  * @param {string} group: to use a group of font-awesome by default "fas".
+ * @param {string} value: the text of the button.
+ * @param {string} type: the type of the button.
  */
 
 export const Button: FC<ButtonType> = ({
