@@ -36,7 +36,7 @@ export const Sidebar: FC = () => {
     },
     { path: '/profile', icon: 'user', label: 'My profile' },
     {
-      path: '/payments_and_invoices',
+      path: '/billing',
       icon: 'money-check',
       label: 'Billing',
     },

@@ -19,9 +19,9 @@ import { updateShow } from './store/features/layoutSlice';
 import { Register } from './views/auth/Register';
 import { UploadDocuments } from './views/documents/UploadDocuments';
 import { UserProfile } from './views/profile';
-import { PaymentsAndInvoices } from './views/paymentsAndInvoices';
 import { Feedback } from './views/feedback';
 import { Contact } from './views/contact';
+import { BillingPage } from './views/billing';
 
 const App: FC = () => {
   const { getUser } = useUser(true);
@@ -84,11 +84,11 @@ const App: FC = () => {
             }
           />
           <Route
-            path="/payments_and_invoices"
+            path="/billing"
             element={
               <RedirectPage privatePath>
                 <LayoutContent>
-                  <PaymentsAndInvoices />
+                  <BillingPage />
                 </LayoutContent>
               </RedirectPage>
             }

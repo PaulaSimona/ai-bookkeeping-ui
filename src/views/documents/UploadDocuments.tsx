@@ -20,7 +20,7 @@ export const UploadDocuments: FC = () => {
   const [files, setFiles] = useState<any[]>([]);
   const [showNoStorageAlert, setShowNoStorageAlert] = useState(false);
   const [showBuyAdditionalStorage, setShowBuyAdditionalStorage] =
-    useState(true);
+    useState(false);
   const { getUserPackagesStatus, number_of_documents, storage_space } =
     usePackage();
 
@@ -100,6 +100,7 @@ export const UploadDocuments: FC = () => {
 
   const onClickBuyStorage = () => {
     setShowNoStorageAlert(false);
+    setShowBuyAdditionalStorage(true);
   };
 
   useEffect(() => {
