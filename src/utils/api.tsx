@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { API_DOMAIN } from './index';
-import { getToken, getRefresh, setToken } from './auth';
+import { getToken, getRefresh, setToken, removeAuth } from './auth';
 
 let isRefreshing = false;
 let failedQueue: any[] = [];
@@ -72,6 +72,11 @@ api.interceptors.response.use(
               resolve(api(originalRequest));
             })
             .catch((err) => {
+              console.log('~~~ERROR API_DOMAIN', err.response.data.code);
+              if (err.response.data.code === 'token_not_valid') {
+                removeAuth();
+                window.location.href = '/login';
+              }
               processQueue(err, null);
               handleError();
               reject(err);
