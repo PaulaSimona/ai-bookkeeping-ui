@@ -21,35 +21,34 @@ const CheckoutForm = () => {
   };
   // Handle form submission.
   const handleSubmit = async (event: BaseSyntheticEvent) => {
-    console.log(`handleSubmit`);
     event.preventDefault();
     if (elements == null || stripe == null) return;
 
     setLoading(true);
 
-    console.log(`handleSubmit _TEST`);
-
     const card = elements.getElement(CardElement);
 
-    const { paymentMethod } = await stripe.createPaymentMethod({
-      type: 'card',
-      card: card,
-    });
+    if (card) {
+      const { paymentMethod } = await stripe.createPaymentMethod({
+        type: 'card',
+        card: card,
+      });
 
-    if (paymentMethod) {
-      api
-        .post('/api/payments/save-stripe-info', {
-          payment_method_id: paymentMethod.id,
-        })
-        .then((response) => {
-          console.log(response.data);
-        })
-        .catch((error) => {
-          console.log(error);
-        })
-        .finally(() => {
-          setLoading(false);
-        });
+      if (paymentMethod) {
+        api
+          .post('/api/payments/save-stripe-info', {
+            payment_method_id: paymentMethod.id,
+          })
+          .then((response) => {
+            console.log(response.data);
+          })
+          .catch((error) => {
+            console.log(error);
+          })
+          .finally(() => {
+            setLoading(false);
+          });
+      }
     }
   };
 
