@@ -24,6 +24,10 @@ export const UploadDocuments: FC = () => {
   const { getUserPackagesStatus, number_of_documents, storage_space } =
     usePackage();
 
+  const total_size = useMemo(() => {
+    return getSize(storage_space);
+  }, [storage_space]);
+
   const total = useMemo(() => {
     if (files.length > 0) {
       return files.reduce((res: number, file) => res + file.size, 0);
@@ -112,6 +116,27 @@ export const UploadDocuments: FC = () => {
       <Row>
         <Col>
           <h2 className="px-2 mb-4">Upload Documents</h2>
+        </Col>
+      </Row>
+      <Row>
+        <Col className="mb-4 px-2 d-flex justify-content-between">
+          <div className="px-2 text-small">
+            <small>
+              <strong>documents:</strong>{' '}
+              <span className={number_of_documents === 0 ? 'text-danger' : ''}>
+                {number_of_documents}
+              </span>
+              {' - '}
+              <strong>storage:</strong> <span>{total_size}</span>
+            </small>
+          </div>
+          <div>
+            <Button
+              value="Buy Additional Storage Space"
+              size="sm"
+              onClick={() => setShowBuyAdditionalStorage(true)}
+            />
+          </div>
         </Col>
       </Row>
       <Row>

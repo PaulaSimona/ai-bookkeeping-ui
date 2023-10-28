@@ -22,6 +22,11 @@ import { UserProfile } from './views/profile';
 import { Feedback } from './views/feedback';
 import { Contact } from './views/contact';
 import { BillingPage } from './views/billing';
+import { Elements } from '@stripe/react-stripe-js';
+import { loadStripe } from '@stripe/stripe-js/pure';
+import CheckoutForm from './components/Form/CheckoutForm';
+
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_SECRET_KEY);
 
 const App: FC = () => {
   const { getUser } = useUser(true);
@@ -88,7 +93,21 @@ const App: FC = () => {
             element={
               <RedirectPage privatePath>
                 <LayoutContent>
-                  <BillingPage />
+                  <Elements stripe={stripePromise}>
+                    <BillingPage />
+                  </Elements>
+                </LayoutContent>
+              </RedirectPage>
+            }
+          />
+          <Route
+            path="/test"
+            element={
+              <RedirectPage privatePath>
+                <LayoutContent>
+                  <Elements stripe={stripePromise}>
+                    <CheckoutForm />
+                  </Elements>
                 </LayoutContent>
               </RedirectPage>
             }
