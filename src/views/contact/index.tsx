@@ -61,7 +61,7 @@ export const Contact: FC = () => {
             />
             <div className="mt-4">
               <div style={{ maxWidth: 200, float: 'right' }}>
-                <Form.Control as={Button} type="submit" value="Submit" />
+                <Button type="submit" variant="primary" value="Submit" />
               </div>
             </div>
           </Form.Group>

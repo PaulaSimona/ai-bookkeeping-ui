@@ -35,8 +35,10 @@ export const Feedback: FC = () => {
                 setFeedbackText(e.target.value)
               }
             />
-            <div className="mt-4" style={{ maxWidth: 200 }}>
-              <Form.Control as={Button} type="submit" value="Submit" />
+            <div className="mt-4">
+              <div style={{ maxWidth: 200, float: 'right' }}>
+                <Button type="submit" variant="primary" value="Submit" />
+              </div>
             </div>
           </Form.Group>
         </Form>
