@@ -15,11 +15,22 @@
         font-size: 1rem;
         padding: 1.5rem 0.5rem;
         color: white !important;
-        }
-        &-content{
-            background-color: #f8f9fa;
-            overflow-x: hidden;
-            width: 100%;
-            padding: 1rem;
-        }
+        position: fixed;
+        z-index: 900;
+        top: 60px;
+    }
+    &-content{
+        background-color: #f8f9fa;
+        overflow-x: hidden;
+        width: 100%;
+        padding: 1rem;
+        margin-top: 60px;
+        margin-left: 20rem;
+    }
+}
+.nav-container{
+    position: fixed;
+    width: 100%;
+    background: white;
+    z-index: 1000;
 }
