@@ -35,7 +35,7 @@ export const useProfile = () => {
       dispatch(setProfile(data));
     });
   };
-  const updateProfile = (data: profileType) => {
+  const updateProfile = async (data: profileType) => {
     const request_data = {
       email: data['email'],
       role: data['role'],
@@ -53,7 +53,7 @@ export const useProfile = () => {
         postal_code: data['company_postal_code'],
       },
     };
-    api
+    return api
       .put('/api/user/profile', request_data)
       .then((response) => {
         const new_data = {
@@ -78,6 +78,7 @@ export const useProfile = () => {
           message: 'Profile was updated successfully.',
           variant: 'success',
         });
+        return response;
       })
       .catch(() => {
         showToast({

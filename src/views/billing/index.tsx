@@ -1,12 +1,24 @@
-import { FC } from 'react';
+import { FC, useEffect, useState } from 'react';
 import { Container, Row, Col, Table } from 'react-bootstrap';
 import { Button } from '../../components/Button/Button';
 import { Badge } from '../../components/Badge';
+import { Modal } from '../../components/Modal';
+import { EditAddress } from './components/EditAddress';
+import { useProfile } from '../../api/user/useProfile';
 
 export const BillingPage: FC = () => {
+  const [showEditAddress, setShowEditAddress] = useState(false);
+  const { profile, getProfile } = useProfile();
+
   const onClickDownload = () => {
     console.log('onClickDownload');
   };
+
+  useEffect(() => {
+    if (!profile) {
+      getProfile();
+    }
+  }, [getProfile, profile]);
 
   return (
     <Container style={{ maxWidth: 960 }} className="my-4 profile">
@@ -17,27 +29,38 @@ export const BillingPage: FC = () => {
       </Row>
       <Row className="px-2">
         <Col>
-          <div className="text-small">
-            <div>
-              <small>VP BOOKKEEPERS LTD</small>
+          {profile && (
+            <div className="text-small">
+              <div>
+                <small>{profile.company_name}</small>
+              </div>
+              <div>
+                <small>
+                  {profile.company_address} - {profile.company_number}
+                </small>
+              </div>
+              <div>
+                <small>
+                  {profile.company_postal_code} {profile.company_city} ,
+                  {profile.company_province}
+                </small>
+              </div>
+              <div>
+                <small>Canada</small>
+              </div>
+              <div>
+                <small>{profile.phone_number}</small>
+              </div>
             </div>
-            <div>
-              <small>1771 Robson Street - 1225</small>
-            </div>
-            <div>
-              <small>V6G3B7 Vancouver ,BC</small>
-            </div>
-            <div>
-              <small>Canada</small>
-            </div>
-            <div>
-              <small>+16047867056</small>
-            </div>
-          </div>
+          )}
         </Col>
         <Col>
           <div>
-            <Button value="Edit Address" size="sm" />
+            <Button
+              value="Edit Address"
+              size="sm"
+              onClick={() => setShowEditAddress(true)}
+            />
           </div>
         </Col>
       </Row>
@@ -139,6 +162,20 @@ export const BillingPage: FC = () => {
           </tbody>
         </Table>
       </div>
+      <Modal
+        opened={showEditAddress}
+        title="Edit Address"
+        dialogClassName="modal_buy_additional_storage"
+        contain={
+          <EditAddress
+            profile={profile}
+            onClose={() => setShowEditAddress(false)}
+          />
+        }
+        handleClose={() => setShowEditAddress(false)}
+        onAccept={() => {}}
+        noActions={true}
+      />
     </Container>
   );
 };
