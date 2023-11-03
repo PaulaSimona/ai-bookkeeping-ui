@@ -54,10 +54,30 @@ export const usePayments = () => {
     });
   };
 
+  const setPrimaryPaymentMethod = async (id: number) => {
+    return api.put(`/api/payments/${id}/set-primary`).then((response) => {
+      if (response.status === 200) {
+        showToast({
+          title: 'Payment Method set as primary',
+          message: 'Payment Method was set as primary successfully',
+          variant: 'success',
+        });
+      } else {
+        showToast({
+          title: 'Payment Method not set as primary',
+          message: response.data.message,
+          variant: 'danger',
+        });
+      }
+      return response;
+    });
+  };
+
   return {
     paymentsMethods,
     getPayments,
     createPaymentMethod,
     deletePaymentMethod,
+    setPrimaryPaymentMethod,
   };
 };

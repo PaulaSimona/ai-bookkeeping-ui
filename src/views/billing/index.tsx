@@ -1,7 +1,6 @@
 import { FC, memo, useEffect, useRef, useState } from 'react';
 import { Container, Row, Col, Table } from 'react-bootstrap';
 import { Button } from '../../components/Button/Button';
-import { Badge } from '../../components/Badge';
 import { Modal } from '../../components/Modal';
 import { EditAddress } from './components/EditAddress';
 import { useProfile } from '../../api/user/useProfile';
@@ -20,9 +19,16 @@ export const BillingPage: FC = () => {
   const [showEditAddress, setShowEditAddress] = useState(false);
   const [showAddNewPaymentMethod, setShowAddNewPaymentMethod] = useState(false);
   const [showDeletePaymentMethod, setShowDeletePaymentMethod] = useState(false);
+  const [showSetPrimaryPaymentMethod, setShowSetPrimaryPaymentMethod] =
+    useState(false);
   const selectedPaymentMethod = useRef<any>();
   const { profile, getProfile } = useProfile();
-  const { paymentsMethods, getPayments, deletePaymentMethod } = usePayments();
+  const {
+    paymentsMethods,
+    getPayments,
+    deletePaymentMethod,
+    setPrimaryPaymentMethod,
+  } = usePayments();
 
   const onClickDownload = () => {
     console.log('onClickDownload');
@@ -36,6 +42,19 @@ export const BillingPage: FC = () => {
           getPayments();
         }
       });
+    }
+  };
+
+  const onSetPrimaryPaymentMethod = () => {
+    if (selectedPaymentMethod.current) {
+      setPrimaryPaymentMethod(selectedPaymentMethod.current.id).then(
+        (response) => {
+          if (response.status === 200) {
+            setShowSetPrimaryPaymentMethod(false);
+            getPayments();
+          }
+        },
+      );
     }
   };
 
@@ -186,9 +205,34 @@ export const BillingPage: FC = () => {
                 <td>
                   <div className="d-flex justify-content-between align-items-center">
                     <Button value="Edit" variant="secondary" size="sm" />
-                    <Badge textColor="white" bgColor="primary" id={1}>
-                      Primary
-                    </Badge>
+                    {paymentMethod.is_primary ? (
+                      <Button
+                        value={'Primary'}
+                        variant="primary"
+                        style={{
+                          padding: '0.2rem 0.5rem',
+                          fontSize: '0.8rem',
+                          width: 100,
+                        }}
+                      />
+                    ) : (
+                      <div className="mx-2">
+                        <Button
+                          value="Set primary"
+                          variant="outline-secondary"
+                          size="sm"
+                          style={{
+                            padding: '0.2rem 0.5rem',
+                            fontSize: '0.8rem',
+                            width: 100,
+                          }}
+                          onClick={() => {
+                            selectedPaymentMethod.current = paymentMethod;
+                            setShowSetPrimaryPaymentMethod(true);
+                          }}
+                        />
+                      </div>
+                    )}
                     <i
                       className="far fa-trash-alt m_pointer"
                       onClick={() => {
@@ -241,6 +285,17 @@ export const BillingPage: FC = () => {
         }
         handleClose={() => setShowDeletePaymentMethod(false)}
         onAccept={onDeletePaymentMethod}
+      />
+      <Modal
+        opened={showSetPrimaryPaymentMethod}
+        title="Set Primary Payment Method"
+        contain={
+          <div>
+            <p>Do you want to set this card as primary payment method?</p>
+          </div>
+        }
+        handleClose={() => setShowSetPrimaryPaymentMethod(false)}
+        onAccept={onSetPrimaryPaymentMethod}
       />
     </Container>
   );
