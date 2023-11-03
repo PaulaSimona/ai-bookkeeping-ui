@@ -34,9 +34,30 @@ export const usePayments = () => {
     });
   };
 
+  const deletePaymentMethod = async (id: number) => {
+    return api.delete(`/api/payments/${id}`).then((response) => {
+      console.log(response);
+      if (response.status === 204) {
+        showToast({
+          title: 'Payment Method deleted',
+          message: 'Payment Method was deleted successfully',
+          variant: 'success',
+        });
+      } else {
+        showToast({
+          title: 'Payment Method not deleted',
+          message: response.data.message,
+          variant: 'danger',
+        });
+      }
+      return response;
+    });
+  };
+
   return {
     paymentsMethods,
     getPayments,
     createPaymentMethod,
+    deletePaymentMethod,
   };
 };

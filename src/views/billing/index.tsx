@@ -1,4 +1,4 @@
-import { FC, useEffect, useState } from 'react';
+import { FC, memo, useEffect, useRef, useState } from 'react';
 import { Container, Row, Col, Table } from 'react-bootstrap';
 import { Button } from '../../components/Button/Button';
 import { Badge } from '../../components/Badge';
@@ -8,25 +8,43 @@ import { useProfile } from '../../api/user/useProfile';
 import { AddNewPaymentMethod } from './components/AddNewPaymentMethod';
 import { usePayments } from '../../api/payments/usePayments';
 
+const CardIcon = memo(({ card }: { card: string }) => {
+  const card_code = card === 'diners' ? 'diners-club' : card;
+
+  if (card === 'unionpay') return <i className="fas fa-credit-card"></i>;
+
+  return <i className={`fab fa-cc-${card_code}`}></i>;
+});
+
 export const BillingPage: FC = () => {
   const [showEditAddress, setShowEditAddress] = useState(false);
   const [showAddNewPaymentMethod, setShowAddNewPaymentMethod] = useState(false);
+  const [showDeletePaymentMethod, setShowDeletePaymentMethod] = useState(false);
+  const selectedPaymentMethod = useRef<any>();
   const { profile, getProfile } = useProfile();
-  const { paymentsMethods, getPayments } = usePayments();
+  const { paymentsMethods, getPayments, deletePaymentMethod } = usePayments();
 
   const onClickDownload = () => {
     console.log('onClickDownload');
   };
 
+  const onDeletePaymentMethod = () => {
+    setShowDeletePaymentMethod(false);
+    if (selectedPaymentMethod.current) {
+      deletePaymentMethod(selectedPaymentMethod.current.id).then((response) => {
+        if (response.status === 204) {
+          getPayments();
+        }
+      });
+    }
+  };
+
   useEffect(() => {
     if (!profile) {
       getProfile();
+      getPayments();
     }
-  }, [getProfile, profile]);
-
-  useEffect(() => {
-    getPayments();
-  }, [getPayments]);
+  }, [getProfile, getPayments, profile]);
 
   return (
     <Container style={{ maxWidth: 960 }} className="my-4 profile">
@@ -157,7 +175,8 @@ export const BillingPage: FC = () => {
             {paymentsMethods?.map((paymentMethod: any) => (
               <tr key={paymentMethod.id}>
                 <td>
-                  <i className="fab fa-cc-visa"></i> {paymentMethod.card_brand}
+                  <CardIcon card={paymentMethod.card_brand} />{' '}
+                  {paymentMethod.card_brand}
                 </td>
                 <td>****{paymentMethod.card_last4}</td>
                 <td>{paymentMethod.name_payment_method}</td>
@@ -170,7 +189,13 @@ export const BillingPage: FC = () => {
                     <Badge textColor="white" bgColor="primary" id={1}>
                       Primary
                     </Badge>
-                    <i className="far fa-trash-alt"></i>
+                    <i
+                      className="far fa-trash-alt m_pointer"
+                      onClick={() => {
+                        selectedPaymentMethod.current = paymentMethod;
+                        setShowDeletePaymentMethod(true);
+                      }}
+                    ></i>
                   </div>
                 </td>
               </tr>
@@ -204,6 +229,18 @@ export const BillingPage: FC = () => {
         handleClose={() => setShowAddNewPaymentMethod(false)}
         onAccept={() => {}}
         noActions={true}
+      />
+      <Modal
+        opened={showDeletePaymentMethod}
+        title="Delete Payment Method"
+        dialogClassName="modal_buy_additional_storage"
+        contain={
+          <div>
+            <p>Do you want to delete this card?</p>
+          </div>
+        }
+        handleClose={() => setShowDeletePaymentMethod(false)}
+        onAccept={onDeletePaymentMethod}
       />
     </Container>
   );
