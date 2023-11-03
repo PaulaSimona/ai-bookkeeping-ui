@@ -7,6 +7,7 @@ export type PaymentsType = {
   card_exp_month: string;
   card_exp_year: string;
   name_payment_method: string;
+  is_primary: boolean;
 };
 
 interface PaymentsState {

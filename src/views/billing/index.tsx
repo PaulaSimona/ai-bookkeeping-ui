@@ -1,4 +1,4 @@
-import { FC, memo, useEffect, useRef, useState } from 'react';
+import { FC, useEffect, useRef, useState } from 'react';
 import { Container, Row, Col, Table } from 'react-bootstrap';
 import { Button } from '../../components/Button/Button';
 import { Modal } from '../../components/Modal';
@@ -6,14 +6,7 @@ import { EditAddress } from './components/EditAddress';
 import { useProfile } from '../../api/user/useProfile';
 import { AddNewPaymentMethod } from './components/AddNewPaymentMethod';
 import { usePayments } from '../../api/payments/usePayments';
-
-const CardIcon = memo(({ card }: { card: string }) => {
-  const card_code = card === 'diners' ? 'diners-club' : card;
-
-  if (card === 'unionpay') return <i className="fas fa-credit-card"></i>;
-
-  return <i className={`fab fa-cc-${card_code}`}></i>;
-});
+import { CardIcon } from '../../components/Icons/CardIcon';
 
 export const BillingPage: FC = () => {
   const [showEditAddress, setShowEditAddress] = useState(false);

@@ -1,6 +1,27 @@
 .buy_more_space{
+    font-size: 1rem;
     &_item{
         border-bottom: 1px solid #ccc;
         justify-content: space-between;
+    }
+    .payment-method-card{
+        border: 1px solid #ccc;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        border-radius: 0.5rem;
+        cursor: pointer;
+        box-shadow: 1px 1px 0.25rem rgba(0,0,0,0.1);
+        &-item{
+            &.left{
+                margin-left: 1rem;
+                width: 5.5rem;
+            }
+            &.center{
+                width: 9rem;
+            }
+        }
+        &:hover{
+            border: 1px solid #000;
+        }
     }
 }
