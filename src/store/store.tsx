@@ -3,6 +3,7 @@ import authReducer from './features/authSlice';
 import layoutSlice from './features/layoutSlice';
 import ProfileSlice from './features/profileSlice';
 import packageSlice from './features/packageSlice';
+import paymentSlice from './features/paymentSlice';
 
 export const store = configureStore({
   reducer: {
@@ -10,6 +11,7 @@ export const store = configureStore({
     layout: layoutSlice,
     profile: ProfileSlice,
     package: packageSlice,
+    payments: paymentSlice,
   },
 });
 

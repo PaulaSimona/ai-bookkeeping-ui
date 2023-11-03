@@ -5,10 +5,14 @@ import { Badge } from '../../components/Badge';
 import { Modal } from '../../components/Modal';
 import { EditAddress } from './components/EditAddress';
 import { useProfile } from '../../api/user/useProfile';
+import { AddNewPaymentMethod } from './components/AddNewPaymentMethod';
+import { usePayments } from '../../api/payments/usePayments';
 
 export const BillingPage: FC = () => {
   const [showEditAddress, setShowEditAddress] = useState(false);
+  const [showAddNewPaymentMethod, setShowAddNewPaymentMethod] = useState(false);
   const { profile, getProfile } = useProfile();
+  const { paymentsMethods, getPayments } = usePayments();
 
   const onClickDownload = () => {
     console.log('onClickDownload');
@@ -19,6 +23,10 @@ export const BillingPage: FC = () => {
       getProfile();
     }
   }, [getProfile, profile]);
+
+  useEffect(() => {
+    getPayments();
+  }, [getPayments]);
 
   return (
     <Container style={{ maxWidth: 960 }} className="my-4 profile">
@@ -127,7 +135,11 @@ export const BillingPage: FC = () => {
 
       <div className="my-4 px-2 d-flex justify-content-between align-items-center">
         <h3>Payment Options</h3>
-        <Button value="Add New Payment Method" size="sm" />
+        <Button
+          value="Add New Payment Method"
+          size="sm"
+          onClick={() => setShowAddNewPaymentMethod(true)}
+        />
       </div>
 
       <div className="px-2">
@@ -142,23 +154,27 @@ export const BillingPage: FC = () => {
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td>
-                <i className="fab fa-cc-visa"></i> Visa
-              </td>
-              <td>****1089</td>
-              <td>Paula S Ripanu</td>
-              <td>09/25</td>
-              <td>
-                <div className="d-flex justify-content-between align-items-center">
-                  <Button value="Edit" variant="secondary" size="sm" />
-                  <Badge textColor="white" bgColor="primary" id={1}>
-                    Primary
-                  </Badge>
-                  <i className="far fa-trash-alt"></i>
-                </div>
-              </td>
-            </tr>
+            {paymentsMethods?.map((paymentMethod: any) => (
+              <tr key={paymentMethod.id}>
+                <td>
+                  <i className="fab fa-cc-visa"></i> {paymentMethod.card_brand}
+                </td>
+                <td>****{paymentMethod.card_last4}</td>
+                <td>{paymentMethod.name_payment_method}</td>
+                <td>
+                  {paymentMethod.card_exp_month}/{paymentMethod.card_exp_year}
+                </td>
+                <td>
+                  <div className="d-flex justify-content-between align-items-center">
+                    <Button value="Edit" variant="secondary" size="sm" />
+                    <Badge textColor="white" bgColor="primary" id={1}>
+                      Primary
+                    </Badge>
+                    <i className="far fa-trash-alt"></i>
+                  </div>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </Table>
       </div>
@@ -173,6 +189,19 @@ export const BillingPage: FC = () => {
           />
         }
         handleClose={() => setShowEditAddress(false)}
+        onAccept={() => {}}
+        noActions={true}
+      />
+      <Modal
+        opened={showAddNewPaymentMethod}
+        title="Edit Address"
+        dialogClassName="modal_buy_additional_storage"
+        contain={
+          <AddNewPaymentMethod
+            handleOnClose={() => setShowAddNewPaymentMethod(false)}
+          />
+        }
+        handleClose={() => setShowAddNewPaymentMethod(false)}
         onAccept={() => {}}
         noActions={true}
       />
