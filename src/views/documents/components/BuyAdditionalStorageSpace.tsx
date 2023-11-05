@@ -24,6 +24,7 @@ export const BuyAdditionalStorageSpace: FC<BuyStorageType> = ({
   const { profile, getProfile } = useProfile();
   const [selected, setSelected] = useState<PackageType | null>(null);
   const [showChangePaymentMethod, setShowChangePaymentMethod] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   // TAXES and TOTAL variables
   const gst = useMemo(() => {
@@ -51,6 +52,7 @@ export const BuyAdditionalStorageSpace: FC<BuyStorageType> = ({
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<any>(null);
 
   const onPlaceYourOrder = () => {
+    setLoading(true);
     const packageId = selected?.id;
     const paymentMethodId =
       selectedPaymentMethod?.id || primaryPaymentMethod?.id;
@@ -58,6 +60,7 @@ export const BuyAdditionalStorageSpace: FC<BuyStorageType> = ({
       if (response.status === 201) {
         onSuccess();
       }
+      setLoading(false);
     });
   };
 
@@ -142,9 +145,7 @@ export const BuyAdditionalStorageSpace: FC<BuyStorageType> = ({
         ))}
       </div>
 
-      <hr />
-
-      <div className="mt-2">
+      <div className="mt-4">
         <h4>Total Invoice</h4>
 
         <div className="d-flex justify-content-between">
@@ -220,7 +221,11 @@ export const BuyAdditionalStorageSpace: FC<BuyStorageType> = ({
       </div>
 
       <div className="mt-4 d-flex flex-row-reverse">
-        <Button value="Place your Order" onClick={onPlaceYourOrder} />
+        <Button
+          value={loading ? 'Ordering...' : 'Place your Order'}
+          onClick={onPlaceYourOrder}
+          disabled={loading}
+        />
       </div>
     </div>
   );
