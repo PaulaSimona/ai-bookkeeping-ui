@@ -9,14 +9,16 @@ import { CardIcon } from '../../../components/Icons/CardIcon';
 import { useProfile } from '../../../api/user/useProfile';
 import { get_gst, get_hst, get_pst, get_qst } from '../../../utils/taxes';
 import { round } from '../../../utils/round';
+import { useBuyPackage } from '../../../api/packages/useBuyPackage';
 
 interface BuyStorageType {
-  onClickButton: () => void;
+  onSuccess: () => void;
 }
 
 export const BuyAdditionalStorageSpace: FC<BuyStorageType> = ({
-  onClickButton,
+  onSuccess,
 }) => {
+  const { buyPackage } = useBuyPackage();
   const { packages } = usePackage();
   const { paymentsMethods, getPayments } = usePayments();
   const { profile, getProfile } = useProfile();
@@ -49,7 +51,14 @@ export const BuyAdditionalStorageSpace: FC<BuyStorageType> = ({
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<any>(null);
 
   const onPlaceYourOrder = () => {
-    onClickButton();
+    const packageId = selected?.id;
+    const paymentMethodId =
+      selectedPaymentMethod?.id || primaryPaymentMethod?.id;
+    buyPackage(packageId, paymentMethodId).then((response) => {
+      if (response.status === 201) {
+        onSuccess();
+      }
+    });
   };
 
   useEffect(() => {

@@ -229,7 +229,7 @@ export const UploadDocuments: FC = () => {
         dialogClassName="modal_buy_additional_storage"
         contain={
           <BuyAdditionalStorageSpace
-            onClickButton={() => {
+            onSuccess={() => {
               setShowBuyAdditionalStorage(false);
             }}
           />
