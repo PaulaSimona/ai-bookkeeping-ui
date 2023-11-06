@@ -33,7 +33,7 @@ export const Login: FC<LoginProps> = ({ getUser }) => {
   useEffect(() => {
     if (success && completed) {
       getUser();
-      navigate('/');
+      navigate('/upload_documents');
     }
   }, [success, completed, getUser, navigate]);
 

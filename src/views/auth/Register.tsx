@@ -47,7 +47,7 @@ export const Register: FC<RegisterType> = ({ getUser }) => {
   useEffect(() => {
     if (success && completed) {
       getUser();
-      navigate('/');
+      navigate('/upload_documents');
     }
   }, [success, completed, getUser, navigate]);
 

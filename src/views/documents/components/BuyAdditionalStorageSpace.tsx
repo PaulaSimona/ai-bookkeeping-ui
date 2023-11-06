@@ -1,5 +1,5 @@
 import { FC, useEffect, useMemo, useState } from 'react';
-import { Form } from 'react-bootstrap';
+import { Alert, Form } from 'react-bootstrap';
 import './BuyAdditionalStorageSpace.scss';
 import { Button } from '../../../components/Button/Button';
 import { usePackage } from '../../../api/packages/usePackage';
@@ -10,6 +10,7 @@ import { useProfile } from '../../../api/user/useProfile';
 import { get_gst, get_hst, get_pst, get_qst } from '../../../utils/taxes';
 import { round } from '../../../utils/round';
 import { useBuyPackage } from '../../../api/packages/useBuyPackage';
+import { LinkButton } from '../../../components/Button/ButtonLink';
 
 interface BuyStorageType {
   onSuccess: () => void;
@@ -22,6 +23,11 @@ export const BuyAdditionalStorageSpace: FC<BuyStorageType> = ({
   const { packages } = usePackage();
   const { paymentsMethods, getPayments } = usePayments();
   const { profile, getProfile } = useProfile();
+  const paymentMethodEmpty = useMemo(
+    () => paymentsMethods.length === 0,
+    [paymentsMethods],
+  );
+
   const [selected, setSelected] = useState<PackageType | null>(null);
   const [showChangePaymentMethod, setShowChangePaymentMethod] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -51,6 +57,7 @@ export const BuyAdditionalStorageSpace: FC<BuyStorageType> = ({
   );
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<any>(null);
 
+  // When user click on Place your order button
   const onPlaceYourOrder = () => {
     setLoading(true);
     const packageId = selected?.id;
@@ -78,6 +85,7 @@ export const BuyAdditionalStorageSpace: FC<BuyStorageType> = ({
     }
   }, [getProfile, profile]);
 
+  // When user select a payment method
   const onSelectPaymentMethod = (paymentMethod: any) => {
     setSelectedPaymentMethod(paymentMethod);
     setShowChangePaymentMethod(false);
@@ -194,37 +202,55 @@ export const BuyAdditionalStorageSpace: FC<BuyStorageType> = ({
 
       <div className="mt-2">
         <h4>Payment method:</h4>
-        <div className="d-flex justify-content-between">
-          {selectedPaymentMethod && (
+        {paymentsMethods.length > 0 && (
+          <div className="d-flex justify-content-between">
+            {selectedPaymentMethod && (
+              <div>
+                Paying with my {selectedPaymentMethod?.card_brand} Card ****
+                {selectedPaymentMethod?.card_last4}
+              </div>
+            )}
+            {primaryPaymentMethod && !selectedPaymentMethod && (
+              <div>
+                Paying with my {primaryPaymentMethod?.card_brand} Card ****
+                {primaryPaymentMethod?.card_last4}
+              </div>
+            )}
             <div>
-              Paying with my {selectedPaymentMethod?.card_brand} Card ****
-              {selectedPaymentMethod?.card_last4}
+              <a
+                href="#"
+                onClick={() => {
+                  setShowChangePaymentMethod(true);
+                }}
+              >
+                Change
+              </a>
             </div>
-          )}
-          {primaryPaymentMethod && !selectedPaymentMethod && (
-            <div>
-              Paying with my {primaryPaymentMethod?.card_brand} Card ****
-              {primaryPaymentMethod?.card_last4}
-            </div>
-          )}
-          <div>
-            <a
-              href="#"
-              onClick={() => {
-                setShowChangePaymentMethod(true);
-              }}
-            >
-              Change
-            </a>
           </div>
-        </div>
+        )}
+        {paymentsMethods.length === 0 && (
+          <div>
+            <Alert variant="secondary">
+              <div className="text-center">
+                <div>You don't have any payment method registered.</div>
+                <div className="mt-2">
+                  <LinkButton
+                    to="/billing"
+                    variant="primary"
+                    value="Add a payment method"
+                  />
+                </div>
+              </div>
+            </Alert>
+          </div>
+        )}
       </div>
 
       <div className="mt-4 d-flex flex-row-reverse">
         <Button
           value={loading ? 'Ordering...' : 'Place your Order'}
           onClick={onPlaceYourOrder}
-          disabled={loading}
+          disabled={loading || paymentMethodEmpty}
         />
       </div>
     </div>

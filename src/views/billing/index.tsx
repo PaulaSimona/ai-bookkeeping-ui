@@ -1,5 +1,5 @@
 import { FC, useEffect, useRef, useState } from 'react';
-import { Container, Row, Col, Table } from 'react-bootstrap';
+import { Container, Row, Col, Table, Alert } from 'react-bootstrap';
 import { Button } from '../../components/Button/Button';
 import { Modal } from '../../components/Modal';
 import { EditAddress } from './components/EditAddress';
@@ -172,74 +172,91 @@ export const BillingPage: FC = () => {
         />
       </div>
 
-      <div className="px-2">
-        <Table striped bordered hover>
-          <thead>
-            <tr>
-              <th>Credit Card</th>
-              <th>Card Number</th>
-              <th>Name</th>
-              <th>Expires</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {paymentsMethods?.map((paymentMethod: any) => (
-              <tr key={paymentMethod.id}>
-                <td>
-                  <CardIcon card={paymentMethod.card_brand} />{' '}
-                  {paymentMethod.card_brand}
-                </td>
-                <td>****{paymentMethod.card_last4}</td>
-                <td>{paymentMethod.name_payment_method}</td>
-                <td>
-                  {paymentMethod.card_exp_month}/{paymentMethod.card_exp_year}
-                </td>
-                <td>
-                  <div className="d-flex justify-content-between align-items-center">
-                    <Button value="Edit" variant="secondary" size="sm" />
-                    {paymentMethod.is_primary ? (
-                      <Button
-                        value={'Primary'}
-                        variant="primary"
-                        style={{
-                          padding: '0.2rem 0.5rem',
-                          fontSize: '0.8rem',
-                          width: 100,
-                        }}
-                      />
-                    ) : (
-                      <div className="mx-2">
+      {paymentsMethods.length == 0 && (
+        <Alert variant="secondary">
+          <div className="text-center p-2">
+            <div className="mb-4">
+              You don't have any payment method registered.
+            </div>
+            <Button
+              variant="primary"
+              value="Add a payment method"
+              onClick={() => setShowAddNewPaymentMethod(true)}
+            />
+          </div>
+        </Alert>
+      )}
+
+      {paymentsMethods.length > 0 && (
+        <div className="px-2">
+          <Table striped bordered hover>
+            <thead>
+              <tr>
+                <th>Credit Card</th>
+                <th>Card Number</th>
+                <th>Name</th>
+                <th>Expires</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {paymentsMethods?.map((paymentMethod: any) => (
+                <tr key={paymentMethod.id}>
+                  <td>
+                    <CardIcon card={paymentMethod.card_brand} />{' '}
+                    {paymentMethod.card_brand}
+                  </td>
+                  <td>****{paymentMethod.card_last4}</td>
+                  <td>{paymentMethod.name_payment_method}</td>
+                  <td>
+                    {paymentMethod.card_exp_month}/{paymentMethod.card_exp_year}
+                  </td>
+                  <td>
+                    <div className="d-flex justify-content-between align-items-center">
+                      <Button value="Edit" variant="secondary" size="sm" />
+                      {paymentMethod.is_primary ? (
                         <Button
-                          value="Set primary"
-                          variant="outline-secondary"
-                          size="sm"
+                          value={'Primary'}
+                          variant="primary"
                           style={{
                             padding: '0.2rem 0.5rem',
                             fontSize: '0.8rem',
                             width: 100,
                           }}
-                          onClick={() => {
-                            selectedPaymentMethod.current = paymentMethod;
-                            setShowSetPrimaryPaymentMethod(true);
-                          }}
                         />
-                      </div>
-                    )}
-                    <i
-                      className="far fa-trash-alt m_pointer"
-                      onClick={() => {
-                        selectedPaymentMethod.current = paymentMethod;
-                        setShowDeletePaymentMethod(true);
-                      }}
-                    ></i>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
-      </div>
+                      ) : (
+                        <div className="mx-2">
+                          <Button
+                            value="Set primary"
+                            variant="outline-secondary"
+                            size="sm"
+                            style={{
+                              padding: '0.2rem 0.5rem',
+                              fontSize: '0.8rem',
+                              width: 100,
+                            }}
+                            onClick={() => {
+                              selectedPaymentMethod.current = paymentMethod;
+                              setShowSetPrimaryPaymentMethod(true);
+                            }}
+                          />
+                        </div>
+                      )}
+                      <i
+                        className="far fa-trash-alt m_pointer"
+                        onClick={() => {
+                          selectedPaymentMethod.current = paymentMethod;
+                          setShowDeletePaymentMethod(true);
+                        }}
+                      ></i>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        </div>
+      )}
       <Modal
         opened={showEditAddress}
         title="Edit Address"
