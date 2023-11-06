@@ -27,6 +27,7 @@ export const BuyAdditionalStorageSpace: FC<BuyStorageType> = ({
     () => paymentsMethods.length === 0,
     [paymentsMethods],
   );
+  const provinceEmpty = useMemo(() => !profile?.company_province, [profile]);
 
   const [selected, setSelected] = useState<PackageType | null>(null);
   const [showChangePaymentMethod, setShowChangePaymentMethod] = useState(false);
@@ -155,54 +156,72 @@ export const BuyAdditionalStorageSpace: FC<BuyStorageType> = ({
 
       <div className="mt-4">
         <h4>Total Invoice</h4>
+        {provinceEmpty && (
+          <Alert variant="secondary">
+            <div className="text-center">
+              <div>You don't have any address registered.</div>
+              <div className="mt-2">
+                <LinkButton
+                  to="/profile"
+                  variant="primary"
+                  value="Update address information"
+                />
+              </div>
+            </div>
+          </Alert>
+        )}
 
-        <div className="d-flex justify-content-between">
-          <div>
-            <strong>Selected:</strong>
-          </div>
-          <div>$ {selected?.price}</div>
-        </div>
+        {!provinceEmpty && (
+          <>
+            <div className="d-flex justify-content-between">
+              <div>
+                <strong>Selected:</strong>
+              </div>
+              <div>$ {selected?.price}</div>
+            </div>
 
-        <div className="mt-2">
-          {pst != 0 && (
-            <div className="d-flex justify-content-between">
-              <strong>PST:</strong>
-              <span>$ {round(pst)}</span>
+            <div className="mt-2">
+              {pst != 0 && (
+                <div className="d-flex justify-content-between">
+                  <strong>PST:</strong>
+                  <span>$ {round(pst)}</span>
+                </div>
+              )}
+              {qst != 0 && (
+                <div className="d-flex justify-content-between">
+                  <strong>QST:</strong>
+                  <span>$ {round(qst)}</span>
+                </div>
+              )}
+              {gst != 0 && (
+                <div className="d-flex justify-content-between">
+                  <strong>GST:</strong>
+                  <span>$ {round(gst)}</span>
+                </div>
+              )}
+              {hst != 0 && (
+                <div className="d-flex justify-content-between">
+                  <strong>HST:</strong>
+                  <span>$ {round(hst)}</span>
+                </div>
+              )}
             </div>
-          )}
-          {qst != 0 && (
-            <div className="d-flex justify-content-between">
-              <strong>QST:</strong>
-              <span>$ {round(qst)}</span>
-            </div>
-          )}
-          {gst != 0 && (
-            <div className="d-flex justify-content-between">
-              <strong>GST:</strong>
-              <span>$ {round(gst)}</span>
-            </div>
-          )}
-          {hst != 0 && (
-            <div className="d-flex justify-content-between">
-              <strong>HST:</strong>
-              <span>$ {round(hst)}</span>
-            </div>
-          )}
-        </div>
 
-        <div className="d-flex justify-content-between mt-2">
-          <div>
-            <strong>Total:</strong>
-          </div>
-          <div>$ {round(total)}</div>
-        </div>
+            <div className="d-flex justify-content-between mt-2">
+              <div>
+                <strong>Total:</strong>
+              </div>
+              <div>$ {round(total)}</div>
+            </div>
+          </>
+        )}
       </div>
 
       <hr />
 
       <div className="mt-2">
         <h4>Payment method:</h4>
-        {paymentsMethods.length > 0 && (
+        {!paymentMethodEmpty && (
           <div className="d-flex justify-content-between">
             {selectedPaymentMethod && (
               <div>
@@ -228,7 +247,7 @@ export const BuyAdditionalStorageSpace: FC<BuyStorageType> = ({
             </div>
           </div>
         )}
-        {paymentsMethods.length === 0 && (
+        {paymentMethodEmpty && (
           <div>
             <Alert variant="secondary">
               <div className="text-center">

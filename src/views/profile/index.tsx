@@ -4,7 +4,7 @@ import { Container, Row, Col, Form } from 'react-bootstrap';
 import { FormInput } from '../../components/Form/FormInput';
 import { Button } from '../../components/Button/Button';
 import { Modal } from '../../components/Modal';
-import { isValid, validate } from '../../utils/validator';
+import { VALIDATION, isValid, validate } from '../../utils/validator';
 import { ChangePassword } from './components/ChangePassword';
 import { DeleteProfile } from './components/DeleteProfile';
 import { useProfile } from '../../api/user/useProfile';
@@ -49,12 +49,12 @@ export const UserProfile: FC = () => {
     email: [],
   });
   const fields = {
-    company_name: [],
-    company_business_number: [],
+    company_name: [VALIDATION.REQUIRED],
+    company_business_number: [VALIDATION.REQUIRED],
     company_address: [],
     company_number: [],
-    company_province: [],
-    company_city: [],
+    company_province: [VALIDATION.REQUIRED],
+    company_city: [VALIDATION.REQUIRED],
     company_postal_code: [],
 
     first_name: [],
@@ -167,6 +167,7 @@ export const UserProfile: FC = () => {
                     classes="mt-2"
                     fieldName="company_province"
                     value={profileData.company_province}
+                    placeholder="Select province"
                     options={PROVINCES_CANADA_LIST}
                     onChange={onHandleChange}
                     errors={errors.company_province}

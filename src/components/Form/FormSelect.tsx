@@ -46,7 +46,7 @@ export const FormSelect: FC<FormSelectType> = ({
       onChange={onChange}
       isInvalid={errors.length > 0}
     >
-      {placeholder && <option>{placeholder}</option>}
+      {placeholder && <option value={''}>{placeholder}</option>}
       {options.map((option: OptionType) => (
         <option key={option.value} value={option.value}>
           {option.label}

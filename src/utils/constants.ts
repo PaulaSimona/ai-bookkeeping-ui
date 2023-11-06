@@ -1,7 +1,7 @@
 export const VALID_TYPE_TO_UPLOAD = [
   'image/jpeg',
-  'image/png',
-  'application/pdf',
+  // 'image/png',
+  // 'application/pdf',
 ];
 
 export const PROVINCES_CANADA_LIST = [
