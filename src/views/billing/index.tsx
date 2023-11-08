@@ -7,6 +7,8 @@ import { useProfile } from '../../api/user/useProfile';
 import { AddNewPaymentMethod } from './components/AddNewPaymentMethod';
 import { usePayments } from '../../api/payments/usePayments';
 import { CardIcon } from '../../components/Icons/CardIcon';
+import { useInvoices } from '../../api/billing/useInvoices';
+import { formatDate } from '../../utils/dates';
 
 export const BillingPage: FC = () => {
   const [showEditAddress, setShowEditAddress] = useState(false);
@@ -16,6 +18,7 @@ export const BillingPage: FC = () => {
     useState(false);
   const selectedPaymentMethod = useRef<any>();
   const { profile, getProfile } = useProfile();
+  const { getInvoices, invoices } = useInvoices();
   const {
     paymentsMethods,
     getPayments,
@@ -55,8 +58,9 @@ export const BillingPage: FC = () => {
     if (!profile) {
       getProfile();
       getPayments();
+      getInvoices();
     }
-  }, [getProfile, getPayments, profile]);
+  }, [getProfile, getPayments, getInvoices, profile]);
 
   return (
     <Container style={{ maxWidth: 960 }} className="my-4 profile">
@@ -116,48 +120,22 @@ export const BillingPage: FC = () => {
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td>#12345</td>
-                <td>06/16/2023</td>
-                <td>Additional Storage</td>
-                <td>$ 9,90</td>
-                <td>
-                  <strong
-                    className="m_pointer text-primary"
-                    onClick={onClickDownload}
-                  >
-                    Download
-                  </strong>
-                </td>
-              </tr>
-              <tr>
-                <td>#12345</td>
-                <td>06/16/2023</td>
-                <td>Additional Storage</td>
-                <td>$ 9,90</td>
-                <td>
-                  <strong
-                    className="m_pointer text-primary"
-                    onClick={onClickDownload}
-                  >
-                    Download
-                  </strong>
-                </td>
-              </tr>
-              <tr>
-                <td>#12345</td>
-                <td>06/16/2023</td>
-                <td>Additional Storage</td>
-                <td>$ 9,90</td>
-                <td>
-                  <strong
-                    className="m_pointer text-primary"
-                    onClick={onClickDownload}
-                  >
-                    Download
-                  </strong>
-                </td>
-              </tr>
+              {invoices?.map((invoice) => (
+                <tr key={invoice.id}>
+                  <td>{invoice.id.split('-')[0]}</td>
+                  <td>{formatDate(invoice.created_at)}</td>
+                  <td>{invoice.description}</td>
+                  <td>$ {invoice.amount}</td>
+                  <td>
+                    <strong
+                      className="m_pointer text-primary"
+                      onClick={onClickDownload}
+                    >
+                      Download
+                    </strong>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </Table>
         </Col>
