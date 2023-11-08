@@ -9,9 +9,15 @@ import { usePayments } from '../../api/payments/usePayments';
 import { CardIcon } from '../../components/Icons/CardIcon';
 import { useInvoices } from '../../api/billing/useInvoices';
 import { formatDate } from '../../utils/dates';
+import { InvoiceType } from '../../store/features/billingSlice';
+import { InvoiceDownloadPDF } from './components/InvoiceDownloadPDF';
 
 export const BillingPage: FC = () => {
   const [showEditAddress, setShowEditAddress] = useState(false);
+  const [showDownloadPDF, setShowDownloadPDF] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] = useState<InvoiceType | null>(
+    null,
+  );
   const [showAddNewPaymentMethod, setShowAddNewPaymentMethod] = useState(false);
   const [showDeletePaymentMethod, setShowDeletePaymentMethod] = useState(false);
   const [showSetPrimaryPaymentMethod, setShowSetPrimaryPaymentMethod] =
@@ -26,8 +32,9 @@ export const BillingPage: FC = () => {
     setPrimaryPaymentMethod,
   } = usePayments();
 
-  const onClickDownload = () => {
-    console.log('onClickDownload');
+  const onClickDownload = (invoice: InvoiceType) => {
+    setSelectedInvoice(invoice);
+    setShowDownloadPDF(true);
   };
 
   const onDeletePaymentMethod = () => {
@@ -129,7 +136,9 @@ export const BillingPage: FC = () => {
                   <td>
                     <strong
                       className="m_pointer text-primary"
-                      onClick={onClickDownload}
+                      onClick={() => {
+                        onClickDownload(invoice);
+                      }}
                     >
                       Download
                     </strong>
@@ -284,6 +293,19 @@ export const BillingPage: FC = () => {
         }
         handleClose={() => setShowSetPrimaryPaymentMethod(false)}
         onAccept={onSetPrimaryPaymentMethod}
+      />
+      <Modal
+        opened={showDownloadPDF}
+        title="Download PDF"
+        contain={
+          <InvoiceDownloadPDF
+            invoice={selectedInvoice}
+            onClose={() => setShowDownloadPDF(false)}
+          />
+        }
+        handleClose={() => setShowDownloadPDF(false)}
+        onAccept={() => {}}
+        noActions
       />
     </Container>
   );

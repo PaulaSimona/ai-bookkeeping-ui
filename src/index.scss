@@ -38,6 +38,9 @@ a{
 .invalid-feedback {
   color: map-get($theme-colors, "danger") !important;
 }
+.invoice{
+  font-size: 1rem;
+}
 .layout-sidebar{
   background-color: rgba(map-get($theme-colors, "primary"), 0.5);
 }

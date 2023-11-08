@@ -11,6 +11,7 @@ export type InvoiceType = {
   pst: number;
   gst: number;
   created_at: string;
+  items: { name: string; price: number }[];
 };
 
 interface BillingState {
