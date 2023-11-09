@@ -8,6 +8,7 @@ import { type FC } from 'react';
 import logo from '../../assets/logo.svg';
 
 import './Nav.scss';
+import { setProfile } from '../../store/features/profileSlice';
 
 export const Nav: FC = () => {
   const navigate = useNavigate();
@@ -15,6 +16,7 @@ export const Nav: FC = () => {
   const onLogOut = (): void => {
     removeAuth();
     dispatch(setUser(null));
+    dispatch(setProfile(null));
     setTimeout(() => {
       navigate('/login');
     }, 200);
