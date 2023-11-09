@@ -16,7 +16,6 @@ export const useDocuments = () => {
     setLoading(true);
     return api.post('api/documents/upload', data).then((res) => {
       if (res.status === 201) {
-        console.log('uploadDocument', res.data);
         showToast({
           title: 'Document uploaded',
           message: 'Document was uploaded successfully.',

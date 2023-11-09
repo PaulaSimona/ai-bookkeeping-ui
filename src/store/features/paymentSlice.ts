@@ -11,11 +11,11 @@ export type PaymentsType = {
 };
 
 interface PaymentsState {
-  paymentsMethods: PaymentsType[];
+  paymentsMethods: PaymentsType[] | null;
 }
 
 const initialState: PaymentsState = {
-  paymentsMethods: [],
+  paymentsMethods: null,
 };
 
 const PaymentsSlice = createSlice({

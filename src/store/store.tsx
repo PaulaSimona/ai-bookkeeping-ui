@@ -13,7 +13,7 @@ export const store = configureStore({
     profile: ProfileSlice,
     package: packageSlice,
     payments: paymentSlice,
-    blilling: billingSlice,
+    billing: billingSlice,
   },
 });
 

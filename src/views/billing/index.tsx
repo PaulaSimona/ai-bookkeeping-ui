@@ -25,7 +25,7 @@ export const BillingPage: FC = () => {
     useState(false);
   const selectedPaymentMethod = useRef<any>();
   const { profile, getProfile } = useProfile();
-  const { getInvoices, invoices } = useInvoices();
+  const { invoices } = useInvoices();
   const {
     paymentsMethods,
     getPayments,
@@ -65,10 +65,8 @@ export const BillingPage: FC = () => {
   useEffect(() => {
     if (!profile) {
       getProfile();
-      getPayments();
-      getInvoices();
     }
-  }, [getProfile, getPayments, getInvoices, profile]);
+  }, [getProfile, profile]);
 
   return (
     <Container style={{ maxWidth: 960 }} className="my-4 profile">
@@ -117,14 +115,14 @@ export const BillingPage: FC = () => {
 
       <Row className="mt-4 px-2">
         <Col>
-          {invoices.length === 0 && (
+          {invoices && invoices.length === 0 && (
             <Alert variant="secondary">
               <div className="text-center my-2">
                 you don't have any register yet.
               </div>
             </Alert>
           )}
-          {invoices.length > 0 && (
+          {invoices && invoices.length > 0 && (
             <Table striped bordered hover>
               <thead>
                 <tr>
@@ -169,7 +167,7 @@ export const BillingPage: FC = () => {
         />
       </div>
 
-      {paymentsMethods.length == 0 && (
+      {paymentsMethods?.length == 0 && (
         <Alert variant="secondary">
           <div className="text-center p-2">
             <div className="mb-4">
@@ -184,7 +182,7 @@ export const BillingPage: FC = () => {
         </Alert>
       )}
 
-      {paymentsMethods.length > 0 && (
+      {paymentsMethods && paymentsMethods.length > 0 && (
         <div className="px-2">
           <Table striped bordered hover>
             <thead>

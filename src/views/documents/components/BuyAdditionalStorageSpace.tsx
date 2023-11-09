@@ -11,6 +11,8 @@ import { get_gst, get_hst, get_pst, get_qst } from '../../../utils/taxes';
 import { round } from '../../../utils/round';
 import { useBuyPackage } from '../../../api/packages/useBuyPackage';
 import { LinkButton } from '../../../components/Button/ButtonLink';
+import { useDispatch } from 'react-redux';
+import { setInvoices } from '../../../store/features/billingSlice';
 
 interface BuyStorageType {
   onSuccess: () => void;
@@ -24,7 +26,7 @@ export const BuyAdditionalStorageSpace: FC<BuyStorageType> = ({
   const { paymentsMethods, getPayments } = usePayments();
   const { profile, getProfile } = useProfile();
   const paymentMethodEmpty = useMemo(
-    () => paymentsMethods.length === 0,
+    () => paymentsMethods?.length === 0,
     [paymentsMethods],
   );
   const provinceEmpty = useMemo(() => !profile?.company_province, [profile]);
@@ -32,6 +34,7 @@ export const BuyAdditionalStorageSpace: FC<BuyStorageType> = ({
   const [selected, setSelected] = useState<PackageType | null>(null);
   const [showChangePaymentMethod, setShowChangePaymentMethod] = useState(false);
   const [loading, setLoading] = useState(false);
+  const dispatch = useDispatch();
 
   // TAXES and TOTAL variables
   const gst = useMemo(() => {
@@ -53,7 +56,7 @@ export const BuyAdditionalStorageSpace: FC<BuyStorageType> = ({
 
   // payment methods selected, by default is primaryPaymentMethod
   const primaryPaymentMethod = useMemo(
-    () => paymentsMethods.find((p) => p.is_primary),
+    () => paymentsMethods?.find((p) => p.is_primary),
     [paymentsMethods],
   );
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<any>(null);
@@ -66,6 +69,7 @@ export const BuyAdditionalStorageSpace: FC<BuyStorageType> = ({
       selectedPaymentMethod?.id || primaryPaymentMethod?.id;
     buyPackage(packageId, paymentMethodId).then((response) => {
       if (response.status === 201) {
+        dispatch(setInvoices(null));
         onSuccess();
       }
       setLoading(false);
@@ -75,7 +79,7 @@ export const BuyAdditionalStorageSpace: FC<BuyStorageType> = ({
   useEffect(() => {
     if (selected == null && packages?.length > 0) {
       setSelected(packages[0]);
-      if (paymentsMethods.length === 0) {
+      if (paymentsMethods && paymentsMethods.length === 0) {
         getPayments();
       }
     }
@@ -106,27 +110,28 @@ export const BuyAdditionalStorageSpace: FC<BuyStorageType> = ({
         </a>
         <div className="mt-4">Select a payment method</div>
         <div className="mt-4">
-          {paymentsMethods.map((paymentMethod) => (
-            <div
-              className="payment-method-card d-flex"
-              onClick={() => {
-                onSelectPaymentMethod(paymentMethod);
-              }}
-            >
-              <div>
-                <CardIcon card={paymentMethod.card_brand} />
+          {paymentsMethods &&
+            paymentsMethods.map((paymentMethod) => (
+              <div
+                className="payment-method-card d-flex"
+                onClick={() => {
+                  onSelectPaymentMethod(paymentMethod);
+                }}
+              >
+                <div>
+                  <CardIcon card={paymentMethod.card_brand} />
+                </div>
+                <div className="payment-method-card-item left">
+                  ****{paymentMethod.card_last4}
+                </div>
+                <div className="payment-method-card-item center">
+                  {paymentMethod.card_brand}
+                </div>
+                <div className="payment-method-card-item right">
+                  {paymentMethod.name_payment_method}
+                </div>
               </div>
-              <div className="payment-method-card-item left">
-                ****{paymentMethod.card_last4}
-              </div>
-              <div className="payment-method-card-item center">
-                {paymentMethod.card_brand}
-              </div>
-              <div className="payment-method-card-item right">
-                {paymentMethod.name_payment_method}
-              </div>
-            </div>
-          ))}
+            ))}
         </div>
       </div>
     );

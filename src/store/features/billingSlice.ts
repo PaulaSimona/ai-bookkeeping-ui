@@ -15,11 +15,11 @@ export type InvoiceType = {
 };
 
 interface BillingState {
-  invoices: InvoiceType[];
+  invoices: InvoiceType[] | null;
 }
 
 const initialState: BillingState = {
-  invoices: [],
+  invoices: null,
 };
 
 const BillingSlice = createSlice({

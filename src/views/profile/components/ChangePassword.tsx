@@ -45,7 +45,6 @@ export const ChangePassword: FC = () => {
             new_password2: '',
           });
         } else {
-          console.log(response.data);
           setErrors({
             ...errors,
             ...response.data,

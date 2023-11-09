@@ -16,7 +16,6 @@ export const NoStorageAlert: FC<NoStorageAlertType> = ({ onClickButton }) => {
       <div>
         <Button
           onClick={() => {
-            console.log('onBuyStorageClick');
             onClickButton();
           }}
           value="Buy more storage"

@@ -17,7 +17,6 @@ export const useContact = () => {
           variant: 'success',
         });
       } else {
-        console.log(response);
         showToast({
           title: 'Email not sent',
           message: response.data.message,

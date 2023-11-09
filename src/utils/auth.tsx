@@ -21,7 +21,6 @@ export const setRefresh = (refresh: string): void => {
 
 // remove access and refresh tokens from cookies
 export const removeAuth = (): void => {
-  console.log('removeAuth', token_name, refresh_name);
   removeCookie(refresh_name);
   removeCookie(token_name);
 };

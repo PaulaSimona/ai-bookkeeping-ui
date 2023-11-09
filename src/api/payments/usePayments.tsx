@@ -3,17 +3,19 @@ import api from '../../utils/api';
 import { RootState } from '../../store/store';
 import { setPaymentsMethodsValues } from '../../store/features/paymentSlice';
 import { useToast } from '../../hooks/useToast';
+import { useCallback, useEffect, useRef } from 'react';
 
 export const usePayments = () => {
   const { paymentsMethods } = useSelector((s: RootState) => s.payments);
+  const isLoading = useRef<boolean>(false);
   const dispatch = useDispatch();
   const { showToast } = useToast();
 
-  const getPayments = () => {
+  const getPayments = useCallback(() => {
     api.get('/api/payments/').then((response) => {
       dispatch(setPaymentsMethodsValues({ payments: response.data }));
     });
-  };
+  }, [dispatch]);
 
   const createPaymentMethod = async (data: any) => {
     return api.post('/api/payments/', data).then((response) => {
@@ -36,7 +38,6 @@ export const usePayments = () => {
 
   const deletePaymentMethod = async (id: number) => {
     return api.delete(`/api/payments/${id}`).then((response) => {
-      console.log(response);
       if (response.status === 204) {
         showToast({
           title: 'Payment Method deleted',
@@ -72,6 +73,13 @@ export const usePayments = () => {
       return response;
     });
   };
+
+  useEffect(() => {
+    if (paymentsMethods == null && !isLoading.current) {
+      isLoading.current = true;
+      getPayments();
+    }
+  }, [paymentsMethods, isLoading, getPayments]);
 
   return {
     paymentsMethods,

@@ -12,7 +12,6 @@ export const useChangePassword = () => {
 
   const changePassword = async (data: ChangePasswordType) => {
     return api.put('/api/user/password', data).then((response) => {
-      console.log(response.status);
       if (response.status === 200) {
         showToast({
           title: 'Password changed',
