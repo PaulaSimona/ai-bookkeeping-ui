@@ -11,6 +11,7 @@ import { useInvoices } from '../../api/billing/useInvoices';
 import { formatDate } from '../../utils/dates';
 import { InvoiceType } from '../../store/features/billingSlice';
 import { InvoiceDownloadPDF } from './components/InvoiceDownloadPDF';
+import { round } from '../../utils/round';
 
 export const BillingPage: FC = () => {
   const [showEditAddress, setShowEditAddress] = useState(false);
@@ -140,7 +141,7 @@ export const BillingPage: FC = () => {
                     <td>{invoice.id.split('-')[0]}</td>
                     <td>{formatDate(invoice.created_at)}</td>
                     <td>{invoice.description}</td>
-                    <td>$ {invoice.amount}</td>
+                    <td>$ {round(invoice.amount)}</td>
                     <td>
                       <strong
                         className="m_pointer text-primary"

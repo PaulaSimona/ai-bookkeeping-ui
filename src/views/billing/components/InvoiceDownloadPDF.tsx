@@ -3,6 +3,7 @@ import { InvoiceType } from '../../../store/features/billingSlice';
 import { Margin, usePDF } from 'react-to-pdf';
 import { Button } from '../../../components/Button/Button';
 import { formatDateTime } from '../../../utils/dates';
+import { round } from '../../../utils/round';
 
 type InvoiceDownloadPDFType = {
   invoice: InvoiceType | null;
@@ -18,7 +19,7 @@ export const InvoiceDownloadPDF: FC<InvoiceDownloadPDFType> = ({
     return formatDateTime(invoice.created_at);
   }, [invoice]);
   const { toPDF, targetRef } = usePDF({
-    filename: 'usepdf-example.pdf',
+    filename: `invoice_${invoice?.created_at}_${invoice?.id.split('-')[0]}.pdf`,
     page: { margin: Margin.MEDIUM },
   });
 
@@ -50,7 +51,7 @@ export const InvoiceDownloadPDF: FC<InvoiceDownloadPDFType> = ({
             <div>
               <strong>HST</strong>
             </div>
-            <div>${invoice.hst}</div>
+            <div>${round(invoice.hst)}</div>
           </div>
         )}
         {!!invoice.pst && (
@@ -58,7 +59,7 @@ export const InvoiceDownloadPDF: FC<InvoiceDownloadPDFType> = ({
             <div>
               <strong>PST</strong>
             </div>
-            <div>${invoice.pst}</div>
+            <div>${round(invoice.pst)}</div>
           </div>
         )}
         {!!invoice.qst && (
@@ -66,7 +67,7 @@ export const InvoiceDownloadPDF: FC<InvoiceDownloadPDFType> = ({
             <div>
               <strong>QST</strong>
             </div>
-            <div>${invoice.qst}</div>
+            <div>${round(invoice.qst)}</div>
           </div>
         )}
         {!!invoice.gst && (
@@ -74,7 +75,7 @@ export const InvoiceDownloadPDF: FC<InvoiceDownloadPDFType> = ({
             <div>
               <strong>GST</strong>
             </div>
-            <div>${invoice.gst}</div>
+            <div>${round(invoice.gst)}</div>
           </div>
         )}
 
@@ -82,7 +83,7 @@ export const InvoiceDownloadPDF: FC<InvoiceDownloadPDFType> = ({
           <div>
             <strong>total:</strong>
           </div>
-          <div>${invoice.amount}</div>
+          <div>${round(invoice.amount)}</div>
         </div>
       </div>
 
