@@ -116,37 +116,46 @@ export const BillingPage: FC = () => {
 
       <Row className="mt-4 px-2">
         <Col>
-          <Table striped bordered hover>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Date</th>
-                <th>Description</th>
-                <th>Amount</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {invoices?.map((invoice) => (
-                <tr key={invoice.id}>
-                  <td>{invoice.id.split('-')[0]}</td>
-                  <td>{formatDate(invoice.created_at)}</td>
-                  <td>{invoice.description}</td>
-                  <td>$ {invoice.amount}</td>
-                  <td>
-                    <strong
-                      className="m_pointer text-primary"
-                      onClick={() => {
-                        onClickDownload(invoice);
-                      }}
-                    >
-                      Download
-                    </strong>
-                  </td>
+          {invoices.length === 0 && (
+            <Alert variant="secondary">
+              <div className="text-center my-2">
+                you don't have any register yet.
+              </div>
+            </Alert>
+          )}
+          {invoices.length > 0 && (
+            <Table striped bordered hover>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Date</th>
+                  <th>Description</th>
+                  <th>Amount</th>
+                  <th>Action</th>
                 </tr>
-              ))}
-            </tbody>
-          </Table>
+              </thead>
+              <tbody>
+                {invoices?.map((invoice) => (
+                  <tr key={invoice.id}>
+                    <td>{invoice.id.split('-')[0]}</td>
+                    <td>{formatDate(invoice.created_at)}</td>
+                    <td>{invoice.description}</td>
+                    <td>$ {invoice.amount}</td>
+                    <td>
+                      <strong
+                        className="m_pointer text-primary"
+                        onClick={() => {
+                          onClickDownload(invoice);
+                        }}
+                      >
+                        Download
+                      </strong>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          )}
         </Col>
       </Row>
 
