@@ -26,7 +26,7 @@ export const usePayments = () => {
       } else {
         showToast({
           title: 'Payment Method not created',
-          message: response.data.message,
+          message: response.data.msg,
           variant: 'danger',
         });
       }
@@ -46,7 +46,7 @@ export const usePayments = () => {
       } else {
         showToast({
           title: 'Payment Method not deleted',
-          message: response.data.message,
+          message: response.data.msg,
           variant: 'danger',
         });
       }
@@ -65,7 +65,7 @@ export const usePayments = () => {
       } else {
         showToast({
           title: 'Payment Method not set as primary',
-          message: response.data.message,
+          message: response.data.msg,
           variant: 'danger',
         });
       }

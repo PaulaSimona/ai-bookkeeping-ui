@@ -68,13 +68,17 @@ export const AddNewPaymentMethod: FC<AddNewPaymentMethod> = ({
           card_exp_month: paymentMethod.card?.exp_month,
           card_exp_year: paymentMethod.card?.exp_year,
           name_payment_method: name,
-        }).then((response) => {
-          if (response) {
-            setName('');
-            getPayments();
-            handleOnClose();
-          }
-        });
+        })
+          .then((response) => {
+            if (response) {
+              setName('');
+              getPayments();
+              handleOnClose();
+            }
+          })
+          .finally(() => {
+            setLoading(false);
+          });
       }
     }
   };
