@@ -123,7 +123,7 @@ export const Register: FC<RegisterType> = ({ getUser }) => {
                 <FormInput
                   type="password"
                   fieldName="password"
-                  placeholder="Contraseña"
+                  placeholder="Password"
                   value={data.password}
                   onChange={onHandleChange}
                   errors={[...errorFields.password, ...errors.password]}
@@ -133,7 +133,7 @@ export const Register: FC<RegisterType> = ({ getUser }) => {
                 <FormInput
                   type="password"
                   fieldName="confirm"
-                  placeholder="Confirmar Contraseña"
+                  placeholder="Confirm password"
                   value={data.confirm}
                   onChange={onHandleChange}
                   errors={[...errorFields.confirm, ...errors.confirm]}
@@ -141,7 +141,7 @@ export const Register: FC<RegisterType> = ({ getUser }) => {
               </div>
               <div className="d-grid gap-2 mt-4">
                 <Button disabled={inProgress} type="submit">
-                  Registrarse
+                  Register
                 </Button>
               </div>
             </Form>

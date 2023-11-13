@@ -35,3 +35,8 @@
     background: white;
     z-index: 1000;
 }
+.sidebar{
+    &-icon{
+        width: 2rem;
+    }
+}

@@ -118,7 +118,7 @@ export const BillingPage: FC = () => {
           {invoices && invoices.length === 0 && (
             <Alert variant="secondary">
               <div className="text-center my-2">
-                you don't have any register yet.
+                You don't have any invoice, yet.
               </div>
             </Alert>
           )}
@@ -290,6 +290,7 @@ export const BillingPage: FC = () => {
         }
         handleClose={() => setShowDeletePaymentMethod(false)}
         onAccept={onDeletePaymentMethod}
+        textConfirm="Delete"
       />
       <Modal
         opened={showSetPrimaryPaymentMethod}
@@ -301,6 +302,7 @@ export const BillingPage: FC = () => {
         }
         handleClose={() => setShowSetPrimaryPaymentMethod(false)}
         onAccept={onSetPrimaryPaymentMethod}
+        textConfirm="Set primary"
       />
       <Modal
         opened={showDownloadPDF}

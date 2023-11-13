@@ -1,4 +1,4 @@
-import { BaseSyntheticEvent, useState, FC, useEffect } from 'react';
+import { BaseSyntheticEvent, useState, FC, useEffect, useRef } from 'react';
 import { Container, Row, Col, Form } from 'react-bootstrap';
 
 import { FormInput } from '../../components/Form/FormInput';
@@ -64,12 +64,17 @@ export const UserProfile: FC = () => {
   };
   const { profile, getProfile, updateProfile, deleteProfile } = useProfile();
 
+  const isThereChanges = useRef(false);
+
   const onHandleChange = (event: BaseSyntheticEvent) => {
+    if (!isThereChanges.current) isThereChanges.current = true;
     setProfileData({ ...profileData, [event.target.name]: event.target.value });
   };
 
   const onSave = (event: BaseSyntheticEvent) => {
     event.preventDefault();
+    // control if there any change
+    if (!isThereChanges.current) return;
     const newError = validate(profileData, fields);
     setErrors(newError);
     if (isValid(newError)) {

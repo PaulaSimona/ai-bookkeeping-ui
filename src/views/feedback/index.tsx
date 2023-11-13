@@ -25,7 +25,7 @@ export const Feedback: FC = () => {
       <Row className="px-2">
         <Form onSubmit={onSubmitFeedback} style={{ maxWidth: 750 }}>
           <Form.Group className="mb-3" controlId="exampleForm.ControlTextarea1">
-            <Form.Label>Let us know how could improve</Form.Label>
+            <Form.Label>Share your thoughts to help us improve.</Form.Label>
             <Form.Control
               as="textarea"
               placeholder="your opinion..."

@@ -144,7 +144,7 @@ export const UploadDocuments: FC = () => {
           <div className="files_uploader mb-4">
             <FileUploader
               onSubmitted={uploadFile}
-              buttonText="load documents"
+              buttonText="Upload documents"
               noFileText={false}
               text="Drag and drop documents."
               errors={errors}

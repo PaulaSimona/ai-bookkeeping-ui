@@ -18,7 +18,7 @@ const SidebarItem: FC<SidebarItemType> = ({ path, icon, label }) => {
             isActive ? 'selected' : isPending ? 'pending' : ''
           }
         >
-          <i className={`fas fa-${icon}`}></i> {label}
+          <i className={`sidebar-icon fas fa-${icon}`}></i> {label}
         </NavLink>
       </div>
     </li>

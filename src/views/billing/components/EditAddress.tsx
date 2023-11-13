@@ -47,8 +47,7 @@ export const EditAddress: FC<EditAddressType> = ({ profile, onClose }) => {
     email: [],
   };
 
-  const onSave = (e: BaseSyntheticEvent) => {
-    e.preventDefault();
+  const onSave = () => {
     if (isLoading) return;
     setIsLoading(true);
 
@@ -68,7 +67,7 @@ export const EditAddress: FC<EditAddressType> = ({ profile, onClose }) => {
 
   return (
     <div>
-      <Form className="px-2" onSubmit={onSave}>
+      <Form className="px-2">
         <Row>
           <Col sm={8}>
             <FormInput
@@ -150,22 +149,21 @@ export const EditAddress: FC<EditAddressType> = ({ profile, onClose }) => {
             />
           </Col>
           <hr />
-          <Col className="d-flex flex-row-reverse">
-            <div style={{ float: 'right' }}>
-              <Button type="submit" value="Update Address" variant="primary" />
-            </div>
-            <div style={{ float: 'right', marginRight: '1rem' }}>
-              <Button
-                type="submit"
-                value="Cancel"
-                variant="secondary"
-                onClick={onClose}
-                disabled={isLoading}
-              />
-            </div>
-          </Col>
         </Row>
       </Form>
+      <Col className="d-flex flex-row-reverse">
+        <div style={{ float: 'right' }}>
+          <Button
+            onClick={onSave}
+            value="Update Address"
+            variant="primary"
+            disabled={isLoading}
+          />
+        </div>
+        <div style={{ float: 'right', marginRight: '1rem' }}>
+          <Button value="Cancel TEST" variant="secondary" onClick={onClose} />
+        </div>
+      </Col>
     </div>
   );
 };
