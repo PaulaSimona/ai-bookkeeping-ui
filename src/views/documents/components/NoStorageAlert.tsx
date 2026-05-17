@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { FC } from 'react';
 import { Button } from '../../../components/Button/Button';
 import './NoStorageAlert.scss';

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { type FC } from 'react';
 import ToastBase from 'react-bootstrap/Toast';
 

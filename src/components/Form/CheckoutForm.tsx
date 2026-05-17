@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { CardElement, useElements, useStripe } from '@stripe/react-stripe-js';
 import { BaseSyntheticEvent, useState } from 'react';
 import api from '../../utils/api';

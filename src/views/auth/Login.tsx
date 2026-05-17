@@ -1,138 +1,116 @@
-import { type BaseSyntheticEvent, useEffect, useState, type FC } from 'react';
-import { Form, InputGroup, Alert } from 'react-bootstrap';
-import { useNavigate, NavLink } from 'react-router-dom';
-import { Card } from '../../components/Card';
-import { Button } from '../../components/Button/Button';
-import { LinkButton } from '../../components/Button/ButtonLink';
-import { useLogin } from '../../api/auth/useLogin';
-import { isValid, validate } from '../../utils/validator';
-import './Login.scss';
-import logo from '../../assets/logo.svg';
+import { type FC, type FormEvent, useEffect, useState } from 'react';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { useLogin } from '@/api/auth/useLogin';
+import { Loader } from '@/components/Loader';
+import logoSvg from '@/assets/logo.svg';
 
-interface LoginProps {
-  getUser: () => void;
+interface Props {
+  getUser?: () => void;
 }
 
-interface LoginType {
-  email: string;
-  password: string;
-}
-
-export const Login: FC<LoginProps> = ({ getUser }) => {
-  const [loginData, setLoginData] = useState<LoginType>({
-    email: '',
-    password: '',
-  });
-  const [errors, setErrors] = useState<any>({ email: [], password: [] });
-  const fields = { email: ['required', 'email'], password: ['required'] };
+export const Login: FC<Props> = ({ getUser }) => {
   const navigate = useNavigate();
-  const { login, success, error, inProgress, completed } = useLogin();
-  const [passwordShown, setPasswordShown] = useState(false);
-  const classNamePasswordIcon = `fa fa-${passwordShown ? 'eye-slash' : 'eye'}`;
+  const { login, success, error, inProgress } = useLogin();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
   useEffect(() => {
-    if (success && completed) {
-      getUser();
-      navigate('/upload_documents');
+    if (success) {
+      getUser?.();
+      navigate('/dashboard');
     }
-  }, [success, completed, getUser, navigate]);
+  }, [success, getUser, navigate]);
 
-  const onLogin = (event: BaseSyntheticEvent): void => {
-    event.preventDefault();
-    const newError = validate(loginData, fields);
-    setErrors(newError);
-
-    if (isValid(newError)) {
-      login(loginData);
-    }
-  };
-
-  const onHandleChange = (event: BaseSyntheticEvent): void => {
-    setLoginData({ ...loginData, [event.target.name]: event.target.value });
-  };
-
-  const togglePassword = (): void => {
-    setPasswordShown(!passwordShown);
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    login({ email, password });
   };
 
   return (
-    <div className="container login">
-      <div>
-        <div className="logo-wrapper mt-4 text-center">
-          <img className="logo" src={logo} alt="AI BOOKKEEPING" />
+    <div className="flex h-screen overflow-hidden">
+      {/* Left panel */}
+      <div className="hidden lg:flex flex-col justify-between w-[440px] shrink-0 bg-[#0A1628] px-12 py-12">
+        <img src={logoSvg} alt="AI Bookkeeping" className="h-[53px] w-auto" />
+        <div>
+          <h1 className="text-4xl font-bold text-white leading-tight">
+            Smart bookkeeping,<br />powered by AI.
+          </h1>
+          <p className="mt-4 text-white/60 text-base leading-relaxed">
+            Upload receipts and invoices. We extract, categorize, and organize
+            your expenses — be always ready for tax time.
+          </p>
         </div>
-        <div style={{ maxWidth: 500, margin: '0 auto' }} className="mt-4">
-          <Card className="login_box p-4 mb-4">
-            <h2>Login</h2>
-            <form onSubmit={onLogin}>
-              {error && <Alert variant="danger">{error}</Alert>}
-              <Form.Group className="my-3">
-                <Form.Label className="font-weight-bold" htmlFor="email">
-                  Email
-                </Form.Label>
-                <Form.Control
-                  key="email"
-                  name="email"
-                  id="email"
-                  placeholder="Email"
-                  type="Text"
-                  value={loginData.email}
-                  onChange={onHandleChange}
-                  isInvalid={errors.email.length > 0}
-                />
-                <Form.Control.Feedback id="email_errors" type="invalid">
-                  <ul>
-                    {errors.email.map((errorValue: string) => (
-                      <li key={`error_email_${errorValue}`}>{errorValue}</li>
-                    ))}
-                  </ul>
-                </Form.Control.Feedback>
-              </Form.Group>
-              <Form.Group className="my-3">
-                <Form.Label className="font-weight-bold" htmlFor="password">
+        <p className="text-white/30 text-sm">© 2026 Time2Win Inc.</p>
+      </div>
+
+      {/* Right panel — outer div scrolls, inner div centers */}
+      <div className="flex-1 bg-white overflow-y-auto">
+        <div className="flex min-h-full items-center justify-center px-6 py-8">
+          <div className="w-full max-w-sm">
+          {/* Mobile logo */}
+          <img src={logoSvg} alt="AI Bookkeeping" className="h-7 mb-10 lg:hidden" />
+
+          <h2 className="text-2xl font-semibold text-gray-900">Welcome back</h2>
+          <p className="mt-1 text-sm text-gray-500">Sign in to your account</p>
+
+          {error && (
+            <div className="mt-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Email address
+              </label>
+              <input
+                type="email"
+                required
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@company.com"
+                className="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0066FF] focus:border-transparent transition"
+              />
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-sm font-medium text-gray-700">
                   Password
-                </Form.Label>
-                <InputGroup>
-                  <Form.Control
-                    key="password"
-                    name="password"
-                    id="password"
-                    placeholder="Password"
-                    type={passwordShown ? 'text' : 'password'}
-                    value={loginData.password}
-                    onChange={onHandleChange}
-                    isInvalid={errors.password.length > 0}
-                  />
-                  <div
-                    className="input-group-text m_pointer"
-                    onClick={togglePassword}
-                    aria-hidden="true"
-                  >
-                    <i className={classNamePasswordIcon} />
-                  </div>
-                </InputGroup>
-                <Form.Control.Feedback id="email_errors" type="invalid">
-                  <ul>
-                    {errors.password.map((errorValue: string) => (
-                      <li key={`error_password_${errorValue}`}>{errorValue}</li>
-                    ))}
-                  </ul>
-                </Form.Control.Feedback>
-              </Form.Group>
-
-              <div className="d-grid gap-2">
-                <Button type="submit" disabled={inProgress} value="Login" />
+                </label>
+                <a href="#" className="text-xs text-[#0066FF] hover:underline">
+                  Forgot password?
+                </a>
               </div>
-            </form>
-
-            <div className="d-grid gap-2 my-3">
-              <LinkButton to="/register" value="Register" variant="secondary" />
+              <input
+                type="password"
+                required
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0066FF] focus:border-transparent transition"
+              />
             </div>
 
-            <div className="my-3">
-              <NavLink to="#">Forgot Password?</NavLink>
-            </div>
-          </Card>
+            <button
+              type="submit"
+              disabled={inProgress}
+              className="w-full flex items-center justify-center gap-2 rounded-lg bg-[#0066FF] hover:bg-[#0052cc] disabled:opacity-60 px-4 py-2.5 text-sm font-semibold text-white transition-colors"
+            >
+              {inProgress ? <><Loader /> Signing in…</> : 'Sign in'}
+            </button>
+          </form>
+
+          <p className="mt-6 text-center text-sm text-gray-500">
+            Don't have an account?{' '}
+            <NavLink to="/register" className="font-medium text-[#0066FF] hover:underline">
+              Create one
+            </NavLink>
+          </p>
+          </div>
         </div>
       </div>
     </div>

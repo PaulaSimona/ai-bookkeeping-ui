@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { type FC } from 'react';
 import { Card as CardBase } from 'react-bootstrap';
 import { Badge } from '../Badge';

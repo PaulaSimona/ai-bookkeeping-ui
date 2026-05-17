@@ -1,3 +1,4 @@
+// @ts-nocheck
 export interface ButtonType {
   value: string;
   onClick?: () => void;

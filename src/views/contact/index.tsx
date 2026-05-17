@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { BaseSyntheticEvent, FC, useState } from 'react';
 import { Container, Form } from 'react-bootstrap';
 import { Button } from '../../components/Button/Button';

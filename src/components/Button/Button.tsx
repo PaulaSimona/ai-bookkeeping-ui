@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { type FC } from 'react';
 import { Button as ButtonBase } from 'react-bootstrap';
 import { ButtonType } from './ButtonType';

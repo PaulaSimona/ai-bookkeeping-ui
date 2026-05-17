@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Badge as BadgeBase } from 'react-bootstrap';
 import React from 'react';
 

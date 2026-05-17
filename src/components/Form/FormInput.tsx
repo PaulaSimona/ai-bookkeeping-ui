@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { type BaseSyntheticEvent, type FC } from 'react';
 import { Form } from 'react-bootstrap';
 

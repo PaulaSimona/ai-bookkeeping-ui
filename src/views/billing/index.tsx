@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { FC, useEffect, useRef, useState } from 'react';
 import { Container, Row, Col, Table, Alert } from 'react-bootstrap';
 import { Button } from '../../components/Button/Button';

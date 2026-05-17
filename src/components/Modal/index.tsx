@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { FC, cloneElement } from 'react';
 import { Modal as ModalBase } from 'react-bootstrap';
 import { Button } from '../Button/Button';

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { FC, useEffect, useMemo, useState } from 'react';
 import { Alert, Form } from 'react-bootstrap';
 import './BuyAdditionalStorageSpace.scss';

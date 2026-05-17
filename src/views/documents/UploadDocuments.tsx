@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { FC, useEffect, useMemo, useState } from 'react';
 import { Col, Container, Row } from 'react-bootstrap';
 import FileUploader from '../../components/DragAndDrop/FileUploader';

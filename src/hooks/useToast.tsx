@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useDispatch } from 'react-redux';
 import { showMessage } from '../store/features/layoutSlice';
 

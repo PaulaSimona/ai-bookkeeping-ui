@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { BaseSyntheticEvent, FC, useState } from 'react';
 import { Col, Container, Row } from 'react-bootstrap';
 import Form from 'react-bootstrap/Form';

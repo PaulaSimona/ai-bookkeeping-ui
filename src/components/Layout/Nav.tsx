@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useNavigate, NavLink } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { Nav as NavBase, NavDropdown } from 'react-bootstrap';

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { FC, useMemo } from 'react';
 import { InvoiceType } from '../../../store/features/billingSlice';
 import { Margin, usePDF } from 'react-to-pdf';

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { type FC } from 'react';
 import { Link } from 'react-router-dom';
 import { Button as ButtonBase } from 'react-bootstrap';

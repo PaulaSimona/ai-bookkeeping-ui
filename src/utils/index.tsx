@@ -1,13 +1,13 @@
 const protocol = document.location.protocol;
-let vite_api_domain: string = import.meta.env.VITE_API_DOMAIN;
+let vite_api_domain: string = import.meta.env.VITE_API_DOMAIN ?? 'http://localhost:8000';
 
-if (protocol == 'https:' && !vite_api_domain.includes('https:')) {
+if (protocol === 'https:' && !vite_api_domain.includes('https:')) {
   vite_api_domain = vite_api_domain.replace('http', 'https');
 }
 
-if (protocol == 'http:' && vite_api_domain.includes('https:')) {
+if (protocol === 'http:' && vite_api_domain.includes('https:')) {
   vite_api_domain = vite_api_domain.replace('https', 'http');
 }
 
-export const IS_HTTPS = protocol == 'https:';
+export const IS_HTTPS = protocol === 'https:';
 export const API_DOMAIN: string = vite_api_domain;

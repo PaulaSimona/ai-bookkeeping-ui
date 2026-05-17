@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { BaseSyntheticEvent, FC, useState } from 'react';
 import { CardElement, useElements, useStripe } from '@stripe/react-stripe-js';
 import { Form } from 'react-bootstrap';

@@ -1,26 +1,13 @@
-import { getCookie, setCookie, removeCookie } from 'typescript-cookie';
-import { IS_HTTPS } from './index';
+const TOKEN_KEY   = 'ai-bk-token';
+const REFRESH_KEY = 'ai-bk-refresh';
 
-const token_name = `token-bk${IS_HTTPS ? 's' : ''}`;
-const refresh_name = `refresh-bk${IS_HTTPS ? 's' : ''}`;
+export const getToken   = (): string | undefined => localStorage.getItem(TOKEN_KEY)   ?? undefined;
+export const getRefresh = (): string | undefined => localStorage.getItem(REFRESH_KEY) ?? undefined;
 
-// returns access token
-export const getToken = (): undefined | string => getCookie(token_name);
+export const setToken = (token: string): void => localStorage.setItem(TOKEN_KEY, token);
+export const setRefresh = (refresh: string): void => localStorage.setItem(REFRESH_KEY, refresh);
 
-// returns refresh token
-export const getRefresh = (): undefined | string => getCookie(refresh_name);
-
-// set access token on cookies
-export const setToken = (token: string): undefined | string =>
-  setCookie(token_name, token);
-
-// set access refresh token on cookies
-export const setRefresh = (refresh: string): void => {
-  setCookie(refresh_name, refresh);
-};
-
-// remove access and refresh tokens from cookies
 export const removeAuth = (): void => {
-  removeCookie(refresh_name);
-  removeCookie(token_name);
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(REFRESH_KEY);
 };
