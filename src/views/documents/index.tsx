@@ -281,6 +281,150 @@ const SkeletonRow = () => (
   </tr>
 );
 
+// ─── Categories ───────────────────────────────────────────────────────────────
+
+const CATEGORIES = [
+  'Groceries',
+  'Meals & Entertainment',
+  'Office Supplies',
+  'Travel & Transportation',
+  'Fuel & Vehicle',
+  'Software & Subscriptions',
+  'Professional Services',
+  'Utilities & Communications',
+  'Advertising & Marketing',
+  'Insurance',
+  'Other Business Expenses',
+] as const;
+
+// ─── Edit drawer ───────────────────────────────────────────────────────────────
+
+interface EditForm {
+  vendor: string;
+  category: string;
+  amount: string;
+  date: string;
+}
+
+const EditDrawer: FC<{
+  doc: Doc;
+  onSave: (id: number, form: EditForm) => Promise<void>;
+  onClose: () => void;
+  saving: boolean;
+}> = ({ doc, onSave, onClose, saving }) => {
+  const [form, setForm] = useState<EditForm>({
+    vendor:   docVendor(doc),
+    category: docCategory(doc) === '—' ? '' : docCategory(doc),
+    amount:   docTotal(doc) > 0 ? String(docTotal(doc)) : '',
+    date:     doc.extracted_data?.[0]?.date ?? '',
+  });
+
+  const set = (field: keyof EditForm) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+      setForm((f) => ({ ...f, [field]: e.target.value }));
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSave(doc.id, form);
+  };
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/30 z-40" onClick={onClose} />
+      <div className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl z-50 flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">Edit document</h2>
+            <p className="text-xs text-gray-400 mt-0.5 truncate max-w-[280px]">{doc.name}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors" aria-label="Close">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Vendor</label>
+            <input
+              type="text"
+              value={form.vendor}
+              onChange={set('vendor')}
+              placeholder="Store or business name"
+              className="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0066FF] focus:border-transparent transition"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Category</label>
+            <select
+              value={form.category}
+              onChange={set('category')}
+              className="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0066FF] focus:border-transparent transition bg-white"
+            >
+              <option value="">— Select category —</option>
+              {CATEGORIES.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Total amount</label>
+            <div className="relative">
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-gray-400">$</span>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.amount}
+                onChange={set('amount')}
+                placeholder="0.00"
+                className="w-full rounded-lg border border-gray-300 pl-8 pr-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0066FF] focus:border-transparent transition"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Date</label>
+            <input
+              type="date"
+              value={form.date}
+              onChange={set('date')}
+              className="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0066FF] focus:border-transparent transition"
+            />
+          </div>
+        </form>
+
+        {/* Footer */}
+        <div className="flex gap-3 px-6 py-4 border-t border-gray-100">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={saving}
+            onClick={(e) => { e.preventDefault(); onSave(doc.id, form); }}
+            className="flex-1 rounded-lg bg-[#0066FF] hover:bg-[#0052cc] disabled:opacity-60 px-4 py-2.5 text-sm font-semibold text-white transition-colors flex items-center justify-center gap-2"
+          >
+            {saving
+              ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Saving…</>
+              : 'Save changes'}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+};
+
 // ─── Confirm delete modal ─────────────────────────────────────────────────────
 
 const ConfirmDeleteModal: FC<{
@@ -340,6 +484,8 @@ export const Documents: FC = () => {
   const [selected, setSelected]   = useState<Doc | null>(null);
   const [confirmDoc, setConfirmDoc] = useState<Doc | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [editDoc, setEditDoc]       = useState<Doc | null>(null);
+  const [saving, setSaving]         = useState(false);
 
   const fetchDocs = useCallback(() => {
     api
@@ -401,6 +547,24 @@ export const Documents: FC = () => {
       setUploadErr('Upload failed. Please try again.');
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleSave = async (id: number, form: EditForm) => {
+    setSaving(true);
+    try {
+      const res = await api.patch(`/api/documents/${id}/`, {
+        vendor:   form.vendor   || undefined,
+        category: form.category || undefined,
+        amount:   form.amount   ? parseFloat(form.amount) : undefined,
+        date:     form.date     || undefined,
+      });
+      if (res?.data) {
+        setDocs((prev) => prev.map((d) => (d.id === id ? (res.data as Doc) : d)));
+      }
+      setEditDoc(null);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -500,16 +664,29 @@ export const Documents: FC = () => {
                           Details
                         </button>
                       </td>
-                      <td className="px-4 py-4 w-10">
-                        <button
-                          onClick={() => setConfirmDoc(doc)}
-                          title="Delete document"
-                          className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50"
-                        >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                          </svg>
-                        </button>
+                      <td className="px-4 py-4 w-20">
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {/* Edit */}
+                          <button
+                            onClick={() => setEditDoc(doc)}
+                            title="Edit document"
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-[#0066FF] hover:bg-blue-50 transition-colors"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                            </svg>
+                          </button>
+                          {/* Delete */}
+                          <button
+                            onClick={() => setConfirmDoc(doc)}
+                            title="Delete document"
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                            </svg>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -523,6 +700,16 @@ export const Documents: FC = () => {
 
       {/* Details drawer */}
       <DetailsDrawer doc={selected} onClose={() => setSelected(null)} />
+
+      {/* Edit drawer */}
+      {editDoc && (
+        <EditDrawer
+          doc={editDoc}
+          saving={saving}
+          onSave={handleSave}
+          onClose={() => setEditDoc(null)}
+        />
+      )}
 
       {/* Delete confirmation modal */}
       {confirmDoc && (
