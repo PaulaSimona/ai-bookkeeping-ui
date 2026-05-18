@@ -11,6 +11,8 @@ import { Workbook } from '@/views/workbook';
 import { Reports } from '@/views/reports';
 import { Settings } from '@/views/settings';
 import { Support } from '@/views/support';
+import { Feedback } from '@/views/feedback';
+import { Subscription, SubscriptionSuccess } from '@/views/subscription';
 
 const PrivateLayout: FC = () => (
   <RedirectPage privatePath>
@@ -25,38 +27,23 @@ const App: FC = () => {
 
   return (
     <Routes>
-      {/* Root — always redirect to /dashboard */}
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
-      {/* Public */}
-      <Route
-        path="/login"
-        element={
-          <RedirectPage>
-            <Login getUser={getUser} />
-          </RedirectPage>
-        }
-      />
-      <Route
-        path="/register"
-        element={
-          <RedirectPage>
-            <Register getUser={getUser} />
-          </RedirectPage>
-        }
-      />
+      <Route path="/login"    element={<RedirectPage><Login getUser={getUser} /></RedirectPage>} />
+      <Route path="/register" element={<RedirectPage><Register getUser={getUser} /></RedirectPage>} />
 
-      {/* Private — inside AppShell with sidebar */}
       <Route element={<PrivateLayout />}>
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/documents" element={<Documents />} />
-        <Route path="/workbook"  element={<Workbook />} />
-        <Route path="/reports"   element={<Reports />} />
-        <Route path="/settings"  element={<Settings />} />
-        <Route path="/support"   element={<Support />} />
+        <Route path="/dashboard"            element={<Dashboard />} />
+        <Route path="/documents"            element={<Documents />} />
+        <Route path="/workbook"             element={<Workbook />} />
+        <Route path="/reports"              element={<Reports />} />
+        <Route path="/settings"             element={<Settings />} />
+        <Route path="/support"              element={<Support />} />
+        <Route path="/feedback"             element={<Feedback />} />
+        <Route path="/subscription"         element={<Subscription />} />
+        <Route path="/subscription/success" element={<SubscriptionSuccess />} />
       </Route>
 
-      {/* Catch-all */}
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );

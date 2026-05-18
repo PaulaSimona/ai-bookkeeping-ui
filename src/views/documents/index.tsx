@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { Link } from 'react-router-dom';
 import api from '@/utils/api';
 import { getToken } from '@/utils/auth';
 
@@ -252,11 +253,21 @@ const UploadZone: FC<UploadZoneProps> = ({ onFile, uploading, error }) => {
         )}
       </div>
 
-      {error && (
+      {error === '__trial_expired__' ? (
+        <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800 flex items-center justify-between gap-4">
+          <span>Your 14-day free trial has expired.</span>
+          <Link
+            to="/subscription"
+            className="shrink-0 rounded-lg bg-[#0066FF] hover:bg-[#0052cc] px-4 py-2 text-xs font-semibold text-white transition-colors"
+          >
+            View plans →
+          </Link>
+        </div>
+      ) : error ? (
         <div className="mt-3 rounded-lg bg-red-50 border border-red-200 px-4 py-2.5 text-sm text-red-700">
           {error}
         </div>
-      )}
+      ) : null}
 
       <input
         ref={inputRef}
@@ -534,7 +545,9 @@ export const Documents: FC = () => {
         const code = res?.data?.error_code;
         const msg  = res?.data?.error;
         console.warn('[upload] non-201 response — error_code:', code, '| error:', msg);
-        if (code === 'not_enough_documents') {
+        if (code === 'trial_expired') {
+          setUploadErr('__trial_expired__');
+        } else if (code === 'not_enough_documents') {
           setUploadErr('You have reached your document quota. Please upgrade your plan.');
         } else if (code === 'not_enough_storage') {
           setUploadErr('Not enough storage space. Please upgrade your plan.');
