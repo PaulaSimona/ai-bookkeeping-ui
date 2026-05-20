@@ -5,6 +5,10 @@ import { RedirectPage } from '@/components/Redirect';
 import { AppShell } from '@/components/Layout/AppShell';
 import { Login } from '@/views/auth/Login';
 import { Register } from '@/views/auth/Register';
+import { CheckEmail } from '@/views/auth/CheckEmail';
+import { VerifyEmail } from '@/views/auth/VerifyEmail';
+import { ForgotPassword } from '@/views/auth/ForgotPassword';
+import { ResetPassword } from '@/views/auth/ResetPassword';
 import { Dashboard } from '@/views/dashboard';
 import { Documents } from '@/views/documents';
 import { Workbook } from '@/views/workbook';
@@ -29,8 +33,12 @@ const App: FC = () => {
     <Routes>
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
-      <Route path="/login"    element={<RedirectPage><Login getUser={getUser} /></RedirectPage>} />
-      <Route path="/register" element={<RedirectPage><Register getUser={getUser} /></RedirectPage>} />
+      <Route path="/login"        element={<RedirectPage><Login getUser={getUser} /></RedirectPage>} />
+      <Route path="/register"     element={<RedirectPage><Register /></RedirectPage>} />
+      <Route path="/check-email"     element={<CheckEmail />} />
+      <Route path="/verify-email"    element={<VerifyEmail />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password"  element={<ResetPassword />} />
 
       <Route element={<PrivateLayout />}>
         <Route path="/dashboard"            element={<Dashboard />} />

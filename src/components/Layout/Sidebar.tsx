@@ -1,4 +1,4 @@
-import { type FC } from 'react';
+import { type FC, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import logoSvg from '@/assets/logo.svg';
@@ -69,11 +69,53 @@ const NavItem: FC<{ to: string; label: string; icon: string; end?: boolean }> = 
   </NavLink>
 );
 
+// Confirmation dialog — styled to match the dark navy sidebar
+const LogoutDialog: FC<{ onConfirm: () => void; onCancel: () => void }> = ({ onConfirm, onCancel }) => (
+  <>
+    {/* Backdrop */}
+    <div className="fixed inset-0 bg-black/50 z-50" onClick={onCancel} />
+    {/* Dialog */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div
+        className="bg-[#0A1628] border border-white/10 rounded-xl shadow-2xl w-full max-w-xs p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-9 h-9 rounded-lg bg-white/8 flex items-center justify-center shrink-0">
+            <Icon path={ICONS.logout} />
+          </div>
+          <h3 className="text-sm font-semibold text-white">Log out</h3>
+        </div>
+
+        <p className="text-sm text-white/60 mb-6 leading-relaxed">
+          Are you sure you want to log out?
+        </p>
+
+        <div className="flex gap-2">
+          <button
+            onClick={onCancel}
+            className="flex-1 rounded-lg border border-white/15 px-4 py-2 text-sm font-medium text-white/70 hover:text-white hover:border-white/30 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 rounded-lg bg-white/10 hover:bg-white/15 px-4 py-2 text-sm font-semibold text-white transition-colors"
+          >
+            Log out
+          </button>
+        </div>
+      </div>
+    </div>
+  </>
+);
+
 export const Sidebar: FC = () => {
   const navigate  = useNavigate();
   const dispatch  = useDispatch();
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false);
 
-  const handleLogout = () => {
+  const confirmLogout = () => {
     removeAuth();
     dispatch(setUser(null));
     dispatch(setInProgress(false));
@@ -81,33 +123,42 @@ export const Sidebar: FC = () => {
   };
 
   return (
-    <aside className="flex flex-col w-60 h-screen bg-[#0A1628] shrink-0">
-      {/* Logo */}
-      <div className="flex items-center px-5 py-5 border-b border-white/10">
-        <img src={logoSvg} alt="AI Bookkeeping" className="h-[30px] w-auto" />
-      </div>
+    <>
+      <aside className="flex flex-col w-60 h-screen bg-[#0A1628] shrink-0">
+        {/* Logo */}
+        <div className="flex items-center px-5 py-5 border-b border-white/10">
+          <img src={logoSvg} alt="AI Bookkeeping" className="h-[30px] w-auto" />
+        </div>
 
-      {/* Main nav */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5">
-        {NAV_MAIN.map(({ to, label, icon }) => (
-          <NavItem key={to} to={to} label={label} icon={icon} />
-        ))}
-      </nav>
+        {/* Main nav */}
+        <nav className="flex-1 px-3 py-4 space-y-0.5">
+          {NAV_MAIN.map(({ to, label, icon }) => (
+            <NavItem key={to} to={to} label={label} icon={icon} />
+          ))}
+        </nav>
 
-      {/* Bottom nav */}
-      <div className="px-3 pb-4 border-t border-white/10 pt-3 space-y-0.5">
-        {NAV_BOTTOM.map(({ to, label, icon }) => (
-          <NavItem key={to} to={to} label={label} icon={icon} />
-        ))}
+        {/* Bottom nav */}
+        <div className="px-3 pb-4 border-t border-white/10 pt-3 space-y-0.5">
+          {NAV_BOTTOM.map(({ to, label, icon }) => (
+            <NavItem key={to} to={to} label={label} icon={icon} />
+          ))}
 
-        <button
-          onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-white/60 hover:text-white hover:bg-white/8 transition-colors"
-        >
-          <Icon path={ICONS.logout} />
-          Log out
-        </button>
-      </div>
-    </aside>
+          <button
+            onClick={() => setShowLogoutDialog(true)}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-white/60 hover:text-white hover:bg-white/8 transition-colors"
+          >
+            <Icon path={ICONS.logout} />
+            Log out
+          </button>
+        </div>
+      </aside>
+
+      {showLogoutDialog && (
+        <LogoutDialog
+          onConfirm={confirmLogout}
+          onCancel={() => setShowLogoutDialog(false)}
+        />
+      )}
+    </>
   );
 };
