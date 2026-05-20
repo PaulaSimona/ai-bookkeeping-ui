@@ -15,9 +15,9 @@ const SHARED_FEATURES = [
 
 const ADVANCED_FEATURES = [
   'Everything in Pro',
-  'Supplier invoices & bills',
+  'Supplier invoice recording',
   'Supplier payment tracking',
-  'Customer invoices',
+  'Customer invoice recording',
   'Customer payment tracking',
   'Bank & credit card connection (via Plaid)',
   'Bank reconciliation',
@@ -28,9 +28,9 @@ const ADVANCED_FEATURES = [
 ] as const;
 
 const WAITLIST_FEATURES = [
-  'Supplier invoices & bills',
+  'Supplier invoice recording',
   'Supplier payment tracking',
-  'Customer invoices',
+  'Customer invoice recording',
   'Customer payment tracking',
   'Bank & credit card connection (via Plaid)',
   'Bank reconciliation',
