@@ -126,8 +126,11 @@ export const Sidebar: FC = () => {
     <>
       <aside className="flex flex-col w-60 h-screen bg-[#0A1628] shrink-0">
         {/* Logo */}
-        <div className="flex items-center px-5 py-5 border-b border-white/10">
+        <div className="flex flex-col gap-1.5 px-5 py-4 border-b border-white/10">
           <img src={logoSvg} alt="AI Bookkeeping" className="h-[30px] w-auto" />
+          <span className="self-start bg-amber-500 text-white text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded">
+            Beta
+          </span>
         </div>
 
         {/* Main nav */}
