@@ -24,7 +24,7 @@ export const useLogin = (): any => {
       })
       .catch((error) => {
         const responseData = error.response?.data ?? {};
-        const errorMessage = responseData.detail || 'Something went wrong. Please try again.';
+        const errorMessage = responseData.detail || responseData.error || 'Something went wrong. Please try again.';
         const errorCode = responseData.error_code || '';
         setFlags((f) => ({ ...f, error: errorMessage, errorCode }));
       })
