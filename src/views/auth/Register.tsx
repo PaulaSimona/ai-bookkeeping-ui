@@ -37,6 +37,30 @@ const PasswordInput: FC<React.InputHTMLAttributes<HTMLInputElement>> = ({ classN
   );
 };
 
+// ─── Password strength indicator ─────────────────────────────────────────────
+
+function getStrength(pw: string): { level: 1 | 2 | 3 | 4; label: string; bar: string; text: string } {
+  const types = [/[A-Z]/, /[a-z]/, /[0-9]/, /[^A-Za-z0-9]/].filter((r) => r.test(pw)).length;
+  if (pw.length < 8 || types < 2) return { level: 1, label: 'Weak',   bar: 'bg-red-500',     text: 'text-red-500'    };
+  if (types === 2)                 return { level: 2, label: 'Fair',   bar: 'bg-orange-400',  text: 'text-orange-500' };
+  if (types === 3)                 return { level: 3, label: 'Good',   bar: 'bg-yellow-400',  text: 'text-yellow-600' };
+  return                                  { level: 4, label: 'Strong', bar: 'bg-emerald-500', text: 'text-emerald-600'};
+}
+
+const PasswordStrength: FC<{ password: string }> = ({ password }) => {
+  const { level, label, bar, text } = getStrength(password);
+  return (
+    <div className="mt-2 flex items-center gap-2">
+      <div className="flex gap-1 flex-1">
+        {([1, 2, 3, 4] as const).map((n) => (
+          <div key={n} className={`h-1.5 flex-1 rounded-full transition-colors duration-200 ${n <= level ? bar : 'bg-gray-200'}`} />
+        ))}
+      </div>
+      <span className={`text-[11px] font-semibold w-12 text-right shrink-0 ${text}`}>{label}</span>
+    </div>
+  );
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -166,6 +190,9 @@ export const Register: FC<Props> = () => {
                       placeholder={placeholder}
                       className={inputClass}
                     />
+                  )}
+                  {field === 'password' && form.password && (
+                    <PasswordStrength password={form.password} />
                   )}
                   {fieldError(field) && (
                     <p className="mt-1 text-xs text-red-600">{fieldError(field)}</p>
