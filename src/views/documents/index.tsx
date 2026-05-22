@@ -331,6 +331,7 @@ interface EditForm {
   category: string;
   amount: string;
   date: string;
+  notes?: string;
 }
 
 const EditDrawer: FC<{
@@ -339,15 +340,17 @@ const EditDrawer: FC<{
   onClose: () => void;
   saving: boolean;
 }> = ({ doc, onSave, onClose, saving }) => {
+  const existingNotes = (doc.extracted_data ?? []).find((i: any) => i.description === '_notes');
   const [form, setForm] = useState<EditForm>({
     vendor:   docVendor(doc),
     category: docCategory(doc) === '—' ? '' : docCategory(doc),
     amount:   docTotal(doc) > 0 ? String(docTotal(doc)) : '',
     date:     doc.extracted_data?.[0]?.date ?? '',
+    notes:    (existingNotes as any)?.notes ?? '',
   });
 
   const set = (field: keyof EditForm) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
       setForm((f) => ({ ...f, [field]: e.target.value }));
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -415,6 +418,12 @@ const EditDrawer: FC<{
             </div>
           </div>
 
+          {form.category === 'Meals & Entertainment' && (
+            <p className="text-xs text-gray-400 italic -mt-2">
+              Include any gratuity in the total amount paid.
+            </p>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Date</label>
             <input
@@ -422,6 +431,18 @@ const EditDrawer: FC<{
               value={form.date}
               onChange={set('date')}
               className="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0066FF] focus:border-transparent transition"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Notes <span className="font-normal text-gray-400">(optional)</span></label>
+            <textarea
+              value={form.notes ?? ''}
+              onChange={set('notes')}
+              placeholder="e.g. Business lunch with client, includes tip"
+              maxLength={500}
+              rows={3}
+              className="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0066FF] focus:border-transparent transition resize-none"
             />
           </div>
         </form>
@@ -587,6 +608,7 @@ export const Documents: FC = () => {
         category: form.category || undefined,
         amount:   form.amount   ? parseFloat(form.amount) : undefined,
         date:     form.date     || undefined,
+        notes:    form.notes    ?? '',
       });
       if (res?.data) {
         setDocs((prev) => prev.map((d) => (d.id === id ? (res.data as Doc) : d)));
