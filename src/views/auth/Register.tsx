@@ -122,7 +122,14 @@ export const Register: FC<Props> = () => {
             their bookkeeping.
           </p>
         </div>
-        <p className="text-white/30 text-sm">© 2026 Time2Win Inc.</p>
+        <div className="text-white/30 text-xs space-y-1">
+          <p>© 2026 Time2Win Inc.</p>
+          <p className="flex items-center gap-2">
+            <NavLink to="/privacy-policy"   className="hover:text-white/50 transition-colors">Privacy Policy</NavLink>
+            <span>·</span>
+            <NavLink to="/terms-of-service" className="hover:text-white/50 transition-colors">Terms of Service</NavLink>
+          </p>
+        </div>
       </div>
 
       {/* Right panel */}
@@ -218,6 +225,13 @@ export const Register: FC<Props> = () => {
             <NavLink to="/login" className="font-medium text-[#0066FF] hover:underline">
               Sign in
             </NavLink>
+          </p>
+
+          <p className="mt-4 text-center text-xs text-gray-400">
+            By continuing, you agree to our{' '}
+            <NavLink to="/terms-of-service" className="underline hover:text-gray-600 transition-colors">Terms of Service</NavLink>
+            {' '}and{' '}
+            <NavLink to="/privacy-policy" className="underline hover:text-gray-600 transition-colors">Privacy Policy</NavLink>
           </p>
         </div>
       </div>

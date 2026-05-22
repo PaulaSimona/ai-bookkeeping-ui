@@ -17,6 +17,8 @@ import { Settings } from '@/views/settings';
 import { Support } from '@/views/support';
 import { Feedback } from '@/views/feedback';
 import { Subscription, SubscriptionSuccess } from '@/views/subscription';
+import { PrivacyPolicy } from '@/views/legal/PrivacyPolicy';
+import { TermsOfService } from '@/views/legal/TermsOfService';
 
 const PrivateLayout: FC = () => (
   <RedirectPage privatePath>
@@ -39,6 +41,8 @@ const App: FC = () => {
       <Route path="/verify-email"    element={<VerifyEmail />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password"  element={<ResetPassword />} />
+      <Route path="/privacy-policy"   element={<PrivacyPolicy />} />
+      <Route path="/terms-of-service" element={<TermsOfService />} />
 
       <Route element={<PrivateLayout />}>
         <Route path="/dashboard"            element={<Dashboard />} />
