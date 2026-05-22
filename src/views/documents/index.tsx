@@ -30,6 +30,7 @@ interface Doc {
   created_at: string;
   type_file: string;
   size: number;
+  file?: string | null;
   extraction_status: 'pending' | 'done' | 'failed' | 'needs_clarification' | 'unreadable';
   extracted_data: LineItem[];
 }
@@ -130,10 +131,25 @@ const DetailsDrawer: FC<{ doc: Doc | null; onClose: () => void }> = ({ doc, onCl
         </div>
 
         {/* Status */}
-        <div className="px-6 py-3 border-b border-gray-50 flex items-center gap-2">
-          <StatusBadge status={doc.extraction_status} />
-          {items.length > 0 && (
-            <span className="text-xs text-gray-400">{items.length} line item{items.length !== 1 ? 's' : ''}</span>
+        <div className="px-6 py-3 border-b border-gray-50 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <StatusBadge status={doc.extraction_status} />
+            {items.length > 0 && (
+              <span className="text-xs text-gray-400">{items.length} line item{items.length !== 1 ? 's' : ''}</span>
+            )}
+          </div>
+          {doc.file && (
+            <a
+              href={doc.file}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1.5 text-xs font-medium text-[#0066FF] hover:underline"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+              </svg>
+              View original
+            </a>
           )}
         </div>
 
@@ -670,12 +686,25 @@ export const Documents: FC = () => {
                         <StatusBadge status={doc.extraction_status} />
                       </td>
                       <td className="px-6 py-4">
-                        <button
-                          onClick={() => setSelected(doc)}
-                          className="text-xs font-medium text-[#0066FF] hover:underline"
-                        >
-                          Details
-                        </button>
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => setSelected(doc)}
+                            className="text-xs font-medium text-[#0066FF] hover:underline"
+                          >
+                            Details
+                          </button>
+                          {doc.file && (
+                            <a
+                              href={doc.file}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-xs font-medium text-gray-400 hover:text-gray-700 transition-colors"
+                              title="View original file"
+                            >
+                              View
+                            </a>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-4 w-20">
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
