@@ -19,6 +19,7 @@ import { Feedback } from '@/views/feedback';
 import { Subscription, SubscriptionSuccess } from '@/views/subscription';
 import { PrivacyPolicy } from '@/views/legal/PrivacyPolicy';
 import { TermsOfService } from '@/views/legal/TermsOfService';
+import { ReviewerDashboard } from '@/views/reviewer';
 
 const PrivateLayout: FC = () => (
   <RedirectPage privatePath>
@@ -54,6 +55,7 @@ const App: FC = () => {
         <Route path="/feedback"             element={<Feedback />} />
         <Route path="/subscription"         element={<Subscription />} />
         <Route path="/subscription/success" element={<SubscriptionSuccess />} />
+        <Route path="/reviewer"             element={<ReviewerDashboard />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

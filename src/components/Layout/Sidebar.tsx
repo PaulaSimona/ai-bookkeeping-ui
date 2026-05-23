@@ -1,6 +1,7 @@
 import { type FC, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
+import type { RootState } from '@/store/store';
 import logoSvg from '@/assets/logo.svg';
 import { removeAuth } from '@/utils/auth';
 import { setUser, setInProgress } from '@/store/features/authSlice';
@@ -20,6 +21,8 @@ const Icon: FC<{ path: string }> = ({ path }) => (
 );
 
 const ICONS = {
+  reviewer:
+    'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4',
   dashboard: 'M3 3h7v7H3V3zm11 0h7v7h-7V3zM3 14h7v7H3v-7zm11 0h7v7h-7v-7z',
   documents:
     'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
@@ -113,6 +116,8 @@ const LogoutDialog: FC<{ onConfirm: () => void; onCancel: () => void }> = ({ onC
 export const Sidebar: FC = () => {
   const navigate  = useNavigate();
   const dispatch  = useDispatch();
+  const auth      = useSelector((s: RootState) => s.auth);
+  const isStaff   = auth.user?.user?.is_staff ?? auth.user?.is_staff ?? false;
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
 
   const confirmLogout = () => {
@@ -138,6 +143,12 @@ export const Sidebar: FC = () => {
           {NAV_MAIN.map(({ to, label, icon }) => (
             <NavItem key={to} to={to} label={label} icon={icon} />
           ))}
+          {isStaff && (
+            <>
+              <div className="my-2 border-t border-white/10" />
+              <NavItem to="/reviewer" label="Reviewer" icon={ICONS.reviewer} />
+            </>
+          )}
         </nav>
 
         {/* Bottom nav */}
