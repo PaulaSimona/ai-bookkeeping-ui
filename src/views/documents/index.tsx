@@ -97,7 +97,7 @@ const StatusBadge: FC<{ status: Doc['extraction_status'] }> = ({ status }) => {
 
 // ─── Details drawer ───────────────────────────────────────────────────────────
 
-const DetailsDrawer: FC<{ doc: Doc | null; onClose: () => void }> = ({ doc, onClose }) => {
+const DetailsDrawer: FC<{ doc: Doc | null; onClose: () => void; onEdit?: (doc: Doc) => void }> = ({ doc, onClose, onEdit }) => {
   if (!doc) return null;
   const allItems = doc.extracted_data ?? [];
   const items = allItems.filter((i) => i.description !== '_total');
@@ -156,9 +156,17 @@ const DetailsDrawer: FC<{ doc: Doc | null; onClose: () => void }> = ({ doc, onCl
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
           {doc.extraction_status === 'failed' && (
-            <p className="text-sm text-red-600 bg-red-50 rounded-lg px-4 py-3">
-              AI extraction failed for this document. You can re-upload it or enter data manually.
-            </p>
+            <div className="text-sm bg-red-50 rounded-lg px-4 py-3">
+              <p className="text-red-600">AI extraction failed for this document. You can re-upload it or enter the data manually.</p>
+              {onEdit && (
+                <button
+                  onClick={() => { onClose(); onEdit(doc); }}
+                  className="mt-3 w-full rounded-lg bg-[#0066FF] hover:bg-[#0052cc] px-4 py-2.5 text-sm font-semibold text-white transition-colors"
+                >
+                  Enter data manually →
+                </button>
+              )}
+            </div>
           )}
           {doc.extraction_status === 'pending' && (
             <p className="text-sm text-amber-700 bg-amber-50 rounded-lg px-4 py-3">
@@ -271,12 +279,32 @@ const UploadZone: FC<UploadZoneProps> = ({ onFile, uploading, error }) => {
 
       {error === '__trial_expired__' ? (
         <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800 flex items-center justify-between gap-4">
-          <span>Your 14-day free trial has expired.</span>
+          <span>Your 5-day free trial has expired.</span>
           <Link
             to="/subscription"
             className="shrink-0 rounded-lg bg-[#0066FF] hover:bg-[#0052cc] px-4 py-2 text-xs font-semibold text-white transition-colors"
           >
-            View plans →
+            Upgrade now →
+          </Link>
+        </div>
+      ) : error === '__quota_docs__' ? (
+        <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800 flex items-center justify-between gap-4">
+          <span>You've reached your document quota.</span>
+          <Link
+            to="/subscription"
+            className="shrink-0 rounded-lg bg-[#0066FF] hover:bg-[#0052cc] px-4 py-2 text-xs font-semibold text-white transition-colors"
+          >
+            Upgrade now →
+          </Link>
+        </div>
+      ) : error === '__quota_storage__' ? (
+        <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800 flex items-center justify-between gap-4">
+          <span>You've run out of storage space.</span>
+          <Link
+            to="/subscription"
+            className="shrink-0 rounded-lg bg-[#0066FF] hover:bg-[#0052cc] px-4 py-2 text-xs font-semibold text-white transition-colors"
+          >
+            Upgrade now →
           </Link>
         </div>
       ) : error ? (
@@ -585,9 +613,9 @@ export const Documents: FC = () => {
         if (code === 'trial_expired') {
           setUploadErr('__trial_expired__');
         } else if (code === 'not_enough_documents') {
-          setUploadErr('You have reached your document quota. Please upgrade your plan.');
+          setUploadErr('__quota_docs__');
         } else if (code === 'not_enough_storage') {
-          setUploadErr('Not enough storage space. Please upgrade your plan.');
+          setUploadErr('__quota_storage__');
         } else {
           setUploadErr(msg ?? 'Upload failed. Please try again.');
         }
@@ -763,7 +791,11 @@ export const Documents: FC = () => {
       </div>
 
       {/* Details drawer */}
-      <DetailsDrawer doc={selected} onClose={() => setSelected(null)} />
+      <DetailsDrawer
+        doc={selected}
+        onClose={() => setSelected(null)}
+        onEdit={(doc) => { setSelected(null); setEditDoc(doc); }}
+      />
 
       {/* Edit drawer */}
       {editDoc && (
