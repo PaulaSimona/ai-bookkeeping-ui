@@ -110,6 +110,7 @@ const BusinessProfileSection: FC<{ showSuccess: (m: string) => void; showError: 
   const [saving, setSaving]   = useState(false);
   const [country, setCountry] = useState('CA');
   const [form, setForm] = useState({
+    phone_number:    '',
     company_name:    '',
     business_number: '',
     address:         '',
@@ -124,6 +125,7 @@ const BusinessProfileSection: FC<{ showSuccess: (m: string) => void; showError: 
       if (res?.data) {
         const c = res.data.company ?? {};
         setForm({
+          phone_number:    res.data.phone_number ?? '',
           company_name:    c.company_name    ?? '',
           business_number: c.business_number ?? '',
           address:         c.address         ?? '',
@@ -144,7 +146,8 @@ const BusinessProfileSection: FC<{ showSuccess: (m: string) => void; showError: 
     e.preventDefault();
     setSaving(true);
     try {
-      const res = await api.put('/api/user/profile', { company: form });
+      const { phone_number, ...companyFields } = form;
+      const res = await api.put('/api/user/profile', { phone_number, company: companyFields });
       if (res?.status === 200) {
         showSuccess('Business profile saved.');
       } else {
@@ -170,6 +173,10 @@ const BusinessProfileSection: FC<{ showSuccess: (m: string) => void; showError: 
       <form onSubmit={handleSubmit} className="space-y-5">
         <Field label="Business name">
           <Input value={form.company_name} onChange={set('company_name')} placeholder="Acme Corp" />
+        </Field>
+
+        <Field label="Phone number">
+          <Input type="tel" value={form.phone_number} onChange={set('phone_number')} placeholder="+1 604 555 1234" />
         </Field>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
