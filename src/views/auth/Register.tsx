@@ -76,7 +76,6 @@ export const Register: FC<Props> = () => {
     last_name: '',
     email: '',
     confirm_email: '',
-    phone_number: '',
     password: '',
     confirm: '',
   });
@@ -138,7 +137,7 @@ export const Register: FC<Props> = () => {
           <img src={logoSvg} alt="AI Bookkeeping" className="h-7 mb-10 lg:hidden" />
 
           <h2 className="text-2xl font-semibold text-gray-900">Create account</h2>
-          <p className="mt-1 text-sm text-gray-500">5-day free trial · Credit card required</p>
+          <p className="mt-1 text-sm text-gray-500">5-day free trial · No credit card required</p>
 
           {error && !Object.values(errors ?? {}).some((e) => Array.isArray(e) && e.length > 0) && (
             <div className="mt-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
@@ -171,7 +170,6 @@ export const Register: FC<Props> = () => {
             {[
               { field: 'email' as const,         label: 'Email address',          type: 'email',    placeholder: 'you@company.com' },
               { field: 'confirm_email' as const, label: 'Confirm email address',  type: 'email',    placeholder: 'you@company.com' },
-              { field: 'phone_number' as const,  label: 'Phone number',           type: 'tel',      placeholder: '+1 613 555 1234' },
               { field: 'password' as const,      label: 'Password',               type: 'password', placeholder: 'Min. 8 characters' },
               { field: 'confirm' as const,       label: 'Confirm password',       type: 'password', placeholder: 'Repeat password' },
             ].map(({ field, label, type, placeholder }) => {
