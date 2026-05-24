@@ -1,3 +1,4 @@
+// v2 pricing flow
 import { type FC } from 'react';
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { useSelector } from 'react-redux';
