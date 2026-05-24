@@ -55,6 +55,14 @@ const docVendor = (doc: Doc) =>
 const docCategory = (doc: Doc) =>
   doc.extracted_data?.[0]?.category ?? '—';
 
+const timeSaved = (docCount: number): string => {
+  const totalMinutes = docCount * 2.5;
+  if (totalMinutes < 60) return `${Math.floor(totalMinutes)} min`;
+  const hours = Math.floor(totalMinutes / 60);
+  const mins  = Math.round(totalMinutes % 60);
+  return mins > 0 ? `${hours}h ${mins}min` : `${hours}h`;
+};
+
 const greeting = () => {
   const h = new Date().getHours();
   return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
@@ -169,7 +177,7 @@ export const Dashboard: FC = () => {
         </div>
 
         {/* Stat cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 mb-8">
           <StatCard
             label="Documents this month"
             value={loading ? '—' : String(monthDocs.length)}
@@ -200,6 +208,18 @@ export const Dashboard: FC = () => {
             icon={
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 14.25l6-6m4.5-3.493V21.75l-3.75-1.5-3.75 1.5-3.75-1.5-3.75 1.5V4.757c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0c1.1.128 1.907 1.077 1.907 2.185z" />
+              </svg>
+            }
+          />
+          <StatCard
+            label="Time saved"
+            value={loading ? '—' : timeSaved(docs.length)}
+            sub="vs. manual data entry"
+            accent="bg-amber-50 text-amber-600"
+            icon={
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+                <circle cx="12" cy="12" r="9" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 3" />
               </svg>
             }
           />
