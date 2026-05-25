@@ -757,7 +757,7 @@ export const Documents: FC = () => {
                         </div>
                       </td>
                       <td className="px-4 py-4 w-20">
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center gap-1">
                           {/* Edit */}
                           <button
                             onClick={() => setEditDoc(doc)}
