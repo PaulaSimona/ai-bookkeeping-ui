@@ -608,7 +608,7 @@ export const LandingPage: FC = () => {
             </div>
 
             <p className="mt-8 text-center text-xs text-white/30">
-              Prices in CAD. GST/HST may apply. Cancel anytime from your billing portal.{' '}
+              Prices in CAD / USD. Taxes may apply. Cancel anytime from your billing portal.{' '}
               By subscribing you agree to our{' '}
               <Link to="/terms-of-service" className="underline hover:text-white/50 transition-colors">
                 Terms of Service
@@ -620,7 +620,7 @@ export const LandingPage: FC = () => {
         {/* ── FOOTER ─────────────────────────────────────────────────────────── */}
         <footer className="px-6 py-10 border-t border-white/8">
           <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-            <p className="text-sm text-white/30">© 2026 Time2Win Inc.</p>
+            <p className="text-sm text-white/30">© 2026 Time2Win Inc. · Canadian-based company</p>
             <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
               <Link to="/privacy-policy" className="text-sm text-white/30 hover:text-white/60 transition-colors">
                 Privacy Policy
