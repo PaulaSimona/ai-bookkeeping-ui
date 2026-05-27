@@ -25,6 +25,7 @@ import { Pricing } from '@/views/pricing';
 import { PrivacyPolicy } from '@/views/legal/PrivacyPolicy';
 import { TermsOfService } from '@/views/legal/TermsOfService';
 import { ReviewerDashboard } from '@/views/reviewer';
+import { LandingPage } from '@/pages/LandingPage';
 
 const PrivateLayout: FC = () => (
   <RedirectPage privatePath>
@@ -34,11 +35,12 @@ const PrivateLayout: FC = () => (
   </RedirectPage>
 );
 
-// Unauthenticated → /pricing, authenticated → /dashboard
+// Unauthenticated → landing page, authenticated → /documents
 const HomeRedirect: FC = () => {
   const { user, inProgress } = useSelector((s: RootState) => s.auth);
   if (inProgress) return <PageLoader />;
-  return <Navigate to={user ? '/dashboard' : '/pricing'} replace />;
+  if (user) return <Navigate to="/documents" replace />;
+  return <LandingPage />;
 };
 
 const App: FC = () => {
