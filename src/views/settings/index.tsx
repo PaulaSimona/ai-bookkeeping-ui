@@ -316,8 +316,8 @@ const TelegramSection: FC<{ showSuccess: (m: string) => void; showError: (m: str
             </svg>
             <div className="text-sm text-gray-600 leading-relaxed">
               Send <code className="bg-white border border-gray-200 rounded px-1.5 py-0.5 font-mono text-xs">/start</code> to{' '}
-              <a href="https://t.me/AIBookkeepingBot" target="_blank" rel="noreferrer" className="text-[#0066FF] hover:underline font-medium">
-                @AIBookkeepingBot
+              <a href="https://t.me/Accuratebooks_bot" target="_blank" rel="noreferrer" className="text-[#0066FF] hover:underline font-medium">
+                @Accuratebooks_bot
               </a>{' '}
               on Telegram, then click <strong>Generate link token</strong> below and send{' '}
               <code className="bg-white border border-gray-200 rounded px-1.5 py-0.5 font-mono text-xs">/link &lt;token&gt;</code> to the bot.
