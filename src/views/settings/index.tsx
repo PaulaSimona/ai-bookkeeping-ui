@@ -1,5 +1,6 @@
 import { type FC, type FormEvent, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Send } from 'lucide-react';
 import api from '@/utils/api';
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
@@ -309,23 +310,64 @@ const TelegramSection: FC<{ showSuccess: (m: string) => void; showError: (m: str
           </button>
         </div>
       ) : (
-        <div className="space-y-4">
-          <div className="flex items-start gap-3 rounded-lg bg-gray-50 px-4 py-3.5">
-            <svg className="w-5 h-5 text-gray-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
-            </svg>
-            <div className="text-sm text-gray-600 leading-relaxed">
-              Send <code className="bg-white border border-gray-200 rounded px-1.5 py-0.5 font-mono text-xs">/start</code> to{' '}
-              <a href="https://t.me/Accuratebooks_bot" target="_blank" rel="noreferrer" className="text-[#0066FF] hover:underline font-medium">
-                @Accuratebooks_bot
-              </a>{' '}
-              on Telegram, then click <strong>Generate link token</strong> below and send{' '}
-              <code className="bg-white border border-gray-200 rounded px-1.5 py-0.5 font-mono text-xs">/link &lt;token&gt;</code> to the bot.
+        <div className="rounded-xl bg-[#EFF8FF] border border-[#BFDBFE] p-5 space-y-5">
+          {/* Header */}
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-full bg-white flex items-center justify-center shrink-0 shadow-sm">
+              <Send className="w-4 h-4" style={{ color: '#0088CC' }} />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-900">Connect Telegram Bot</p>
+              <p className="text-xs text-gray-500 mt-0.5">Upload receipts directly from your phone</p>
             </div>
           </div>
 
+          {/* Two-column layout */}
+          <div className="flex flex-col sm:flex-row gap-5">
+            {/* Steps */}
+            <ol className="flex-1 space-y-3 text-sm text-gray-700">
+              <li className="flex items-start gap-2.5">
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#0088CC] text-[10px] font-bold text-white">1</span>
+                <span>Download Telegram on your phone</span>
+              </li>
+              <li className="flex items-start gap-2.5">
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#0088CC] text-[10px] font-bold text-white">2</span>
+                <span>
+                  Scan the QR code or tap{' '}
+                  <a href="https://t.me/Accuratebooks_bot" target="_blank" rel="noreferrer" className="font-medium text-[#0088CC] hover:underline">
+                    @Accuratebooks_bot
+                  </a>
+                </span>
+              </li>
+              <li className="flex items-start gap-2.5">
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#0088CC] text-[10px] font-bold text-white">3</span>
+                <span>
+                  Send <code className="rounded bg-white border border-[#BFDBFE] px-1.5 py-0.5 font-mono text-xs">/start</code> to the bot
+                </span>
+              </li>
+              <li className="flex items-start gap-2.5">
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#0088CC] text-[10px] font-bold text-white">4</span>
+                <span>
+                  Generate your link token below and send{' '}
+                  <code className="rounded bg-white border border-[#BFDBFE] px-1.5 py-0.5 font-mono text-xs">/link &lt;token&gt;</code> to the bot
+                </span>
+              </li>
+            </ol>
+
+            {/* QR code */}
+            <div className="sm:shrink-0 flex justify-center">
+              <img
+                src="/t_me-Accuratebooks_bot.jpg"
+                alt="Scan to open @Accuratebooks_bot on Telegram"
+                className="rounded-lg border border-[#BFDBFE] object-contain"
+                style={{ width: 180, height: 180 }}
+              />
+            </div>
+          </div>
+
+          {/* Token display */}
           {token && (
-            <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3">
+            <div className="rounded-lg border border-blue-100 bg-white px-4 py-3">
               <p className="text-xs font-medium text-blue-700 mb-1.5">Your link token (valid 15 minutes)</p>
               <div className="flex items-center gap-2">
                 <code className="flex-1 font-mono text-sm text-blue-900 break-all">/link {token}</code>
@@ -339,10 +381,11 @@ const TelegramSection: FC<{ showSuccess: (m: string) => void; showError: (m: str
             </div>
           )}
 
+          {/* Generate button */}
           <button
             onClick={handleGenerateToken}
             disabled={generating}
-            className="flex items-center gap-2 rounded-lg bg-[#0066FF] hover:bg-[#0052cc] disabled:opacity-60 px-5 py-2.5 text-sm font-semibold text-white transition-colors"
+            className="flex items-center gap-2 rounded-lg bg-[#0088CC] hover:bg-[#0077b3] disabled:opacity-60 px-5 py-2.5 text-sm font-semibold text-white transition-colors"
           >
             {generating && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
             {generating ? 'Generating…' : 'Generate link token'}
