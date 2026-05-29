@@ -1,5 +1,4 @@
 import { type FC, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import api from '@/utils/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -160,7 +159,6 @@ export const Reports: FC = () => {
   const [docs, setDocs]           = useState<Doc[]>([]);
   const [loadingDocs, setLoading] = useState(true);
   const [isCanada, setIsCanada]   = useState(true); // default CA until profile loads
-  const [noProvince, setNoProvince] = useState(false);
 
   // Load documents + profile in parallel
   useEffect(() => {
@@ -171,7 +169,6 @@ export const Reports: FC = () => {
     api.get('/api/user/profile').then((res) => {
       const province = res?.data?.company?.province ?? '';
       setIsCanada(CA_PROVINCES.has(province) || province === '');
-      setNoProvince(!province);
     });
   }, []);
 
@@ -205,20 +202,6 @@ export const Reports: FC = () => {
             Generated on demand from your uploaded documents. Download as Excel at any time.
           </p>
         </div>
-
-        {/* Province warning banner */}
-        {noProvince && (
-          <div className="mb-6 flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            <span className="shrink-0 text-base">⚠️</span>
-            <p>
-              Set your province in{' '}
-              <Link to="/settings" className="font-medium underline underline-offset-2 hover:text-amber-900">
-                Settings → Business Profile
-              </Link>{' '}
-              to generate accurate Canadian tax reports.
-            </p>
-          </div>
-        )}
 
         {/* Report cards — side by side on md+, stacked on mobile */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">

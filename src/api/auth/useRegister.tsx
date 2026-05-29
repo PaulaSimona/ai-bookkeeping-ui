@@ -9,6 +9,7 @@ const EMPTY_ERRORS = {
   phone_number: [] as string[],
   password: [] as string[],
   confirm: [] as string[],
+  province: [] as string[],
 };
 
 const extractFieldErrors = (data: any): typeof EMPTY_ERRORS => {
@@ -45,6 +46,7 @@ export const useRegister = (): any => {
     phone_number: string;
     password: string;
     confirm: string;
+    province: string;
   }): Promise<any> => {
     setFlags((f) => ({ ...f, inProgress: true, success: false, requiresVerification: false, error: '' }));
     setErrors(EMPTY_ERRORS);

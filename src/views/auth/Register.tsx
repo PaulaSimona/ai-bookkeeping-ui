@@ -61,6 +61,44 @@ const PasswordStrength: FC<{ password: string }> = ({ password }) => {
   );
 };
 
+// ─── Location data ───────────────────────────────────────────────────────────
+
+const CANADA_PROVINCES = [
+  { code: 'AB', name: 'Alberta' },
+  { code: 'BC', name: 'British Columbia' },
+  { code: 'MB', name: 'Manitoba' },
+  { code: 'NB', name: 'New Brunswick' },
+  { code: 'NL', name: 'Newfoundland and Labrador' },
+  { code: 'NS', name: 'Nova Scotia' },
+  { code: 'NT', name: 'Northwest Territories' },
+  { code: 'NU', name: 'Nunavut' },
+  { code: 'ON', name: 'Ontario' },
+  { code: 'PE', name: 'Prince Edward Island' },
+  { code: 'QC', name: 'Quebec' },
+  { code: 'SK', name: 'Saskatchewan' },
+  { code: 'YT', name: 'Yukon' },
+];
+
+const US_STATES = [
+  { code: 'AL', name: 'Alabama' }, { code: 'AK', name: 'Alaska' }, { code: 'AZ', name: 'Arizona' },
+  { code: 'AR', name: 'Arkansas' }, { code: 'CA', name: 'California' }, { code: 'CO', name: 'Colorado' },
+  { code: 'CT', name: 'Connecticut' }, { code: 'DE', name: 'Delaware' }, { code: 'DC', name: 'District of Columbia' },
+  { code: 'FL', name: 'Florida' }, { code: 'GA', name: 'Georgia' }, { code: 'HI', name: 'Hawaii' },
+  { code: 'ID', name: 'Idaho' }, { code: 'IL', name: 'Illinois' }, { code: 'IN', name: 'Indiana' },
+  { code: 'IA', name: 'Iowa' }, { code: 'KS', name: 'Kansas' }, { code: 'KY', name: 'Kentucky' },
+  { code: 'LA', name: 'Louisiana' }, { code: 'ME', name: 'Maine' }, { code: 'MD', name: 'Maryland' },
+  { code: 'MA', name: 'Massachusetts' }, { code: 'MI', name: 'Michigan' }, { code: 'MN', name: 'Minnesota' },
+  { code: 'MS', name: 'Mississippi' }, { code: 'MO', name: 'Missouri' }, { code: 'MT', name: 'Montana' },
+  { code: 'NE', name: 'Nebraska' }, { code: 'NV', name: 'Nevada' }, { code: 'NH', name: 'New Hampshire' },
+  { code: 'NJ', name: 'New Jersey' }, { code: 'NM', name: 'New Mexico' }, { code: 'NY', name: 'New York' },
+  { code: 'NC', name: 'North Carolina' }, { code: 'ND', name: 'North Dakota' }, { code: 'OH', name: 'Ohio' },
+  { code: 'OK', name: 'Oklahoma' }, { code: 'OR', name: 'Oregon' }, { code: 'PA', name: 'Pennsylvania' },
+  { code: 'RI', name: 'Rhode Island' }, { code: 'SC', name: 'South Carolina' }, { code: 'SD', name: 'South Dakota' },
+  { code: 'TN', name: 'Tennessee' }, { code: 'TX', name: 'Texas' }, { code: 'UT', name: 'Utah' },
+  { code: 'VT', name: 'Vermont' }, { code: 'VA', name: 'Virginia' }, { code: 'WA', name: 'Washington' },
+  { code: 'WV', name: 'West Virginia' }, { code: 'WI', name: 'Wisconsin' }, { code: 'WY', name: 'Wyoming' },
+];
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -78,8 +116,11 @@ export const Register: FC<Props> = () => {
     confirm_email: '',
     password: '',
     confirm: '',
+    country: 'CA',
+    province: '',
   });
   const [emailMismatch, setEmailMismatch] = useState(false);
+  const [provinceError, setProvinceError] = useState(false);
 
   useEffect(() => {
     if (requiresVerification && registeredEmail) {
@@ -101,6 +142,11 @@ export const Register: FC<Props> = () => {
       return;
     }
     setEmailMismatch(false);
+    if (!form.province.trim()) {
+      setProvinceError(true);
+      return;
+    }
+    setProvinceError(false);
     register(form);
   };
 
@@ -167,47 +213,102 @@ export const Register: FC<Props> = () => {
               ))}
             </div>
 
-            {[
-              { field: 'email' as const,         label: 'Email address',          type: 'email',    placeholder: 'you@company.com' },
-              { field: 'confirm_email' as const, label: 'Confirm email address',  type: 'email',    placeholder: 'you@company.com' },
-              { field: 'password' as const,      label: 'Password',               type: 'password', placeholder: 'Min. 8 characters' },
-              { field: 'confirm' as const,       label: 'Confirm password',       type: 'password', placeholder: 'Repeat password' },
-            ].map(({ field, label, type, placeholder }) => {
-              const inputClass = `w-full rounded-lg border px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0066FF] focus:border-transparent transition ${fieldError(field) ? 'border-red-400' : 'border-gray-300'}`;
-              return (
-                <div key={field}>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">{label}</label>
-                  {type === 'password' ? (
-                    <PasswordInput
-                      required
-                      value={form[field]}
-                      onChange={set(field)}
-                      placeholder={placeholder}
-                      autoComplete="new-password"
-                      className={inputClass}
-                    />
-                  ) : (
-                    <input
-                      type={type}
-                      required
-                      value={form[field]}
-                      onChange={set(field)}
-                      placeholder={placeholder}
-                      className={inputClass}
-                    />
-                  )}
-                  {field === 'password' && form.password && (
-                    <PasswordStrength password={form.password} />
-                  )}
-                  {fieldError(field) && (
-                    <p className="mt-1 text-xs text-red-600">{fieldError(field)}</p>
-                  )}
-                  {field === 'confirm_email' && emailMismatch && (
-                    <p className="mt-1 text-xs text-red-600">Email addresses do not match.</p>
-                  )}
-                </div>
-              );
-            })}
+            {/* Email fields */}
+            {([
+              { field: 'email' as const,         label: 'Email address',         type: 'email', placeholder: 'you@company.com' },
+              { field: 'confirm_email' as const, label: 'Confirm email address', type: 'email', placeholder: 'you@company.com' },
+            ] as const).map(({ field, label, type, placeholder }) => (
+              <div key={field}>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">{label}</label>
+                <input
+                  type={type}
+                  required
+                  value={form[field]}
+                  onChange={set(field)}
+                  placeholder={placeholder}
+                  className={`w-full rounded-lg border px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0066FF] focus:border-transparent transition ${fieldError(field) ? 'border-red-400' : 'border-gray-300'}`}
+                />
+                {fieldError(field) && <p className="mt-1 text-xs text-red-600">{fieldError(field)}</p>}
+                {field === 'confirm_email' && emailMismatch && (
+                  <p className="mt-1 text-xs text-red-600">Email addresses do not match.</p>
+                )}
+              </div>
+            ))}
+
+            {/* Country */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Country</label>
+              <select
+                value={form.country}
+                onChange={(e) => {
+                  setForm((f) => ({ ...f, country: e.target.value, province: '' }));
+                  setProvinceError(false);
+                }}
+                className="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0066FF] focus:border-transparent transition"
+              >
+                <option value="CA">Canada</option>
+                <option value="US">United States</option>
+                <option value="OTHER">Other</option>
+              </select>
+            </div>
+
+            {/* Province / State */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                {form.country === 'CA' ? 'Province' : form.country === 'US' ? 'State' : 'Province / State / Region'}
+              </label>
+              {form.country === 'CA' && (
+                <select
+                  value={form.province}
+                  onChange={(e) => { setForm((f) => ({ ...f, province: e.target.value })); setProvinceError(false); }}
+                  className={`w-full rounded-lg border px-3.5 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0066FF] focus:border-transparent transition ${provinceError || fieldError('province') ? 'border-red-400' : 'border-gray-300'}`}
+                >
+                  <option value="">Select province…</option>
+                  {CANADA_PROVINCES.map((p) => <option key={p.code} value={p.code}>{p.name}</option>)}
+                </select>
+              )}
+              {form.country === 'US' && (
+                <select
+                  value={form.province}
+                  onChange={(e) => { setForm((f) => ({ ...f, province: e.target.value })); setProvinceError(false); }}
+                  className={`w-full rounded-lg border px-3.5 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0066FF] focus:border-transparent transition ${provinceError || fieldError('province') ? 'border-red-400' : 'border-gray-300'}`}
+                >
+                  <option value="">Select state…</option>
+                  {US_STATES.map((s) => <option key={s.code} value={s.code}>{s.name}</option>)}
+                </select>
+              )}
+              {form.country === 'OTHER' && (
+                <input
+                  type="text"
+                  value={form.province}
+                  onChange={(e) => { setForm((f) => ({ ...f, province: e.target.value })); setProvinceError(false); }}
+                  placeholder="Enter your province, state, or region"
+                  className={`w-full rounded-lg border px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0066FF] focus:border-transparent transition ${provinceError || fieldError('province') ? 'border-red-400' : 'border-gray-300'}`}
+                />
+              )}
+              {provinceError && <p className="mt-1 text-xs text-red-600">Province/State is required.</p>}
+              {fieldError('province') && <p className="mt-1 text-xs text-red-600">{fieldError('province')}</p>}
+            </div>
+
+            {/* Password fields */}
+            {([
+              { field: 'password' as const, label: 'Password',         placeholder: 'Min. 8 characters' },
+              { field: 'confirm' as const,  label: 'Confirm password', placeholder: 'Repeat password'   },
+            ] as const).map(({ field, label, placeholder }) => (
+              <div key={field}>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">{label}</label>
+                <PasswordInput
+                  required
+                  value={form[field]}
+                  onChange={set(field)}
+                  placeholder={placeholder}
+                  autoComplete="new-password"
+                  className={`w-full rounded-lg border px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0066FF] focus:border-transparent transition ${fieldError(field) ? 'border-red-400' : 'border-gray-300'}`}
+                />
+                {field === 'password' && form.password && <PasswordStrength password={form.password} />}
+                {fieldError(field) && <p className="mt-1 text-xs text-red-600">{fieldError(field)}</p>}
+              </div>
+            ))}
 
             <button
               type="submit"
