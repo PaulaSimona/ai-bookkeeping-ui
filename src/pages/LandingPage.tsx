@@ -422,7 +422,7 @@ export const LandingPage: FC = () => {
                 </div>
                 <h3 className="text-base font-semibold text-white mb-2">Mid-size Businesses</h3>
                 <p className="text-sm text-white/50 leading-relaxed">
-                  Full double-entry bookkeeping, bank reconciliation, P&L reports, and Accounts Payable/Receivable tracking. Coming soon.
+                  Full double-entry bookkeeping, bank reconciliation, P&L reports, Accounts Payable/Receivable tracking, and Human (Accountant) review. Coming soon.
                 </p>
               </div>
             </div>
