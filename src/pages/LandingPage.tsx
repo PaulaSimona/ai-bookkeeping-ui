@@ -11,6 +11,7 @@ const SHARED_FEATURES = [
   'Expense & tax reports',
   'Telegram bot intake',
   'GST/HST ITC reports',
+  'Human in the loop',
   'Email support',
 ] as const;
 
@@ -26,6 +27,7 @@ const ADVANCED_FEATURES = [
   'Accounts Payable balance',
   'Accounts Receivable balance',
   'Tax reports (CA & US)',
+  'Human (Accountant) review',
 ] as const;
 
 const WAITLIST_FEATURES = [
