@@ -345,12 +345,12 @@ export const LandingPage: FC = () => {
 
             {/* Demo video */}
             <div className="mt-16 max-w-3xl mx-auto">
-              <div className="relative rounded-2xl bg-[#0A1628] border border-white/10 overflow-hidden shadow-2xl shadow-black/50" style={{ aspectRatio: '16/9' }}>
+              <div className="rounded-2xl bg-[#0A1628] border border-white/10 overflow-hidden shadow-2xl shadow-black/50">
                 <video
                   controls
                   muted
                   playsInline
-                  className="absolute inset-0 w-full h-full object-cover"
+                  className="w-full block"
                 >
                   <source src="https://pub-9fd69cb1102f42cdaf6eb68e293314af.r2.dev/Tier1_presenation.mp4" type="video/mp4" />
                   Your browser does not support the video tag.
