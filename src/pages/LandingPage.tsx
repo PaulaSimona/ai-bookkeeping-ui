@@ -352,7 +352,7 @@ export const LandingPage: FC = () => {
                   playsInline
                   className="absolute inset-0 w-full h-full object-cover"
                 >
-                  <source src="https://pub-9fd69cb1102f42cdaf6eb68e293314af.r2.dev/Tier1_presenation.MOV" type="video/quicktime" />
+                  <source src="https://pub-9fd69cb1102f42cdaf6eb68e293314af.r2.dev/Tier1_presenation.mp4" type="video/mp4" />
                   Your browser does not support the video tag.
                 </video>
               </div>
