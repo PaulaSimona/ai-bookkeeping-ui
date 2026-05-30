@@ -343,17 +343,18 @@ export const LandingPage: FC = () => {
               </button>
             </div>
 
-            {/* Embedded YouTube video */}
+            {/* Demo video */}
             <div className="mt-16 max-w-3xl mx-auto">
               <div className="relative rounded-2xl bg-[#0A1628] border border-white/10 overflow-hidden shadow-2xl shadow-black/50" style={{ aspectRatio: '16/9' }}>
-                <iframe
-                  src="https://www.youtube.com/embed/pzyyNsK8rOw"
-                  title="See AI Bookkeeping in action"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                  className="absolute inset-0 w-full h-full"
-                  style={{ border: 'none' }}
-                />
+                <video
+                  controls
+                  muted
+                  playsInline
+                  className="absolute inset-0 w-full h-full object-cover"
+                >
+                  <source src="https://pub-9fd69cb1102f42cdaf6eb68e293314af.r2.dev/Tier1_presenation.MOV" type="video/quicktime" />
+                  Your browser does not support the video tag.
+                </video>
               </div>
             </div>
           </div>
