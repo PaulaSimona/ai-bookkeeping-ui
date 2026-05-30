@@ -343,30 +343,17 @@ export const LandingPage: FC = () => {
               </button>
             </div>
 
-            {/* Video placeholder */}
+            {/* Embedded YouTube video */}
             <div className="mt-16 max-w-3xl mx-auto">
               <div className="relative rounded-2xl bg-[#0A1628] border border-white/10 overflow-hidden shadow-2xl shadow-black/50" style={{ aspectRatio: '16/9' }}>
-                {/* Subtle grid */}
-                <div
-                  className="absolute inset-0 opacity-[0.035]"
-                  aria-hidden
-                  style={{
-                    backgroundImage:
-                      'linear-gradient(rgba(255,255,255,1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,1) 1px, transparent 1px)',
-                    backgroundSize: '40px 40px',
-                  }}
+                <iframe
+                  src="https://www.youtube.com/embed/pzyyNsK8rOw"
+                  title="See AI Bookkeeping in action"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  className="absolute inset-0 w-full h-full"
+                  style={{ border: 'none' }}
                 />
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
-                  <button
-                    className="w-16 h-16 rounded-full bg-white/10 border border-white/20 flex items-center justify-center hover:bg-white/15 transition-colors"
-                    aria-label="Play video"
-                  >
-                    <svg className="w-6 h-6 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M8 5v14l11-7z" />
-                    </svg>
-                  </button>
-                  <p className="text-sm text-white/35">See AI Bookkeeping in action</p>
-                </div>
               </div>
             </div>
           </div>
