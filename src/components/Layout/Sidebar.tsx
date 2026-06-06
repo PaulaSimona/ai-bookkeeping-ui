@@ -21,6 +21,8 @@ const Icon: FC<{ path: string }> = ({ path }) => (
 );
 
 const ICONS = {
+  accounts:
+    'M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5M9 11.25v1.5M12 9v3.75m3-6v6',
   reviewer:
     'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4',
   dashboard: 'M3 3h7v7H3V3zm11 0h7v7h-7V3zM3 14h7v7H3v-7zm11 0h7v7h-7v-7z',
@@ -41,11 +43,12 @@ const ICONS = {
 };
 
 const NAV_MAIN = [
-  { to: '/dashboard', label: 'Dashboard', icon: ICONS.dashboard },
-  { to: '/documents', label: 'Documents', icon: ICONS.documents },
-  { to: '/workbook',  label: 'Workbook',  icon: ICONS.workbook  },
-  { to: '/reports',   label: 'Reports',   icon: ICONS.reports   },
-  { to: '/settings',  label: 'Settings',  icon: ICONS.settings  },
+  { to: '/dashboard', label: 'Dashboard',          icon: ICONS.dashboard },
+  { to: '/documents', label: 'Documents',          icon: ICONS.documents },
+  { to: '/workbook',  label: 'Workbook',           icon: ICONS.workbook  },
+  { to: '/reports',   label: 'Reports',            icon: ICONS.reports   },
+  { to: '/accounts',  label: 'Chart of Accounts',  icon: ICONS.accounts  },
+  { to: '/settings',  label: 'Settings',           icon: ICONS.settings  },
 ];
 
 const NAV_BOTTOM = [
