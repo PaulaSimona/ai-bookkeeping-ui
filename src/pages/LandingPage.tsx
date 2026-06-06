@@ -1,4 +1,4 @@
-import { type FC, type FormEvent, useState } from 'react';
+import { type FC, type FormEvent, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '@/utils/api';
 import logoSvg from '@/assets/logo.svg';
@@ -189,11 +189,131 @@ const CheckIcon: FC = () => (
   </svg>
 );
 
+// ─── FAQ data ─────────────────────────────────────────────────────────────────
+
+const FAQ_ITEMS = [
+  {
+    q: 'How does AI Bookkeeping work?',
+    a: 'Upload a photo or PDF of your receipt. Our AI extracts the vendor, date, amount, and taxes automatically. You can download an Excel report ready for your accountant.',
+  },
+  {
+    q: 'Is AI Bookkeeping available in Canada and the US?',
+    a: 'Yes, we support both Canadian (GST/HST) and US tax rules, with jurisdiction-aware categorization.',
+  },
+  {
+    q: 'Do I need a credit card to start?',
+    a: 'No credit card required. You get a 5-day free trial with 5 documents included.',
+  },
+  {
+    q: 'Can I cancel anytime?',
+    a: 'Yes, you can cancel your subscription anytime from your billing portal. You keep access until the end of your billing period.',
+  },
+  {
+    q: 'What file types are supported?',
+    a: 'We support JPG, PNG, HEIC (iPhone photos), and PDF files.',
+  },
+] as const;
+
+// ─── FAQ section ───────────────────────────────────────────────────────────────
+
+const FaqSection: FC = () => {
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+
+  const toggle = (i: number) => setOpenIndex((prev) => (prev === i ? null : i));
+
+  return (
+    <section className="px-6 py-20 border-t border-white/8">
+      <div className="max-w-3xl mx-auto">
+        <div className="text-center mb-12">
+          <p className="text-xs font-semibold uppercase tracking-widest text-emerald-400 mb-3">FAQ</p>
+          <h2 className="text-3xl font-bold text-white">Frequently asked questions</h2>
+        </div>
+
+        <div className="space-y-3">
+          {FAQ_ITEMS.map((item, i) => {
+            const isOpen = openIndex === i;
+            return (
+              <div
+                key={i}
+                className="rounded-2xl bg-[#0A1628] border border-white/10 overflow-hidden"
+              >
+                <button
+                  onClick={() => toggle(i)}
+                  className="w-full flex items-center justify-between gap-4 px-6 py-5 text-left"
+                  aria-expanded={isOpen}
+                >
+                  <span className="text-sm font-semibold text-white">{item.q}</span>
+                  <svg
+                    className={`w-4 h-4 text-white/40 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={2.5}
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                  </svg>
+                </button>
+                {isOpen && (
+                  <div className="px-6 pb-5">
+                    <p className="text-sm text-white/55 leading-relaxed">{item.a}</p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+};
+
 // ─── Landing page ──────────────────────────────────────────────────────────────
 
 export const LandingPage: FC = () => {
   const [showWaitlist, setShowWaitlist]     = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.type = 'application/ld+json';
+    script.text = JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'SoftwareApplication',
+      name: 'AI Bookkeeping',
+      applicationCategory: 'BusinessApplication',
+      operatingSystem: 'Web',
+      description: 'AI-powered bookkeeping for small businesses and freelancers across North America.',
+      offers: [
+        {
+          '@type': 'Offer',
+          name: 'Starter',
+          price: '29',
+          priceCurrency: 'CAD',
+          priceSpecification: { '@type': 'UnitPriceSpecification', billingDuration: 'P1M' },
+        },
+        { '@type': 'Offer', name: 'Growth', price: '49', priceCurrency: 'CAD' },
+        { '@type': 'Offer', name: 'Pro', price: '69', priceCurrency: 'CAD' },
+      ],
+    });
+    document.head.appendChild(script);
+    return () => { document.head.removeChild(script); };
+  }, []);
+
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.type = 'application/ld+json';
+    script.text = JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: FAQ_ITEMS.map((item) => ({
+        '@type': 'Question',
+        name: item.q,
+        acceptedAnswer: { '@type': 'Answer', text: item.a },
+      })),
+    });
+    document.head.appendChild(script);
+    return () => { document.head.removeChild(script); };
+  }, []);
 
   const scrollTo = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
@@ -606,6 +726,9 @@ export const LandingPage: FC = () => {
             </p>
           </div>
         </section>
+
+        {/* ── FAQ ────────────────────────────────────────────────────────────── */}
+        <FaqSection />
 
         {/* ── FOOTER ─────────────────────────────────────────────────────────── */}
         <footer className="px-6 py-10 border-t border-white/8">
