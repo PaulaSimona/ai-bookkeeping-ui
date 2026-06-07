@@ -27,6 +27,7 @@ import { TermsOfService } from '@/views/legal/TermsOfService';
 import { ReviewerDashboard } from '@/views/reviewer';
 import { LandingPage } from '@/pages/LandingPage';
 import { ChartOfAccounts } from '@/pages/accounts/ChartOfAccounts';
+import { AccountingReview } from '@/pages/accounting/AccountingReview';
 
 const PrivateLayout: FC = () => (
   <RedirectPage privatePath>
@@ -73,6 +74,7 @@ const App: FC = () => {
         <Route path="/subscription/success" element={<SubscriptionSuccess />} />
         <Route path="/reviewer"             element={<ReviewerDashboard />} />
         <Route path="/accounts"             element={<ChartOfAccounts />} />
+        <Route path="/accounting-review"    element={<AccountingReview />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

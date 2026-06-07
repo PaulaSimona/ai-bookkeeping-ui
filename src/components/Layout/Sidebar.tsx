@@ -5,6 +5,7 @@ import type { RootState } from '@/store/store';
 import logoSvg from '@/assets/logo.svg';
 import { removeAuth } from '@/utils/auth';
 import { setUser, setInProgress } from '@/store/features/authSlice';
+import { useOrgMe } from '@/hooks/useAccounts';
 
 // Heroicons outline paths (24×24 viewBox, stroke)
 const Icon: FC<{ path: string }> = ({ path }) => (
@@ -25,6 +26,8 @@ const ICONS = {
     'M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5M9 11.25v1.5M12 9v3.75m3-6v6',
   reviewer:
     'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4',
+  agentReview:
+    'M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.456-2.456L14.25 6l1.035-.259a3.375 3.375 0 002.456-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z',
   dashboard: 'M3 3h7v7H3V3zm11 0h7v7h-7V3zM3 14h7v7H3v-7zm11 0h7v7h-7v-7z',
   documents:
     'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
@@ -121,6 +124,11 @@ export const Sidebar: FC = () => {
   const dispatch  = useDispatch();
   const auth      = useSelector((s: RootState) => s.auth);
   const isStaff   = auth.user?.user?.is_staff ?? auth.user?.is_staff ?? false;
+  // Tier-2 accounting review queue is gated on org role (owner/bookkeeper) —
+  // the same roles the backend's _WRITE_ROLES enforces on /api/accounting/review/.
+  // is_staff is a separate, global Tier-1 concept and doesn't apply here.
+  const { role: orgRole } = useOrgMe();
+  const canReviewAccounting = orgRole === 'owner' || orgRole === 'bookkeeper';
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
 
   const confirmLogout = () => {
@@ -146,6 +154,12 @@ export const Sidebar: FC = () => {
           {NAV_MAIN.map(({ to, label, icon }) => (
             <NavItem key={to} to={to} label={label} icon={icon} />
           ))}
+          {canReviewAccounting && (
+            <>
+              <div className="my-2 border-t border-white/10" />
+              <NavItem to="/accounting-review" label="Accounting Review" icon={ICONS.agentReview} />
+            </>
+          )}
           {isStaff && (
             <>
               <div className="my-2 border-t border-white/10" />
