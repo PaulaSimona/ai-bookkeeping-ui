@@ -350,6 +350,12 @@ export const LandingPage: FC = () => {
               >
                 Pricing
               </button>
+              <Link to="/blog" className="text-sm text-white/60 hover:text-white transition-colors">
+                Blog
+              </Link>
+              <Link to="/faq" className="text-sm text-white/60 hover:text-white transition-colors">
+                FAQ
+              </Link>
             </div>
 
             {/* Auth buttons (desktop) */}
@@ -401,6 +407,20 @@ export const LandingPage: FC = () => {
               >
                 Pricing
               </button>
+              <Link
+                to="/blog"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block text-sm text-white/60 hover:text-white transition-colors py-2"
+              >
+                Blog
+              </Link>
+              <Link
+                to="/faq"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block text-sm text-white/60 hover:text-white transition-colors py-2"
+              >
+                FAQ
+              </Link>
               <div className="flex gap-3 pt-1">
                 <Link
                   to="/login"
@@ -735,6 +755,14 @@ export const LandingPage: FC = () => {
           <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
             <p className="text-sm text-white/30">© 2026 Time2Win Inc. · Canadian-based company</p>
             <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+              <span className="text-xs font-semibold uppercase tracking-widest text-white/20">Resources</span>
+              <Link to="/blog" className="text-sm text-white/30 hover:text-white/60 transition-colors">
+                Blog
+              </Link>
+              <Link to="/faq" className="text-sm text-white/30 hover:text-white/60 transition-colors">
+                FAQ
+              </Link>
+              <span className="text-white/15 hidden sm:inline" aria-hidden="true">·</span>
               <Link to="/privacy-policy" className="text-sm text-white/30 hover:text-white/60 transition-colors">
                 Privacy Policy
               </Link>
