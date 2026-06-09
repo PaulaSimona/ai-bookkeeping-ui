@@ -1,6 +1,6 @@
 // v2 pricing flow
-import { type FC } from 'react';
-import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { type FC, useEffect } from 'react';
+import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { type RootState } from '@/store/store';
 import { useUser } from '@/api/user/useUser';
@@ -26,6 +26,9 @@ import { PrivacyPolicy } from '@/views/legal/PrivacyPolicy';
 import { TermsOfService } from '@/views/legal/TermsOfService';
 import { ReviewerDashboard } from '@/views/reviewer';
 import { LandingPage } from '@/pages/LandingPage';
+import { BlogList } from '@/views/blog/BlogList';
+import { BlogPost } from '@/views/blog/BlogPost';
+import { FAQ } from '@/views/faq';
 
 const PrivateLayout: FC = () => (
   <RedirectPage privatePath>
@@ -45,20 +48,31 @@ const HomeRedirect: FC = () => {
 
 const App: FC = () => {
   const { getUser } = useUser(true);
+  const location = useLocation();
+
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).gtag?.('event', 'page_view', {
+      page_path: location.pathname + location.search,
+    });
+  }, [location]);
 
   return (
     <Routes>
       <Route path="/" element={<HomeRedirect />} />
 
-      <Route path="/pricing"          element={<Pricing />} />
-      <Route path="/login"        element={<RedirectPage><Login getUser={getUser} /></RedirectPage>} />
-      <Route path="/register"     element={<RedirectPage><Register /></RedirectPage>} />
-      <Route path="/check-email"     element={<CheckEmail />} />
-      <Route path="/verify-email"    element={<VerifyEmail />} />
-      <Route path="/forgot-password" element={<ForgotPassword />} />
-      <Route path="/reset-password"  element={<ResetPassword />} />
-      <Route path="/privacy-policy"   element={<PrivacyPolicy />} />
-      <Route path="/terms-of-service" element={<TermsOfService />} />
+      <Route path="/pricing"           element={<Pricing />} />
+      <Route path="/login"             element={<RedirectPage><Login getUser={getUser} /></RedirectPage>} />
+      <Route path="/register"          element={<RedirectPage><Register /></RedirectPage>} />
+      <Route path="/check-email"       element={<CheckEmail />} />
+      <Route path="/verify-email"      element={<VerifyEmail />} />
+      <Route path="/forgot-password"   element={<ForgotPassword />} />
+      <Route path="/reset-password"    element={<ResetPassword />} />
+      <Route path="/privacy-policy"    element={<PrivacyPolicy />} />
+      <Route path="/terms-of-service"  element={<TermsOfService />} />
+      <Route path="/blog"              element={<BlogList />} />
+      <Route path="/blog/:slug"        element={<BlogPost />} />
+      <Route path="/faq"               element={<FAQ />} />
 
       <Route element={<PrivateLayout />}>
         <Route path="/dashboard"            element={<Dashboard />} />
@@ -73,7 +87,7 @@ const App: FC = () => {
         <Route path="/reviewer"             element={<ReviewerDashboard />} />
       </Route>
 
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 };

@@ -21,6 +21,8 @@ const Icon: FC<{ path: string }> = ({ path }) => (
 );
 
 const ICONS = {
+  blog: 'M12 7.5h1.5m-1.5 3h1.5m-7.5 3h7.5m-7.5 3h7.5m3-9h3.375c.621 0 1.125.504 1.125 1.125V18a2.25 2.25 0 01-2.25 2.25M16.5 7.5V18a2.25 2.25 0 002.25 2.25M16.5 7.5V4.875c0-.621-.504-1.125-1.125-1.125H4.125C3.504 3.75 3 4.254 3 4.875V18a2.25 2.25 0 002.25 2.25h13.5M6 7.5h3v3H6v-3z',
+  faq:  'M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z',
   reviewer:
     'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4',
   dashboard: 'M3 3h7v7H3V3zm11 0h7v7h-7V3zM3 14h7v7H3v-7zm11 0h7v7h-7v-7z',
@@ -150,6 +152,15 @@ export const Sidebar: FC = () => {
             </>
           )}
         </nav>
+
+        {/* Resources */}
+        <div className="px-3 py-2 border-t border-white/10">
+          <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-white/30">
+            Resources
+          </p>
+          <NavItem to="/blog" label="Blog" icon={ICONS.blog} />
+          <NavItem to="/faq"  label="FAQ"  icon={ICONS.faq}  />
+        </div>
 
         {/* Bottom nav */}
         <div className="px-3 pb-4 border-t border-white/10 pt-3 space-y-0.5">
