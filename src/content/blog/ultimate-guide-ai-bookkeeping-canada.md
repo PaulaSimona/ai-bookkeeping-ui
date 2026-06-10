@@ -1,7 +1,7 @@
 ---
 title: Ultimate Guide to AI Bookkeeping in Canada (2026)
 slug: ultimate-guide-ai-bookkeeping-canada
-date: 2026-06-08
+date: 2026-06-09
 excerpt: Everything Canadian small business owners and freelancers need to know about AI bookkeeping — how it works, what it costs, and how to stay CRA-compliant.
 readTime: 10 min
 category: Guides

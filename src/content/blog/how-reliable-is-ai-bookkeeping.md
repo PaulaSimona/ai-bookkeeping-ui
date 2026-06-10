@@ -1,7 +1,7 @@
 ---
 title: How Reliable Is AI Bookkeeping? Can You Actually Trust It?
 slug: how-reliable-is-ai-bookkeeping
-date: 2026-06-08
+date: 2026-06-09
 excerpt: Wondering if AI bookkeeping is accurate enough to trust? An honest look at accuracy, CRA compliance, and what Canadian small business owners should know.
 readTime: 10 min
 category: Trust & Accuracy

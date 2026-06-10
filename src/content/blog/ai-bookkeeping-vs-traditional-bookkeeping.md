@@ -1,7 +1,7 @@
 ---
 title: AI Bookkeeping vs Traditional Bookkeeping
 slug: ai-bookkeeping-vs-traditional-bookkeeping
-date: 2026-06-08
+date: 2026-06-09
 excerpt: Comparing AI bookkeeping vs traditional bookkeeping for Canadian small businesses. Costs, accuracy, time, CRA compliance — an honest breakdown.
 readTime: 10 min
 category: Comparisons
