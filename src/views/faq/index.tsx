@@ -68,7 +68,7 @@ const FAQ_DATA: FaqCategory[] = [
       },
       {
         question: 'Are prices in Canadian dollars?',
-        answer: 'Yes. All prices are in CAD and include applicable taxes.',
+        answer: 'Yes. All prices are in CAD or USD and exclude taxes.',
       },
     ],
   },
