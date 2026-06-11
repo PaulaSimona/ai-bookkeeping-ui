@@ -315,6 +315,31 @@ export const LandingPage: FC = () => {
     return () => { document.head.removeChild(script); };
   }, []);
 
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.type = 'application/ld+json';
+    script.text = JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'SoftwareApplication',
+      name: 'AI Bookkeeping',
+      review: {
+        '@type': 'Review',
+        author: {
+          '@type': 'Person',
+          name: 'Valentina',
+        },
+        reviewBody: 'When I first heard that AI Bookkeeping could handle my expense receipts automatically, I was skeptical. Taking a photo in Telegram and having it appear in my expense report within seconds sounded too good to be true. After checking the results myself, I was impressed by how accurate everything was. For the first time, my bookkeeping is always up to date without the usual hassle.',
+        reviewRating: {
+          '@type': 'Rating',
+          ratingValue: '5',
+          bestRating: '5',
+        },
+      },
+    });
+    document.head.appendChild(script);
+    return () => { document.head.removeChild(script); };
+  }, []);
+
   const scrollTo = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
     setMobileMenuOpen(false);
@@ -749,6 +774,25 @@ export const LandingPage: FC = () => {
 
         {/* ── FAQ ────────────────────────────────────────────────────────────── */}
         <FaqSection />
+
+        {/* ── TESTIMONIALS ───────────────────────────────────────────────────── */}
+        <section className="px-6 py-20 border-t border-white/8">
+          <div className="max-w-3xl mx-auto text-center">
+            <h2 className="text-2xl font-bold text-white mb-12">What Our Users Say</h2>
+            <div className="bg-[#0A1628] rounded-2xl p-8 border border-white/10 shadow-sm">
+              <p className="text-lg text-white/70 leading-relaxed italic mb-6">
+                "When I first heard that AI Bookkeeping could handle my expense receipts automatically, I was skeptical. Taking a photo in Telegram and having it appear in my expense report within seconds sounded too good to be true. After checking the results myself, I was impressed by how accurate everything was. For the first time, my bookkeeping is always up to date without the usual hassle."
+              </p>
+              <div className="flex items-center justify-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 font-bold text-sm">V</div>
+                <div className="text-left">
+                  <p className="font-semibold text-white">Valentina</p>
+                  <p className="text-sm text-white/40">Small Business Owner, Canada</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
 
         {/* ── FOOTER ─────────────────────────────────────────────────────────── */}
         <footer className="px-6 py-10 border-t border-white/8">
