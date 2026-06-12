@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { API_DOMAIN } from './index';
-import { getToken, getRefresh, setToken, removeAuth } from './auth';
+import { getToken, getRefresh, setToken, setRefresh, removeAuth } from './auth';
 
 let isRefreshing = false;
 let failedQueue: any[] = [];
@@ -68,6 +68,13 @@ api.interceptors.response.use(
             .then((response: any) => {
               originalRequest.headers.Authorization = `Bearer ${response.data.access}`;
               setToken(response.data.access);
+              // ROTATE_REFRESH_TOKENS is on server-side: each refresh returns
+              // a NEW refresh token and blacklists the old one. Store the
+              // rotated token or the next silent refresh gets a 401. If the
+              // response unexpectedly has no refresh field, keep the current one.
+              if (response.data.refresh) {
+                setRefresh(response.data.refresh);
+              }
               processQueue(null, response.data.access);
               resolve(api(originalRequest));
             })
