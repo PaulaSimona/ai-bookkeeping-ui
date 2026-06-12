@@ -99,4 +99,20 @@ api.interceptors.response.use(
   },
 );
 
+/**
+ * Best-effort server-side logout: blacklists the current refresh token via
+ * POST /api/auth/logout/ so it cannot be reused after the user logs out.
+ * Never throws — local token cleanup must proceed even if revocation fails
+ * (network error, token already expired/blacklisted).
+ */
+export const revokeRefreshToken = async (): Promise<void> => {
+  const refresh = getRefresh();
+  if (!refresh) return;
+  try {
+    await api.post('/api/auth/logout/', { refresh });
+  } catch {
+    // Best-effort only — the caller clears local tokens regardless.
+  }
+};
+
 export default api;

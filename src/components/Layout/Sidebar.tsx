@@ -4,6 +4,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import type { RootState } from '@/store/store';
 import logoSvg from '@/assets/logo.svg';
 import { removeAuth } from '@/utils/auth';
+import { revokeRefreshToken } from '@/utils/api';
 import { setUser, setInProgress } from '@/store/features/authSlice';
 import { useOrgMe } from '@/hooks/useAccounts';
 
@@ -131,11 +132,17 @@ export const Sidebar: FC = () => {
   const canReviewAccounting = orgRole === 'owner' || orgRole === 'bookkeeper';
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
 
-  const confirmLogout = () => {
-    removeAuth();
-    dispatch(setUser(null));
-    dispatch(setInProgress(false));
-    navigate('/login', { replace: true });
+  const confirmLogout = async () => {
+    try {
+      // Revoke the refresh token server-side (blacklist) before dropping it.
+      await revokeRefreshToken();
+    } finally {
+      // Local cleanup always runs — logout must never strand the user.
+      removeAuth();
+      dispatch(setUser(null));
+      dispatch(setInProgress(false));
+      navigate('/login', { replace: true });
+    }
   };
 
   return (
