@@ -30,4 +30,56 @@
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
+  <url>
+    <loc>https://ai-bookkeeping.ai/blog</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://ai-bookkeeping.ai/faq</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://ai-bookkeeping.ai/blog/ultimate-guide-ai-bookkeeping-canada</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <lastmod>2026-06-09</lastmod>
+  </url>
+  <url>
+    <loc>https://ai-bookkeeping.ai/blog/how-reliable-is-ai-bookkeeping</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <lastmod>2026-06-09</lastmod>
+  </url>
+  <url>
+    <loc>https://ai-bookkeeping.ai/blog/ai-bookkeeping-vs-traditional-bookkeeping</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <lastmod>2026-06-09</lastmod>
+  </url>
+  <url>
+    <loc>https://ai-bookkeeping.ai/blog/gst-pst-hst-guide-canada</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <lastmod>2026-06-09</lastmod>
+  </url>
+  <url>
+    <loc>https://ai-bookkeeping.ai/blog/cra-bookkeeping-requirements</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <lastmod>2026-06-09</lastmod>
+  </url>
+  <url>
+    <loc>https://ai-bookkeeping.ai/blog/why-people-fear-trusting-ai-with-their-books</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <lastmod>2026-06-10</lastmod>
+  </url>
+  <url>
+    <loc>https://ai-bookkeeping.ai/blog/common-bookkeeping-mistakes</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <lastmod>2026-06-10</lastmod>
+  </url>
 </urlset>
