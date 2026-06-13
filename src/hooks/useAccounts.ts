@@ -97,10 +97,19 @@ export const useAccounts = (filters?: AccountFilters) => {
     if (filters?.type) params.type = filters.type;
     if (filters?.active !== undefined) params.active = String(filters.active);
     if (filters?.search) params.search = filters.search;
+    // This endpoint is paginated (PageNumberPagination, page_size 50, max 200).
+    // The chart of accounts is bounded well under 200 (CA 140 / US 146), so
+    // pull it in one page. If a chart ever exceeds 200, add real pagination.
+    params.page_size = '200';
 
     api.get('/api/accounting/accounts/', { params })
       .then((res) => {
-        if (!cancelled) setAccounts(res?.data ?? []);
+        // The response is a paginated envelope {count, next, previous, results}.
+        // Read results, but tolerate a plain array too, and coerce anything
+        // non-array to [] so a non-list can never reach .map() and white-screen
+        // the page — it degrades to the empty state instead.
+        const data = res?.data;
+        if (!cancelled) setAccounts(Array.isArray(data) ? data : (data?.results ?? []));
       })
       .catch((err) => {
         if (!cancelled) setError(err?.response?.data?.detail ?? 'Failed to load accounts');
