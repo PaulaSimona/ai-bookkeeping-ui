@@ -6,7 +6,6 @@ import logoSvg from '@/assets/logo.svg';
 import { removeAuth } from '@/utils/auth';
 import { revokeRefreshToken } from '@/utils/api';
 import { setUser, setInProgress } from '@/store/features/authSlice';
-import { useOrgMe } from '@/hooks/useAccounts';
 
 // Heroicons outline paths (24×24 viewBox, stroke)
 const Icon: FC<{ path: string }> = ({ path }) => (
@@ -53,7 +52,6 @@ const NAV_MAIN = [
   { to: '/documents', label: 'Documents',          icon: ICONS.documents },
   { to: '/workbook',  label: 'Workbook',           icon: ICONS.workbook  },
   { to: '/reports',   label: 'Reports',            icon: ICONS.reports   },
-  { to: '/accounts',  label: 'Chart of Accounts',  icon: ICONS.accounts  },
   { to: '/settings',  label: 'Settings',           icon: ICONS.settings  },
 ];
 
@@ -127,11 +125,7 @@ export const Sidebar: FC = () => {
   const dispatch  = useDispatch();
   const auth      = useSelector((s: RootState) => s.auth);
   const isStaff   = auth.user?.user?.is_staff ?? auth.user?.is_staff ?? false;
-  // Tier-2 accounting review queue is gated on org role (owner/bookkeeper) —
-  // the same roles the backend's _WRITE_ROLES enforces on /api/accounting/review/.
-  // is_staff is a separate, global Tier-1 concept and doesn't apply here.
-  const { role: orgRole } = useOrgMe();
-  const canReviewAccounting = orgRole === 'owner' || orgRole === 'bookkeeper';
+  const isSuperuser = auth.user?.user?.is_superuser ?? auth.user?.is_superuser ?? false;
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
 
   const confirmLogout = async () => {
@@ -163,7 +157,17 @@ export const Sidebar: FC = () => {
           {NAV_MAIN.map(({ to, label, icon }) => (
             <NavItem key={to} to={to} label={label} icon={icon} />
           ))}
-          {canReviewAccounting && (
+          {/* Chart of Accounts — Tier 2 feature, superuser-only for now. */}
+          {/* TODO: swap to Tier 2 subscription check when Advanced plan is live */}
+          {isSuperuser && (
+            <>
+              <div className="my-2 border-t border-white/10" />
+              <NavItem to="/accounts" label="Chart of Accounts" icon={ICONS.accounts} />
+            </>
+          )}
+          {/* Accounting Review — Tier 2 feature, superuser or staff/reviewer only. */}
+          {/* TODO: swap to Tier 2 subscription check when Advanced plan is live */}
+          {(isSuperuser || isStaff) && (
             <>
               <div className="my-2 border-t border-white/10" />
               <NavItem to="/accounting-review" label="Accounting Review" icon={ICONS.agentReview} />

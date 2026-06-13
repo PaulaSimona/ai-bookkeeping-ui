@@ -1,5 +1,5 @@
 // v2 pricing flow
-import { type FC, useEffect } from 'react';
+import { type FC, type PropsWithChildren, useEffect } from 'react';
 import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { type RootState } from '@/store/store';
@@ -48,6 +48,28 @@ const HomeRedirect: FC = () => {
   return <LandingPage />;
 };
 
+// Tier 2 feature route guards. Mirror the /reviewer page's auth check
+// (auth.user flags, wait out inProgress, redirect to /dashboard) but enforce it
+// at the route so a Tier 1 user can't reach the page by typing the URL.
+// TODO: swap to Tier 2 subscription check when Advanced plan is live
+const RequireSuperuser: FC<PropsWithChildren> = ({ children }) => {
+  const { user, inProgress } = useSelector((s: RootState) => s.auth);
+  const isSuperuser = user?.user?.is_superuser ?? user?.is_superuser ?? false;
+  if (inProgress) return <PageLoader />;
+  if (!isSuperuser) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+};
+
+// TODO: swap to Tier 2 subscription check when Advanced plan is live
+const RequireStaffOrSuperuser: FC<PropsWithChildren> = ({ children }) => {
+  const { user, inProgress } = useSelector((s: RootState) => s.auth);
+  const isStaff = user?.user?.is_staff ?? user?.is_staff ?? false;
+  const isSuperuser = user?.user?.is_superuser ?? user?.is_superuser ?? false;
+  if (inProgress) return <PageLoader />;
+  if (!isStaff && !isSuperuser) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+};
+
 const App: FC = () => {
   const { getUser } = useUser(true);
   const location = useLocation();
@@ -87,8 +109,8 @@ const App: FC = () => {
         <Route path="/subscription"         element={<Subscription />} />
         <Route path="/subscription/success" element={<SubscriptionSuccess />} />
         <Route path="/reviewer"             element={<ReviewerDashboard />} />
-        <Route path="/accounts"             element={<ChartOfAccounts />} />
-        <Route path="/accounting-review"    element={<AccountingReview />} />
+        <Route path="/accounts"             element={<RequireSuperuser><ChartOfAccounts /></RequireSuperuser>} />
+        <Route path="/accounting-review"    element={<RequireStaffOrSuperuser><AccountingReview /></RequireStaffOrSuperuser>} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
