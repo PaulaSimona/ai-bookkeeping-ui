@@ -37,7 +37,7 @@ interface Doc {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const ACCEPTED = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+const ACCEPTED = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf', 'image/heic', 'image/heif'];
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 
 const toBase64 = (file: File): Promise<string> =>
@@ -272,7 +272,7 @@ const UploadZone: FC<UploadZoneProps> = ({ onFile, uploading, error }) => {
               Drag & drop a receipt or invoice, or{' '}
               <span className="text-[#0066FF]">browse</span>
             </p>
-            <p className="mt-1 text-xs text-gray-400">JPEG, PNG, WebP or PDF · Max 10 MB</p>
+            <p className="mt-1 text-xs text-gray-400">JPEG, PNG, WebP, HEIC or PDF · Max 10 MB</p>
           </>
         )}
       </div>
@@ -316,7 +316,7 @@ const UploadZone: FC<UploadZoneProps> = ({ onFile, uploading, error }) => {
       <input
         ref={inputRef}
         type="file"
-        accept="image/jpeg,image/png,image/webp,application/pdf"
+        accept="image/jpeg,image/png,image/webp,application/pdf,image/heic,image/heif,.heic,.heif"
         className="hidden"
         onChange={handleChange}
       />
@@ -573,8 +573,12 @@ export const Documents: FC = () => {
   useEffect(() => { fetchDocs(); }, [fetchDocs]);
 
   const handleFile = async (file: File) => {
-    if (!ACCEPTED.includes(file.type)) {
-      setUploadErr('Only JPEG, PNG, WebP images and PDFs are accepted.');
+    // Safari on iOS/macOS sometimes reports an empty MIME for HEIC — fall back
+    // to the filename so those uploads aren't blocked client-side (the backend
+    // validates by magic bytes regardless).
+    const isHeicByName = file.type === '' && /\.(heic|heif)$/i.test(file.name);
+    if (!ACCEPTED.includes(file.type) && !isHeicByName) {
+      setUploadErr('Only JPEG, PNG, WebP, HEIC images and PDFs are accepted.');
       return;
     }
     if (file.size > MAX_BYTES) {
