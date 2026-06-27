@@ -794,25 +794,42 @@ export const LandingPage: FC = () => {
           </div>
         </section>
 
-        {/* ── FOOTER ─────────────────────────────────────────────────────────── */}
-        <footer className="px-6 py-10 border-t border-white/8">
-          <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex flex-col sm:flex-row items-center gap-4">
-              <p className="text-sm text-white/30">© 2026 Time2Win Inc. · Canadian-based company</p>
+        {/* ── FEATURED ON ────────────────────────────────────────────────────── */}
+        <section className="px-6 py-12 border-t border-white/8">
+          <div className="max-w-6xl mx-auto flex flex-col items-center gap-6">
+            <p className="text-xs uppercase tracking-wider text-white/40">Featured On</p>
+            <div className="flex flex-wrap items-center justify-center gap-6">
               <a
                 target="_blank"
                 rel="noopener noreferrer"
                 href="https://betalist.com/startups/ai-bookkeeping?utm_campaign=badge-ai-bookkeeping&utm_medium=badge&utm_source=badge-featured"
               >
                 <img
-                  alt="AI Bookkeeping - Upload receipts and get categorized expense reports in seconds | BetaList"
-                  width="156"
-                  height="54"
-                  style={{ width: 156, height: 54 }}
+                  alt="Featured on BetaList"
+                  className="h-11 w-auto"
                   src="https://betalist.com/badges/featured?id=170360&theme=color"
                 />
               </a>
+              <a
+                href="https://launchbuff.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Featured on LaunchBuff"
+              >
+                <img
+                  alt="Featured on LaunchBuff"
+                  className="h-11 w-auto"
+                  src="https://launchbuff.com/badge-featured-dark.svg"
+                />
+              </a>
             </div>
+          </div>
+        </section>
+
+        {/* ── FOOTER ─────────────────────────────────────────────────────────── */}
+        <footer className="px-6 py-10 border-t border-white/8">
+          <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+            <p className="text-sm text-white/30">© 2026 Time2Win Inc. · Canadian-based company</p>
             <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
               <Link to="/blog" className="text-sm text-white/30 hover:text-white/60 transition-colors">
                 Blog
