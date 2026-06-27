@@ -822,6 +822,18 @@ export const LandingPage: FC = () => {
                   src="https://launchbuff.com/badge-featured-dark.svg"
                 />
               </a>
+              <a
+                href="https://tools.cafe"
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Featured on tools.cafe"
+              >
+                <img
+                  alt="Featured on tools.cafe"
+                  className="h-11 w-auto"
+                  src="https://tools.cafe/b/dark.svg"
+                />
+              </a>
             </div>
           </div>
         </section>
