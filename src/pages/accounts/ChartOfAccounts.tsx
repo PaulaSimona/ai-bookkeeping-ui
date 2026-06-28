@@ -367,7 +367,7 @@ export const ChartOfAccounts: FC = () => {
     refetch,
   );
 
-  const canEdit = role === 'owner' || role === 'bookkeeper';
+  const canEdit = role === 'owner' || role === 'accountant';
 
   // Debounce search
   useEffect(() => {
