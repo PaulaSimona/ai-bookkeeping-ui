@@ -3,7 +3,7 @@ import api from '@/utils/api';
 
 export type AccountType = 'asset' | 'liability' | 'equity' | 'revenue' | 'expense';
 export type NormalBalance = 'debit' | 'credit';
-export type OrgRole = 'owner' | 'bookkeeper' | 'reviewer';
+export type OrgRole = 'owner' | 'accountant' | 'reviewer';
 
 export interface Account {
   id: string;

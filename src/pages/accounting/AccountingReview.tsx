@@ -331,7 +331,7 @@ const RightPanel: FC<{
 export const AccountingReview: FC = () => {
   const navigate = useNavigate();
   const { role, isLoading: orgLoading } = useOrgMe();
-  const canReview = role === 'owner' || role === 'bookkeeper';
+  const canReview = role === 'owner' || role === 'accountant';
 
   const [entries, setEntries] = useState<ReviewEntry[]>([]);
   const [selected, setSelected] = useState<ReviewEntry | null>(null);
