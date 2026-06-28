@@ -1,5 +1,6 @@
 import { parseFrontmatter, type Article } from '@/utils/blog';
 
+import vsQuickBooksRaw from './ai-bookkeeping-vs-quickbooks.md?raw';
 import ultimateGuideRaw from './ultimate-guide-ai-bookkeeping-canada.md?raw';
 import howReliableRaw from './how-reliable-is-ai-bookkeeping.md?raw';
 import vsTraditionalRaw from './ai-bookkeeping-vs-traditional-bookkeeping.md?raw';
@@ -9,6 +10,7 @@ import whyPeopleFearRaw from './why-people-fear-trusting-ai-with-their-books.md?
 import commonBookkeepingMistakesRaw from './common-bookkeeping-mistakes.md?raw';
 
 const rawArticles: string[] = [
+  vsQuickBooksRaw,
   ultimateGuideRaw,
   howReliableRaw,
   vsTraditionalRaw,
