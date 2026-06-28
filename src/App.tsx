@@ -29,6 +29,7 @@ import { LandingPage } from '@/pages/LandingPage';
 import { ChartOfAccounts } from '@/pages/accounts/ChartOfAccounts';
 import { AccountingReview } from '@/pages/accounting/AccountingReview';
 import { TaxProfile } from '@/pages/accounting/TaxProfile';
+import { ReviewerManagement } from '@/pages/accounting/ReviewerManagement';
 import { BlogList } from '@/views/blog/BlogList';
 import { BlogPost } from '@/views/blog/BlogPost';
 import { FAQ } from '@/views/faq';
@@ -115,6 +116,7 @@ const App: FC = () => {
         <Route path="/subscription/success" element={<SubscriptionSuccess />} />
         <Route path="/reviewer"             element={<ReviewerDashboard />} />
         <Route path="/accounts"             element={<RequireSuperuser><ChartOfAccounts /></RequireSuperuser>} />
+        <Route path="/reviewer-management"  element={<RequireSuperuser><ReviewerManagement /></RequireSuperuser>} />
         <Route path="/accounting-review"    element={<RequireStaffOrSuperuser><AccountingReview /></RequireStaffOrSuperuser>} />
       </Route>
 

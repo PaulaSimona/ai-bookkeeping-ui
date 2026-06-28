@@ -166,6 +166,7 @@ export const Sidebar: FC = () => {
             <>
               <div className="my-2 border-t border-white/10" />
               <NavItem to="/accounts" label="Chart of Accounts" icon={ICONS.accounts} />
+              <NavItem to="/reviewer-management" label="Reviewer Management" icon={ICONS.reviewer} />
             </>
           )}
           {/* Accounting Review — Tier 2 feature, superuser or staff/reviewer only. */}
