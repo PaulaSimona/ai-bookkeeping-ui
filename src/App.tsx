@@ -28,6 +28,7 @@ import { ReviewerDashboard } from '@/views/reviewer';
 import { LandingPage } from '@/pages/LandingPage';
 import { ChartOfAccounts } from '@/pages/accounts/ChartOfAccounts';
 import { AccountingReview } from '@/pages/accounting/AccountingReview';
+import { TaxProfile } from '@/pages/accounting/TaxProfile';
 import { BlogList } from '@/views/blog/BlogList';
 import { BlogPost } from '@/views/blog/BlogPost';
 import { FAQ } from '@/views/faq';
@@ -104,6 +105,10 @@ const App: FC = () => {
         <Route path="/workbook"             element={<Workbook />} />
         <Route path="/reports"              element={<Reports />} />
         <Route path="/settings"             element={<Settings />} />
+        {/* Owner-facing Tier 2 setting — owner-gating is enforced inside the
+            page via useOrgMe(), so NO staff guard here (unlike /accounts and
+            /accounting-review, which gate on is_staff/is_superuser). */}
+        <Route path="/accounting/tax-profile" element={<TaxProfile />} />
         <Route path="/support"              element={<Support />} />
         <Route path="/feedback"             element={<Feedback />} />
         <Route path="/subscription"         element={<Subscription />} />
