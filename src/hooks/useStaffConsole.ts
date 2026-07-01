@@ -136,7 +136,7 @@ export async function deactivateAssignment(payload: AssignmentPayload): Promise<
     return { ok: false, data: null, errors: null };
   } catch (err: any) {
     // 403 not authorized · 404 unknown user/org · 409 no active assignment.
-    return { ok: false, data: null, errors: toConsoleError(err, 'Failed to revoke assignment') };
+    return { ok: false, data: null, errors: toConsoleError(err, 'Failed to remove assignment') };
   }
 }
 
