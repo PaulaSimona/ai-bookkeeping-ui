@@ -13,6 +13,7 @@ import { CheckEmail } from '@/views/auth/CheckEmail';
 import { VerifyEmail } from '@/views/auth/VerifyEmail';
 import { ForgotPassword } from '@/views/auth/ForgotPassword';
 import { ResetPassword } from '@/views/auth/ResetPassword';
+import { StaffInviteAccept } from '@/views/auth/StaffInviteAccept';
 import { Dashboard } from '@/views/dashboard';
 import { Documents } from '@/views/documents';
 import { Workbook } from '@/views/workbook';
@@ -94,6 +95,7 @@ const App: FC = () => {
       <Route path="/verify-email"      element={<VerifyEmail />} />
       <Route path="/forgot-password"   element={<ForgotPassword />} />
       <Route path="/reset-password"    element={<ResetPassword />} />
+      <Route path="/staff-invite/accept" element={<StaffInviteAccept />} />
       <Route path="/privacy-policy"    element={<PrivacyPolicy />} />
       <Route path="/terms-of-service"  element={<TermsOfService />} />
       <Route path="/blog"              element={<BlogList />} />
