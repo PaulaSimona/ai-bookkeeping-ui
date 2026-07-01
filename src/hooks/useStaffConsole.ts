@@ -155,3 +155,19 @@ export async function createStaffInvite(email: string): Promise<WriteResult> {
     return { ok: false, data: null, errors: toConsoleError(err, 'Failed to send invite') };
   }
 }
+
+export async function deactivateStaffAccount(staffUserId: string): Promise<WriteResult> {
+  try {
+    // 200 on revoke. Platform-wide: the backend cascades assignment deactivation and
+    // flips StaffProfile + User is_active (never deletes). Success is toast-only on
+    // the page → data stays null (mirror createStaffInvite).
+    const res = await api.post('/api/accounting/staff/deactivate/', { staff_user_id: staffUserId });
+    if (res?.status === 200) {
+      return { ok: true, data: null, errors: null };
+    }
+    return { ok: false, data: null, errors: null };
+  } catch (err: any) {
+    // 400 self-revoke · 403 not authorized / target is super user · 404 unknown · 409 already revoked.
+    return { ok: false, data: null, errors: toConsoleError(err, 'Failed to revoke access') };
+  }
+}

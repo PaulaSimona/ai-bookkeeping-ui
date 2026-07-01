@@ -1,4 +1,6 @@
 import { type FC, useState } from 'react';
+import { useSelector } from 'react-redux';
+import { type RootState } from '@/store/store';
 import {
   useOrgsList,
   useStaffList,
@@ -6,7 +8,9 @@ import {
   assignReviewer,
   deactivateAssignment,
   createStaffInvite,
+  deactivateStaffAccount,
   type AssignmentListItem,
+  type StaffListItem,
   type ConsoleError,
 } from '@/hooks/useStaffConsole';
 
@@ -35,6 +39,15 @@ function mapRevokeError(e: ConsoleError | null): string {
     case 404: return 'Staff user or org not found.';
     case 403: return 'Not authorized.';
     default:  return e?.detail || 'Failed to remove assignment.';
+  }
+}
+function mapAccountRevokeError(e: ConsoleError | null): string {
+  switch (e?.status) {
+    case 400: return 'You cannot revoke your own access.';
+    case 403: return 'Not permitted, or the target is a super user.';
+    case 404: return 'Staff account not found.';
+    case 409: return 'This staff account is already revoked.';
+    default:  return e?.detail || 'Failed to revoke access.';
   }
 }
 
@@ -106,6 +119,7 @@ export const ReviewerManagement: FC = () => {
   const orgs = useOrgsList();
   const staff = useStaffList();
   const assignments = useAssignments();
+  const auth = useSelector((st: RootState) => st.auth);
 
   const [selectedStaff, setSelectedStaff] = useState('');
   const [selectedOrg, setSelectedOrg] = useState('');
@@ -165,6 +179,33 @@ export const ReviewerManagement: FC = () => {
       assignments.refetch();
     } else {
       showToast(mapRevokeError(res.errors), 'error');
+    }
+  };
+
+  // Cosmetic own-row hide only — /api/user/me carries no user id, so match by
+  // email (unique on users.User). The backend 400 self-guard is the real gate.
+  const isOwnRow = (s: StaffListItem): boolean => {
+    const me = auth.user?.user?.email ?? auth.user?.email;
+    return !!me && me === s.staff_user_email;
+  };
+
+  const handleRevokeAccess = async (row: StaffListItem) => {
+    if (isSubmitting) return;
+    const who = row.staff_user_name || row.staff_user_email;
+    const confirmed = window.confirm(
+      `Revoke all AI-Bookkeeping access for ${who}? They will be signed out of every organization and blocked from logging in. This cannot be undone from here.`,
+    );
+    if (!confirmed) return;
+    setIsSubmitting(true);
+    const res = await deactivateStaffAccount(row.staff_user);
+    setIsSubmitting(false);
+    if (res.ok) {
+      showToast('Access revoked.', 'success');
+      // The backend cascades assignment deactivation — refresh BOTH cards.
+      staff.refetch();
+      assignments.refetch();
+    } else {
+      showToast(mapAccountRevokeError(res.errors), 'error');
     }
   };
 
@@ -338,6 +379,7 @@ export const ReviewerManagement: FC = () => {
                     <th className="px-3 py-2.5 text-xs font-semibold text-white/40 uppercase tracking-wider">Super user</th>
                     <th className="px-3 py-2.5 text-xs font-semibold text-white/40 uppercase tracking-wider">Role type</th>
                     <th className="px-3 py-2.5 text-xs font-semibold text-white/40 uppercase tracking-wider">Active</th>
+                    <th className="px-3 py-2.5 text-xs font-semibold text-white/40 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -351,6 +393,21 @@ export const ReviewerManagement: FC = () => {
                       <td className="px-3 py-2.5 text-sm text-white/70">{s.role_type}</td>
                       <td className="px-3 py-2.5">
                         {s.is_active ? <Pill tone="green">Active</Pill> : <Pill tone="gray">Inactive</Pill>}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        {/* Valid target only: never super users, never inactive rows,
+                            never my own row (cosmetic — backend self-guard is real). */}
+                        {!s.is_super_user && s.is_active && !isOwnRow(s) ? (
+                          <button
+                            onClick={() => handleRevokeAccess(s)}
+                            disabled={isSubmitting}
+                            className="rounded-lg bg-red-500/10 hover:bg-red-500/20 disabled:opacity-60 disabled:cursor-not-allowed border border-red-500/20 px-3 py-1.5 text-xs font-semibold text-red-400 transition-colors"
+                          >
+                            Revoke Access
+                          </button>
+                        ) : (
+                          <span className="text-white/30 text-sm">—</span>
+                        )}
                       </td>
                     </tr>
                   ))}
