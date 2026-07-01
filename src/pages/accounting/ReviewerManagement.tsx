@@ -31,10 +31,10 @@ function mapAssignError(e: ConsoleError | null): string {
 }
 function mapRevokeError(e: ConsoleError | null): string {
   switch (e?.status) {
-    case 409: return 'No active assignment to revoke.';
+    case 409: return 'No active assignment to remove.';
     case 404: return 'Staff user or org not found.';
     case 403: return 'Not authorized.';
-    default:  return e?.detail || 'Failed to revoke assignment.';
+    default:  return e?.detail || 'Failed to remove assignment.';
   }
 }
 
@@ -161,7 +161,7 @@ export const ReviewerManagement: FC = () => {
     const res = await deactivateAssignment({ staff_user_id: row.staff_user, org_id: row.org_id });
     setIsSubmitting(false);
     if (res.ok) {
-      showToast('Assignment revoked.', 'success');
+      showToast('Assignment removed.', 'success');
       assignments.refetch();
     } else {
       showToast(mapRevokeError(res.errors), 'error');
@@ -309,7 +309,7 @@ export const ReviewerManagement: FC = () => {
                           disabled={isSubmitting}
                           className="rounded-lg bg-red-500/10 hover:bg-red-500/20 disabled:opacity-60 disabled:cursor-not-allowed border border-red-500/20 px-3 py-1.5 text-xs font-semibold text-red-400 transition-colors"
                         >
-                          Revoke
+                          Remove
                         </button>
                       </td>
                     </tr>
