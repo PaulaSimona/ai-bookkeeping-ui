@@ -139,3 +139,19 @@ export async function deactivateAssignment(payload: AssignmentPayload): Promise<
     return { ok: false, data: null, errors: toConsoleError(err, 'Failed to revoke assignment') };
   }
 }
+
+export async function createStaffInvite(email: string): Promise<WriteResult> {
+  try {
+    // 201 on create. Authenticated super-user call → the shared `api` wrapper (JWT)
+    // is correct here. The read serializer excludes the secret token and the form
+    // only toasts success, so we don't surface the echo (data stays null).
+    const res = await api.post('/api/accounting/staff/invite/', { email });
+    if (res?.status === 200 || res?.status === 201) {
+      return { ok: true, data: null, errors: null };
+    }
+    return { ok: false, data: null, errors: null };
+  } catch (err: any) {
+    // 400 invalid · 403 not authorized · 409 email already has an account.
+    return { ok: false, data: null, errors: toConsoleError(err, 'Failed to send invite') };
+  }
+}

@@ -5,6 +5,7 @@ import {
   useAssignments,
   assignReviewer,
   deactivateAssignment,
+  createStaffInvite,
   type AssignmentListItem,
   type ConsoleError,
 } from '@/hooks/useStaffConsole';
@@ -109,6 +110,8 @@ export const ReviewerManagement: FC = () => {
   const [selectedStaff, setSelectedStaff] = useState('');
   const [selectedOrg, setSelectedOrg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [isInviting, setIsInviting] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
 
   const showToast = (message: string, type: ToastState['type']) => {
@@ -165,6 +168,22 @@ export const ReviewerManagement: FC = () => {
     }
   };
 
+  const handleInvite = async () => {
+    if (!inviteEmail || isInviting) return;
+    setIsInviting(true);
+    const res = await createStaffInvite(inviteEmail);
+    setIsInviting(false);
+    if (res.ok) {
+      // No refetch: acceptance (not invite) creates the StaffProfile, so the
+      // Staff table doesn't change here — just confirm and clear.
+      showToast(`Invite sent to ${inviteEmail}.`, 'success');
+      setInviteEmail('');
+    } else {
+      // Backend details are already human-readable (409 existing-account, 403 not-authorized).
+      showToast(res.errors?.detail ?? 'Failed to send invite.', 'error');
+    }
+  };
+
   const assignFormLoading = orgs.isLoading || staff.isLoading;
   const assignFormError = orgs.error || staff.error; // non-403 here (403 handled above)
 
@@ -182,7 +201,31 @@ export const ReviewerManagement: FC = () => {
           </p>
         </div>
 
-        {/* 1 — Assign form */}
+        {/* 1 — Invite form (super user emails a single-use invite; email only) */}
+        <Card title="Invite a staff reviewer" subtitle="Email a single-use invite. New reviewers set their own password on accept.">
+          <div className="flex flex-col sm:flex-row sm:items-end gap-4">
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-white/60 mb-1.5">Email</label>
+              <input
+                type="email"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                placeholder="reviewer@example.com"
+                className={inputCls}
+              />
+            </div>
+            <button
+              onClick={handleInvite}
+              disabled={!inviteEmail || isInviting}
+              className="flex items-center justify-center gap-2 rounded-lg bg-[#0066FF] hover:bg-[#0052cc] disabled:opacity-60 disabled:cursor-not-allowed px-5 py-2.5 text-sm font-semibold text-white transition-colors shrink-0"
+            >
+              {isInviting && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+              Send invite
+            </button>
+          </div>
+        </Card>
+
+        {/* 2 — Assign form */}
         <Card title="Assign a reviewer" subtitle="Grant a staff reviewer access to a client organization.">
           {assignFormError ? (
             <ErrorBanner
@@ -233,7 +276,7 @@ export const ReviewerManagement: FC = () => {
           )}
         </Card>
 
-        {/* 2 — Active assignments */}
+        {/* 3 — Active assignments */}
         <Card title="Active assignments" subtitle="Reviewers currently assigned to organizations.">
           {assignments.error ? (
             <ErrorBanner message={assignments.error.detail} onRetry={assignments.refetch} />
@@ -277,7 +320,7 @@ export const ReviewerManagement: FC = () => {
           )}
         </Card>
 
-        {/* 3 — Staff overview (read-only) */}
+        {/* 4 — Staff overview (read-only) */}
         <Card title="Staff" subtitle="Internal staff who can be assigned as reviewers.">
           {staff.error ? (
             <ErrorBanner message={staff.error.detail} onRetry={staff.refetch} />
