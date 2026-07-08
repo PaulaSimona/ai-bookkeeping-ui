@@ -64,6 +64,13 @@ export const PrivacyPolicy: FC = () => (
             <p>If you link your Telegram account, we store your Telegram chat ID to enable document submission
             via the bot. Linking is voluntary and can be removed at any time in Settings.</p>
           </Sub>
+          <Sub title="Bank Account Data (Optional)">
+            <p>If you choose to connect a bank account, we use Plaid Inc. to link it. We receive account
+            details (institution, account name, account type, and the last digits of the account number) and
+            transaction data in order to provide bookkeeping services. We do not receive or store your bank
+            login credentials — you provide those directly to Plaid. Plaid's handling of your data is governed
+            by <a href="https://plaid.com/legal/#end-user-privacy-policy" target="_blank" rel="noreferrer" className="text-[#0066FF] hover:underline">Plaid's End User Privacy Policy</a>.</p>
+          </Sub>
         </Section>
 
         <Section title="2. How We Use Your Information">
@@ -91,6 +98,7 @@ export const PrivacyPolicy: FC = () => (
               <li><strong>Stripe</strong> — Payment processing and subscription management.</li>
               <li><strong>SendGrid (Twilio)</strong> — Transactional email delivery.</li>
               <li><strong>Telegram</strong> — Bot integration for document submission (only if you opt in).</li>
+              <li><strong>Plaid Inc.</strong> — Bank account connections (only if you opt in).</li>
             </ul>
           </Sub>
           <Sub title="Legal Requirements">
