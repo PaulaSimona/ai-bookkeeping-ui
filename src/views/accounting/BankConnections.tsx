@@ -15,17 +15,14 @@ import {
   type PlaidLinkOnExit,
 } from 'react-plaid-link';
 import {
+  buildExchangePayload,
   useLinkToken,
   useExchange,
   usePlaidItems,
-  type ExchangePayload,
+  PLAID_LINK_TOKEN_KEY as LINK_TOKEN_KEY,
   type PlaidItem,
 } from '@/api/plaid/usePlaid';
 import { useOrgMe } from '@/hooks/useAccounts';
-
-// The pre-open stash for the C2 OAuth redirect flow: Link re-initialization
-// after an OAuth institution redirect needs the SAME link_token back.
-const LINK_TOKEN_KEY = 'plaid_link_token';
 
 // ─── Local toast (TaxProfile convention, extended with variants) ──────────────
 
@@ -117,26 +114,7 @@ export const BankConnections: FC = () => {
 
   const onSuccess = useCallback<PlaidLinkOnSuccess>(
     async (publicToken, metadata) => {
-      // Map Link's metadata EXPLICITLY into the backend serializer shape —
-      // never forward the raw metadata object.
-      const payload: ExchangePayload = {
-        public_token: publicToken,
-        metadata: {
-          institution: {
-            institution_id: metadata.institution?.institution_id ?? '',
-            name: metadata.institution?.name ?? '',
-          },
-          accounts: metadata.accounts.map((account) => ({
-            id: account.id,
-            name: account.name ?? '',
-            mask: account.mask ?? '',
-            type: account.type ?? '',
-            subtype: account.subtype ?? '',
-          })),
-        },
-      };
-
-      const result = await exchange(payload);
+      const result = await exchange(buildExchangePayload(publicToken, metadata));
       localStorage.removeItem(LINK_TOKEN_KEY);
       setLinkToken(null);
       setConnecting(false);

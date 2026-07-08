@@ -5,7 +5,13 @@
 // the Plaid access token server-side; the UI only sees link_token (short-
 // lived, public by design) and display fields.
 import { useCallback, useEffect, useState } from 'react';
+import type { PlaidLinkOnSuccessMetadata } from 'react-plaid-link';
 import api from '@/utils/api';
+
+// localStorage stash for the OAuth redirect flow: Link re-initialization on
+// /plaid/oauth-callback needs the SAME link_token back. Single-sourced here —
+// BankConnections writes it, the callback page reads it, both clear it.
+export const PLAID_LINK_TOKEN_KEY = 'plaid_link_token';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -67,6 +73,34 @@ export interface PlaidItem {
 type Result<T> =
   | { ok: true; data: T }
   | { ok: false; status?: number; error: string };
+
+// ─── Link metadata → backend payload (single source of the mapping) ──────────
+
+/**
+ * Map Plaid Link's onSuccess metadata EXPLICITLY into the exact shape the
+ * backend PlaidExchangeSerializer expects — never forward the raw metadata
+ * object. Used by both the in-page flow (BankConnections) and the OAuth
+ * redirect continuation (PlaidOauthCallback).
+ */
+export const buildExchangePayload = (
+  publicToken: string,
+  metadata: PlaidLinkOnSuccessMetadata,
+): ExchangePayload => ({
+  public_token: publicToken,
+  metadata: {
+    institution: {
+      institution_id: metadata.institution?.institution_id ?? '',
+      name: metadata.institution?.name ?? '',
+    },
+    accounts: metadata.accounts.map((account) => ({
+      id: account.id,
+      name: account.name ?? '',
+      mask: account.mask ?? '',
+      type: account.type ?? '',
+      subtype: account.subtype ?? '',
+    })),
+  },
+});
 
 // ─── Error mapping ────────────────────────────────────────────────────────────
 
