@@ -28,6 +28,7 @@ import { TermsOfService } from '@/views/legal/TermsOfService';
 import { ReviewerDashboard } from '@/views/reviewer';
 import { LandingPage } from '@/pages/LandingPage';
 import { ChartOfAccounts } from '@/pages/accounts/ChartOfAccounts';
+import { BankConnections } from '@/views/accounting/BankConnections';
 import { AccountingReview } from '@/pages/accounting/AccountingReview';
 import { TaxProfile } from '@/pages/accounting/TaxProfile';
 import { ReviewerManagement } from '@/pages/accounting/ReviewerManagement';
@@ -112,6 +113,9 @@ const App: FC = () => {
             page via useOrgMe(), so NO staff guard here (unlike /accounts and
             /accounting-review, which gate on is_staff/is_superuser). */}
         <Route path="/accounting/tax-profile" element={<TaxProfile />} />
+        {/* Owner-facing Tier 2 setting — same shape as tax-profile: owner
+            gating enforced inside the page via useOrgMe(), no staff guard. */}
+        <Route path="/accounting/bank-connections" element={<BankConnections />} />
         <Route path="/support"              element={<Support />} />
         <Route path="/feedback"             element={<Feedback />} />
         <Route path="/subscription"         element={<Subscription />} />
