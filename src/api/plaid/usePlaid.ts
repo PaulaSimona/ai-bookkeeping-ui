@@ -12,6 +12,12 @@ import api from '@/utils/api';
 // /plaid/oauth-callback needs the SAME link_token back. Single-sourced here —
 // BankConnections writes it, the callback page reads it, both clear it.
 export const PLAID_LINK_TOKEN_KEY = 'plaid_link_token';
+// Reconnect (C3): the OAuth callback must know WHICH mode the stashed
+// session was — an update-mode success posts to reconnect/complete, never
+// to exchange (which would trip the duplicate-Item guard). Absent keys =
+// connect mode (backward compatible with any in-flight stash).
+export const PLAID_LINK_MODE_KEY = 'plaid_link_mode';
+export const PLAID_RECONNECT_ITEM_KEY = 'plaid_reconnect_item_id';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -144,6 +150,36 @@ export const useExchange = () => {
     return { ok: false, status: response?.status, error: errorMessage(response) };
   };
   return { exchange };
+};
+
+export const useReconnectLinkToken = () => {
+  const createReconnectLinkToken = async (
+    itemId: string,
+  ): Promise<Result<LinkTokenResponse>> => {
+    const response = await api.post(
+      '/api/accounting/plaid/reconnect/link-token/', { item_id: itemId },
+    );
+    if (response?.status === 200 && response.data?.link_token) {
+      return { ok: true, data: response.data as LinkTokenResponse };
+    }
+    return { ok: false, status: response?.status, error: errorMessage(response) };
+  };
+  return { createReconnectLinkToken };
+};
+
+export const useReconnectComplete = () => {
+  const completeReconnect = async (
+    itemId: string,
+  ): Promise<Result<PlaidItem>> => {
+    const response = await api.post(
+      '/api/accounting/plaid/reconnect/complete/', { item_id: itemId },
+    );
+    if (response?.status === 200) {
+      return { ok: true, data: response.data as PlaidItem };
+    }
+    return { ok: false, status: response?.status, error: errorMessage(response) };
+  };
+  return { completeReconnect };
 };
 
 export const usePlaidItems = () => {

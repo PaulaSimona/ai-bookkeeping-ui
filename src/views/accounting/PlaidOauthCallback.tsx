@@ -17,8 +17,17 @@ import {
 import {
   buildExchangePayload,
   useExchange,
+  useReconnectComplete,
   PLAID_LINK_TOKEN_KEY,
+  PLAID_LINK_MODE_KEY,
+  PLAID_RECONNECT_ITEM_KEY,
 } from '@/api/plaid/usePlaid';
+
+const clearStash = () => {
+  localStorage.removeItem(PLAID_LINK_TOKEN_KEY);
+  localStorage.removeItem(PLAID_LINK_MODE_KEY);
+  localStorage.removeItem(PLAID_RECONNECT_ITEM_KEY);
+};
 
 const Shell: FC<{ children: React.ReactNode }> = ({ children }) => (
   <div className="min-h-screen bg-[#0f172a] text-white flex items-center justify-center px-6">
@@ -29,16 +38,46 @@ const Shell: FC<{ children: React.ReactNode }> = ({ children }) => (
 export const PlaidOauthCallback: FC = () => {
   const navigate = useNavigate();
   const { exchange } = useExchange();
+  const { completeReconnect } = useReconnectComplete();
 
   // Read once on mount — absent/empty means the session did not start here
   // (or already finished) and there is nothing to resume.
   const [token] = useState<string | null>(
     () => localStorage.getItem(PLAID_LINK_TOKEN_KEY) || null,
   );
+  // C3: mode + item id stashed by handleReconnect; absent = connect mode.
+  const [mode] = useState<string | null>(
+    () => localStorage.getItem(PLAID_LINK_MODE_KEY),
+  );
+  const [reconnectItemId] = useState<string | null>(
+    () => localStorage.getItem(PLAID_RECONNECT_ITEM_KEY),
+  );
   const [error, setError] = useState<string | null>(null);
 
   const onSuccess = useCallback<PlaidLinkOnSuccess>(
     async (publicToken, metadata) => {
+      // Reconnect continuation: the update-mode session re-authed an
+      // EXISTING Item — post reconnect/complete, never exchange (which
+      // would trip the duplicate-Item guard).
+      if (mode === 'reconnect') {
+        // Mode says reconnect but the item id is gone: NEVER fall through
+        // to exchange (a reconnect success posted there would confuse the
+        // duplicate-Item guard). Treat the session as expired instead.
+        if (!reconnectItemId) {
+          clearStash();
+          setError('This bank connection session has expired.');
+          return;
+        }
+        const result = await completeReconnect(reconnectItemId);
+        clearStash();
+        if (result.ok) {
+          navigate('/accounting/bank-connections');
+        } else {
+          setError(result.error);
+        }
+        return;
+      }
+
       const result = await exchange(buildExchangePayload(publicToken, metadata));
       localStorage.removeItem(PLAID_LINK_TOKEN_KEY);
       if (result.ok) {
@@ -49,11 +88,11 @@ export const PlaidOauthCallback: FC = () => {
         setError(result.error);
       }
     },
-    [exchange, navigate],
+    [mode, reconnectItemId, completeReconnect, exchange, navigate],
   );
 
   const onExit = useCallback<PlaidLinkOnExit>(() => {
-    localStorage.removeItem(PLAID_LINK_TOKEN_KEY);
+    clearStash();
     navigate('/accounting/bank-connections');
   }, [navigate]);
 
