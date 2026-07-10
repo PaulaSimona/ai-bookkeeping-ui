@@ -19,7 +19,11 @@ import {
   useLinkToken,
   useExchange,
   usePlaidItems,
+  useReconnectLinkToken,
+  useReconnectComplete,
   PLAID_LINK_TOKEN_KEY as LINK_TOKEN_KEY,
+  PLAID_LINK_MODE_KEY,
+  PLAID_RECONNECT_ITEM_KEY,
   type PlaidItem,
 } from '@/api/plaid/usePlaid';
 import { useOrgMe } from '@/hooks/useAccounts';
@@ -63,7 +67,14 @@ const StatusBadge: FC<{ status: string }> = ({ status }) => {
 
 // ─── Connected item card ──────────────────────────────────────────────────────
 
-const ItemCard: FC<{ item: PlaidItem }> = ({ item }) => (
+// Reconnect is only offered for a dead-but-repairable login — mirrors the
+// backend RC-1a gate (active is a no-op, revoked is unrepairable).
+const RECONNECTABLE_STATUSES = new Set(['login_required', 'pending_expiration']);
+
+const ItemCard: FC<{
+  item: PlaidItem;
+  onReconnect?: (item: PlaidItem) => void;
+}> = ({ item, onReconnect }) => (
   <div className="rounded-2xl bg-[#0A1628] border border-white/10 p-5">
     <div className="flex items-center justify-between gap-3 flex-wrap">
       <div>
@@ -72,7 +83,17 @@ const ItemCard: FC<{ item: PlaidItem }> = ({ item }) => (
           Connected {new Date(item.created_at).toLocaleDateString()}
         </p>
       </div>
-      <StatusBadge status={item.status} />
+      <div className="flex items-center gap-2">
+        <StatusBadge status={item.status} />
+        {onReconnect && RECONNECTABLE_STATUSES.has(item.status) && (
+          <button
+            onClick={() => onReconnect(item)}
+            className="rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 px-3 py-1 text-xs font-semibold transition-colors"
+          >
+            Reconnect
+          </button>
+        )}
+      </div>
     </div>
     <ul className="mt-4 space-y-1.5">
       {item.accounts.map((account) => (
@@ -100,11 +121,24 @@ export const BankConnections: FC = () => {
   const { items, isLoading, error, refetch } = usePlaidItems();
   const { createLinkToken } = useLinkToken();
   const { exchange } = useExchange();
+  const { createReconnectLinkToken } = useReconnectLinkToken();
+  const { completeReconnect } = useReconnectComplete();
 
-  const [linkToken, setLinkToken] = useState<string | null>(null);
+  // C3: one Link session at a time; mode decides what onSuccess posts.
+  const [linkSession, setLinkSession] = useState<{
+    token: string;
+    mode: 'connect' | 'reconnect';
+    itemId?: string;
+  } | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [toast, setToast] = useState<ToastMsg | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearStash = () => {
+    localStorage.removeItem(LINK_TOKEN_KEY);
+    localStorage.removeItem(PLAID_LINK_MODE_KEY);
+    localStorage.removeItem(PLAID_RECONNECT_ITEM_KEY);
+  };
 
   const showToast = useCallback((message: string, variant: ToastMsg['variant']) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -114,9 +148,27 @@ export const BankConnections: FC = () => {
 
   const onSuccess = useCallback<PlaidLinkOnSuccess>(
     async (publicToken, metadata) => {
+      // Reconnect mode: update-mode Link re-authed the EXISTING Item —
+      // post reconnect/complete (never exchange, which would trip the
+      // duplicate-Item guard).
+      if (linkSession?.mode === 'reconnect' && linkSession.itemId) {
+        const result = await completeReconnect(linkSession.itemId);
+        clearStash();
+        setLinkSession(null);
+        setConnecting(false);
+        if (result.ok) {
+          showToast(`${result.data.institution_name} reconnected.`, 'success');
+          refetch();
+        } else {
+          // 409/detail passes through the existing error path as-is.
+          showToast(result.error, 'error');
+        }
+        return;
+      }
+
       const result = await exchange(buildExchangePayload(publicToken, metadata));
-      localStorage.removeItem(LINK_TOKEN_KEY);
-      setLinkToken(null);
+      clearStash();
+      setLinkSession(null);
       setConnecting(false);
 
       if (result.ok) {
@@ -133,13 +185,13 @@ export const BankConnections: FC = () => {
         showToast(result.error, 'error');
       }
     },
-    [exchange, refetch, showToast],
+    [linkSession, completeReconnect, exchange, refetch, showToast],
   );
 
   const onExit = useCallback<PlaidLinkOnExit>(
     (exitError) => {
-      localStorage.removeItem(LINK_TOKEN_KEY);
-      setLinkToken(null);
+      clearStash();
+      setLinkSession(null);
       setConnecting(false);
       // User cancel is silent; only an exit WITH error gets a toast.
       if (exitError) {
@@ -150,25 +202,50 @@ export const BankConnections: FC = () => {
   );
 
   const { open, ready } = usePlaidLink({
-    token: linkToken,
+    token: linkSession?.token ?? null,
     onSuccess,
     onExit,
   });
 
   // Open Link as soon as the freshly minted token makes it ready.
   useEffect(() => {
-    if (linkToken && ready) open();
-  }, [linkToken, ready, open]);
+    if (linkSession && ready) open();
+  }, [linkSession, ready, open]);
 
   const handleConnect = async () => {
     setConnecting(true);
     const result = await createLinkToken();
     if (result.ok) {
+      // Clear FIRST: an abandoned reconnect session (browser closed — onExit
+      // never fires) must not leave stale mode/item keys under a new connect
+      // session, or the OAuth callback would post reconnect/complete against
+      // the wrong Item.
+      clearStash();
       // Stash BEFORE opening — the C2 OAuth redirect flow reads it back.
+      // Connect mode stashes ONLY the token key, exactly as before C3.
       localStorage.setItem(LINK_TOKEN_KEY, result.data.link_token);
-      setLinkToken(result.data.link_token);
+      setLinkSession({ token: result.data.link_token, mode: 'connect' });
     } else {
       setConnecting(false);
+      showToast(result.error, 'error');
+    }
+  };
+
+  const handleReconnect = async (item: PlaidItem) => {
+    setConnecting(true);
+    const result = await createReconnectLinkToken(item.id);
+    if (result.ok) {
+      // Stash all three keys BEFORE opening — the OAuth callback needs
+      // mode + item id to post reconnect/complete instead of exchange.
+      localStorage.setItem(LINK_TOKEN_KEY, result.data.link_token);
+      localStorage.setItem(PLAID_LINK_MODE_KEY, 'reconnect');
+      localStorage.setItem(PLAID_RECONNECT_ITEM_KEY, item.id);
+      setLinkSession({
+        token: result.data.link_token, mode: 'reconnect', itemId: item.id,
+      });
+    } else {
+      setConnecting(false);
+      // 409 (active/revoked) and other details pass through as-is.
       showToast(result.error, 'error');
     }
   };
@@ -229,7 +306,9 @@ export const BankConnections: FC = () => {
             {/* Connected institutions */}
             {items.length > 0 ? (
               <div className="space-y-4 mb-6">
-                {items.map((item) => <ItemCard key={item.id} item={item} />)}
+                {items.map((item) => (
+                  <ItemCard key={item.id} item={item} onReconnect={handleReconnect} />
+                ))}
               </div>
             ) : !error && (
               <div className="rounded-2xl bg-[#0A1628] border border-white/10 border-dashed p-10 text-center mb-6">
