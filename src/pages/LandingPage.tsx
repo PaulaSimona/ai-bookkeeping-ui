@@ -517,7 +517,7 @@ export const LandingPage: FC = () => {
                   playsInline
                   className="w-full block"
                 >
-                  <source src="https://pub-9fd69cb1102f42cdaf6eb68e293314af.r2.dev/Tier1_presenation.mp4" type="video/mp4" />
+                  <source src="https://pub-0bf198ce553b4baeac57d715ab45ff44.r2.dev/Tier1_presenation.mp4" type="video/mp4" />
                   Your browser does not support the video tag.
                 </video>
               </div>
