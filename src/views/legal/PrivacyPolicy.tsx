@@ -30,7 +30,7 @@ export const PrivacyPolicy: FC = () => (
       {/* Header */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-8 py-10 mb-6">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Privacy Policy</h1>
-        <p className="text-sm text-gray-400">Effective date: May 21, 2026 · Time2Win Inc.</p>
+        <p className="text-sm text-gray-400">Effective date: July 11, 2026 · Time2Win Inc.</p>
         <p className="mt-4 text-gray-600 leading-relaxed">
           AI Bookkeeping is operated by Time2Win Inc. ("we", "our", or "us"). This Privacy Policy explains how we
           collect, use, disclose, and protect information when you use our service at app.ai-bookkeeping.ai. By
@@ -126,15 +126,17 @@ export const PrivacyPolicy: FC = () => (
           <p>We retain your account data and uploaded document data for as long as your account is active.
           If you delete your account, we will delete or anonymize your personal data within 30 days, except
           where we are required by law to retain it (e.g., financial records for tax compliance purposes).</p>
-          <p>Uploaded document images are not stored permanently on our servers — only the extracted structured
-          data is retained.</p>
+          <p>Original document files are stored securely in private, access-controlled storage and are served
+          only through signed, time-limited links. When you delete a document or your account, the original file
+          is deleted from storage immediately, and extracted structured data is deleted or anonymized per the
+          retention terms below.</p>
         </Section>
 
         <Section title="6. Data Security">
           <p>We implement industry-standard security measures including:</p>
           <ul className="list-disc pl-5 mt-2 space-y-1">
             <li>Encryption in transit (TLS/HTTPS for all connections)</li>
-            <li>Encrypted passwords (bcrypt hashing, never stored in plaintext)</li>
+            <li>Encrypted passwords (industry-standard one-way hashing — never stored in plaintext)</li>
             <li>PostgreSQL database with access controls</li>
             <li>Regular security updates and dependency audits</li>
           </ul>
