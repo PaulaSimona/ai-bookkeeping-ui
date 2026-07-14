@@ -30,177 +30,180 @@ export const PrivacyPolicy: FC = () => (
       {/* Header */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-8 py-10 mb-6">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Privacy Policy</h1>
-        <p className="text-sm text-gray-400">Effective date: July 11, 2026 · Time2Win Inc.</p>
-        <p className="mt-4 text-gray-600 leading-relaxed">
-          AI Bookkeeping is operated by Time2Win Inc. ("we", "our", or "us"). This Privacy Policy explains how we
-          collect, use, disclose, and protect information when you use our service at app.ai-bookkeeping.ai. By
-          using our service, you agree to the practices described here.
-        </p>
+        <p className="text-sm text-gray-400">Effective date: July 14, 2026 · Time2Win Inc.</p>
       </div>
 
       {/* Body */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-8 py-10">
 
-        <Section title="1. Information We Collect">
-          <Sub title="Account Information">
-            <p>When you create an account, we collect your name, email address, and password. We also collect your
-            business name, business address, province or state, and GST/HST registration number when you complete
-            your business profile.</p>
-          </Sub>
-          <Sub title="Financial Documents">
-            <p>You may upload receipts, invoices, and other financial documents. These files are transmitted to our
-            AI processing pipeline for data extraction. We store the extracted structured data (vendor names,
-            amounts, dates, categories) in our database.</p>
-          </Sub>
-          <Sub title="Usage Data">
-            <p>We automatically collect information about how you interact with our service, including pages
-            visited, features used, upload timestamps, and error events. This helps us improve the product.</p>
-          </Sub>
-          <Sub title="Payment Information">
-            <p>Payments are processed by Stripe. We do not store your card number, CVV, or full card details.
-            Stripe provides us with a tokenized reference and basic card metadata (last 4 digits, expiry, brand).</p>
-          </Sub>
-          <Sub title="Telegram Integration (Optional)">
-            <p>If you link your Telegram account, we store your Telegram chat ID to enable document submission
-            via the bot. Linking is voluntary and can be removed at any time in Settings.</p>
-          </Sub>
-          <Sub title="Bank Account Data (Optional)">
-            <p>If you choose to connect a bank account, we use Plaid Inc. to link it. We receive account
-            details (institution, account name, account type, and the last digits of the account number) and
-            transaction data in order to provide bookkeeping services. We do not receive or store your bank
-            login credentials — you provide those directly to Plaid. Plaid's handling of your data is governed
-            by <a href="https://plaid.com/legal/#end-user-privacy-policy" target="_blank" rel="noreferrer" className="text-[#0066FF] hover:underline">Plaid's End User Privacy Policy</a>.</p>
-          </Sub>
+        <Section title="1. Who we are">
+          <p>AI Bookkeeping (ai-bookkeeping.ai) is operated by <strong>Time2Win Inc., a corporation organized
+          under the laws of British Columbia, Canada</strong>. Time2Win Inc. is responsible for the personal
+          information handled through the service and is accountable for it under the Personal Information
+          Protection and Electronic Documents Act (PIPEDA). If you have questions about this policy or how your
+          information is handled, contact us at{' '}
+          <a href="mailto:support@ai-bookkeeping.ai" className="text-[#0066FF] hover:underline">support@ai-bookkeeping.ai</a>.</p>
+          <p>This policy applies to the AI Bookkeeping website and application at ai-bookkeeping.ai, our API, and
+          our Telegram bot.</p>
         </Section>
 
-        <Section title="2. How We Use Your Information">
-          <p>We use your information to:</p>
+        <Section title="2. Your records and our role">
+          <p>You and your business decide which financial records to upload to AI Bookkeeping. Those records
+          belong to your business. Time2Win Inc. processes them for one purpose: to provide the bookkeeping
+          service you signed up for — organizing, categorizing, and preparing your financial documents and
+          transactions. We do not sell your information, and we do not use it for advertising.</p>
+        </Section>
+
+        <Section title="3. Information we collect">
+          <p><strong>Account information.</strong> Your name, email address, password (stored in hashed form),
+          and business details you provide, such as your business name and province.</p>
+          <p><strong>Financial records you upload or connect.</strong> This is the core of the service and
+          includes:</p>
+          <ul className="list-disc pl-5 space-y-1">
+            <li>receipts and invoices,</li>
+            <li>bank and credit card transaction data (through our banking connection provider, Plaid),</li>
+            <li>supplier and vendor details that appear on your documents,</li>
+            <li>the accounting records the service produces from them (categorizations, journal entries, reconciliations).</li>
+          </ul>
+          <p><strong>Bank connection information.</strong> When you connect a bank account through Plaid, we
+          receive transaction and account data. <strong>We never see or store your online banking username or
+          password</strong> — the connection is established directly between you and Plaid. The access
+          credentials Plaid issues to us are stored encrypted.</p>
+          <p><strong>Payment information.</strong> Payments are processed by Stripe. Your card details go directly
+          to Stripe and are never stored on our servers.</p>
+          <p><strong>Service and technical information.</strong> Log data needed to operate and secure the service
+          (such as request logs and error reports), and operational metadata about your bank connection (such as
+          when it last synced and whether syncs are failing) so we can keep it healthy.</p>
+        </Section>
+
+        <Section title="4. How we use your information">
           <ul className="list-disc pl-5 space-y-1.5">
-            <li>Provide, maintain, and improve the AI Bookkeeping service</li>
-            <li>Process your uploaded documents and extract financial data using AI</li>
-            <li>Generate Excel workbooks and financial reports for you</li>
-            <li>Process subscription payments and manage your account</li>
-            <li>Send transactional emails (account verification, password resets, support tickets)</li>
-            <li>Respond to support requests and feedback</li>
-            <li>Detect and prevent fraud, abuse, and security incidents</li>
-            <li>Comply with legal obligations</li>
+            <li>To provide the service: reading your documents, extracting their contents, categorizing
+            transactions, drafting accounting entries, and keeping your books.</li>
+            <li>To operate, secure, and improve the service, including monitoring for errors and outages.</li>
+            <li>To communicate with you: account verification, receipts, service and security notices.</li>
+            <li>To meet our legal obligations.</li>
           </ul>
-          <p className="mt-3">We do not use your financial documents or extracted data to train AI models,
-          sell advertising, or share with data brokers.</p>
         </Section>
 
-        <Section title="3. How We Share Your Information">
-          <p>We do not sell your personal information. We share data only in these circumstances:</p>
-          <Sub title="Service Providers">
-            <p>We use the following third-party processors to operate our service:</p>
-            <ul className="list-disc pl-5 mt-2 space-y-1">
-              <li><strong>Anthropic (Claude API)</strong> — AI extraction of document data. Documents are transmitted under Anthropic's data processing terms.</li>
-              <li><strong>Stripe</strong> — Payment processing and subscription management.</li>
-              <li><strong>SendGrid (Twilio)</strong> — Transactional email delivery.</li>
-              <li><strong>Telegram</strong> — Bot integration for document submission (only if you opt in).</li>
-              <li><strong>Plaid Inc.</strong> — Bank account connections (only if you opt in).</li>
-            </ul>
-          </Sub>
-          <Sub title="Legal Requirements">
-            <p>We may disclose information if required by law, court order, or government authority, or to protect
-            the rights and safety of our users and the public.</p>
-          </Sub>
-          <Sub title="Business Transfers">
-            <p>If Time2Win Inc. is involved in a merger, acquisition, or sale of assets, your information may be
-            transferred. We will notify you via email and/or a notice on our website before your data is
-            transferred and becomes subject to a different privacy policy.</p>
-          </Sub>
-        </Section>
-
-        <Section title="4. Cookies and Tracking">
-          <p>We use minimal cookies necessary to operate the service. We do not use third-party advertising
-          cookies or cross-site tracking. Specifically:</p>
-          <ul className="list-disc pl-5 mt-2 space-y-1">
-            <li><strong>Authentication tokens</strong> — Stored in your browser's localStorage to keep you signed in.</li>
-            <li><strong>Stripe cookies</strong> — Set by Stripe during checkout for fraud prevention.</li>
+        <Section title="5. AI processing">
+          <p>AI Bookkeeping is an AI-powered service, and we want to be precise about what that means:</p>
+          <ul className="list-disc pl-5 space-y-1.5">
+            <li>When you upload a document or connect transactions, the relevant text and images are processed by
+            <strong> Anthropic's Claude models</strong> to extract and categorize the information.</li>
+            <li>This processing happens under Anthropic's commercial API terms. <strong>Your documents and data
+            are not used to train AI models.</strong></li>
+            <li>Anthropic is the only AI provider that receives your documents. No other AI company has access to
+            your data.</li>
+            <li>AI output is subject to review controls inside the service; the AI does not move your money and
+            cannot access your bank accounts.</li>
           </ul>
-          <p className="mt-3">We do not use Google Analytics, Facebook Pixel, or similar tracking services.</p>
         </Section>
 
-        <Section title="5. Data Retention">
-          <p>We retain your account data and uploaded document data for as long as your account is active.
-          If you delete your account, we will delete or anonymize your personal data within 30 days, except
-          where we are required by law to retain it (e.g., financial records for tax compliance purposes).</p>
-          <p>Original document files are stored securely in private, access-controlled storage and are served
-          only through signed, time-limited links. When you delete a document or your account, the original file
-          is deleted from storage immediately, and extracted structured data is deleted or anonymized per the
-          retention terms below.</p>
-        </Section>
-
-        <Section title="6. Data Security">
-          <p>We implement industry-standard security measures including:</p>
-          <ul className="list-disc pl-5 mt-2 space-y-1">
-            <li>Encryption in transit (TLS/HTTPS for all connections)</li>
-            <li>Encrypted passwords (industry-standard one-way hashing — never stored in plaintext)</li>
-            <li>PostgreSQL database with access controls</li>
-            <li>Regular security updates and dependency audits</li>
+        <Section title="6. Third-party service providers">
+          <p>We rely on a small number of service providers, each for a specific job:</p>
+          <ul className="list-disc pl-5 space-y-1">
+            <li><strong>Hosting:</strong> Railway (application and database hosting)</li>
+            <li><strong>Document storage:</strong> Cloudflare R2</li>
+            <li><strong>AI processing:</strong> Anthropic</li>
+            <li><strong>Bank connections:</strong> Plaid</li>
+            <li><strong>Payments:</strong> Stripe</li>
+            <li><strong>Email delivery:</strong> SendGrid</li>
+            <li><strong>Error monitoring:</strong> Sentry</li>
           </ul>
-          <p className="mt-3">No method of transmission over the Internet is 100% secure. While we strive to
-          protect your data, we cannot guarantee absolute security. Please notify us immediately at{' '}
-          <a href="mailto:customerservice@ai-bookkeeping.ai" className="text-[#0066FF] hover:underline">
-            customerservice@ai-bookkeeping.ai
-          </a>{' '}
-          if you suspect a security incident.</p>
+          <p>Each provider receives only the information needed for its role, under contractual terms that
+          restrict how it may use that information.</p>
         </Section>
 
-        <Section title="7. Your Rights (PIPEDA)">
-          <p>As a resident of Canada, you have rights under the Personal Information Protection and Electronic
-          Documents Act (PIPEDA), including the right to:</p>
-          <ul className="list-disc pl-5 mt-2 space-y-1">
-            <li><strong>Access</strong> — Request a copy of the personal information we hold about you</li>
-            <li><strong>Correction</strong> — Ask us to correct inaccurate or incomplete information</li>
-            <li><strong>Withdrawal of consent</strong> — Withdraw consent to certain processing (subject to legal or contractual restrictions)</li>
-            <li><strong>Deletion</strong> — Request deletion of your account and personal data</li>
-            <li><strong>Complaint</strong> — Lodge a complaint with the Office of the Privacy Commissioner of Canada (OPC)</li>
+        <Section title="7. Where your information is stored (cross-border transfers)">
+          <p>Our servers and several of our service providers are located in the <strong>United States</strong>.
+          This means your information, including your financial records, is stored and processed outside Canada.
+          While it is outside Canada, it is subject to the laws of the jurisdiction where it is held, and may be
+          accessible to authorities there under those laws. We use contractual and security safeguards with all
+          of our providers to protect your information wherever it is processed. By using the service, you
+          acknowledge this transfer.</p>
+        </Section>
+
+        <Section title="8. How we protect your information">
+          <p>We treat your financial records as highly sensitive and protect them with safeguards that include:</p>
+          <ul className="list-disc pl-5 space-y-1.5">
+            <li><strong>Encryption in transit.</strong> All connections to the service use TLS (HTTPS), enforced
+            across the site.</li>
+            <li><strong>Encryption at rest for bank credentials.</strong> The access tokens for your bank
+            connections are stored encrypted.</li>
+            <li><strong>Private document storage.</strong> Your uploaded documents are held in private cloud
+            storage. They are never publicly accessible; documents are served only through signed links that
+            expire after a short time.</li>
+            <li><strong>Role-based access.</strong> Access inside the service is limited by role, and reviewer
+            access is scoped to the specific businesses a reviewer is assigned to.</li>
+            <li><strong>Audit logging.</strong> Changes to your accounting records are written to append-only
+            audit logs.</li>
+            <li><strong>Monitoring and alerting.</strong> The service is continuously monitored for errors and
+            downtime, with daily operational checks that alert us to problems such as failing bank syncs or
+            unreviewed items aging in queues.</li>
+            <li><strong>Deletion that actually deletes.</strong> When you delete a document or your account, the
+            stored files themselves are erased from storage — not just the database records pointing to them (see
+            Section 9).</li>
           </ul>
-          <p className="mt-3">To exercise these rights, contact us at{' '}
-            <a href="mailto:customerservice@ai-bookkeeping.ai" className="text-[#0066FF] hover:underline">
-              customerservice@ai-bookkeeping.ai
-            </a>.
-          </p>
+          <p>No system can be guaranteed 100% secure, but security review and hardening of the service is a
+          continuous, ongoing program.</p>
         </Section>
 
-        <Section title="8. Users in the United States">
-          <p>If you are using our service from the United States, your data may be processed and stored in
-          Canada or other jurisdictions. By using our service, you consent to the transfer of your information
-          to Canada and acknowledge that Canadian privacy law governs this policy.</p>
-          <p className="mt-2">We do not currently offer services in California and this policy is not intended
-          to constitute compliance with the California Consumer Privacy Act (CCPA).</p>
+        <Section title="9. Data retention and deletion">
+          <ul className="list-disc pl-5 space-y-1.5">
+            <li>We retain your information while your account is active, so the service can do its job.</li>
+            <li><strong>When you delete a document, the stored file is deleted from our cloud storage,</strong>
+            along with its data in the service.</li>
+            <li><strong>When you delete your account, your documents and data are erased,</strong> including the
+            underlying files in storage.</li>
+            <li>Where a law requires us to retain specific records, we will retain them for the period the law
+            requires and no longer.</li>
+            <li>You may request erasure of your personal information at any time by contacting{' '}
+            <a href="mailto:support@ai-bookkeeping.ai" className="text-[#0066FF] hover:underline">support@ai-bookkeeping.ai</a>.</li>
+          </ul>
         </Section>
 
-        <Section title="9. Children's Privacy">
-          <p>Our service is not directed to individuals under the age of 18. We do not knowingly collect
-          personal information from children. If you believe we have inadvertently collected information from
-          a minor, please contact us immediately and we will delete it.</p>
+        <Section title="10. Security incidents">
+          <p>We maintain documented procedures to detect, investigate, contain, and recover from security
+          incidents. If a breach of security safeguards creates a real risk of significant harm to you, we will
+          notify you and report to the Office of the Privacy Commissioner of Canada, as required by PIPEDA, as
+          soon as feasible. We also keep records of security incidents as PIPEDA requires.</p>
         </Section>
 
-        <Section title="10. Changes to This Policy">
-          <p>We may update this Privacy Policy from time to time. We will notify you of significant changes
-          by email or by posting a prominent notice in the app at least 14 days before the change takes effect.
-          Your continued use of the service after the effective date constitutes acceptance of the updated policy.</p>
+        <Section title="11. Cookies and tracking">
+          <p>We do not use advertising cookies, analytics services, or tracking technologies. When you sign in,
+          the service uses authentication tokens stored on your device solely to keep you signed in; they are
+          removed when you sign out.</p>
         </Section>
 
-        <Section title="11. Contact Us">
-          <p>If you have questions or concerns about this Privacy Policy or our data practices, please contact us:</p>
-          <div className="mt-3 bg-gray-50 rounded-lg px-5 py-4 text-sm">
-            <p className="font-semibold text-gray-900">Time2Win Inc.</p>
-            <p className="mt-1">Email:{' '}
-              <a href="mailto:customerservice@ai-bookkeeping.ai" className="text-[#0066FF] hover:underline">
-                customerservice@ai-bookkeeping.ai
-              </a>
-            </p>
-          </div>
+        <Section title="12. Your rights">
+          <p>Under PIPEDA, you have the right to:</p>
+          <ul className="list-disc pl-5 space-y-1.5">
+            <li><strong>access</strong> the personal information we hold about you,</li>
+            <li><strong>correct</strong> it if it is inaccurate,</li>
+            <li><strong>withdraw consent</strong> to our handling of your information (which may mean we can no
+            longer provide the service),</li>
+            <li><strong>request deletion</strong> as described in Section 9,</li>
+            <li>and <strong>complain</strong> to us, or to the Office of the Privacy Commissioner of Canada, about
+            our information-handling practices.</li>
+          </ul>
+          <p>To exercise any of these rights, contact{' '}
+          <a href="mailto:support@ai-bookkeeping.ai" className="text-[#0066FF] hover:underline">support@ai-bookkeeping.ai</a>.</p>
+        </Section>
+
+        <Section title="13. Changes to this policy">
+          <p>When we make material changes to this policy, we will update the effective date at the top and, where
+          the change is significant, notify you through the service or by email. Prior versions are available on
+          request.</p>
         </Section>
 
       </div>
 
       <p className="text-center text-xs text-gray-400 mt-8">
-        © 2026 Time2Win Inc. ·{' '}
+        Time2Win Inc. · British Columbia, Canada ·{' '}
+        <a href="mailto:support@ai-bookkeeping.ai" className="hover:underline">support@ai-bookkeeping.ai</a>
+      </p>
+      <p className="text-center text-xs text-gray-400 mt-2">
         <NavLink to="/terms-of-service" className="hover:underline">Terms of Service</NavLink>
       </p>
     </div>
