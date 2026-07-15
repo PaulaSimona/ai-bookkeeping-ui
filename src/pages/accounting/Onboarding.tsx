@@ -220,9 +220,13 @@ export const Onboarding: FC = () => {
         } else if (Number.isNaN(d) || Number.isNaN(c)) {
           errs[l.key] = 'Amounts must be numbers with up to 2 decimals, e.g. 1234.56.';
         } else {
+          // A side counts as used only if its cents value is positive — mirror
+          // and payload must agree. A set-but-zero side ("0.00") is an error,
+          // not an absent side.
           const hasDebit = d !== null && d > 0;
           const hasCredit = c !== null && c > 0;
-          if (hasDebit === hasCredit) {
+          const zeroSet = (d !== null && d === 0) || (c !== null && c === 0);
+          if (zeroSet || hasDebit === hasCredit) {
             errs[l.key] = 'Exactly one of debit/credit must be a positive amount.';
           }
         }
@@ -269,11 +273,18 @@ export const Onboarding: FC = () => {
       if (mode === 'opening_balances') {
         // Client lines ONLY. The 3500 balancing line is server-owned and the
         // preview row below is display-only — it is never sent.
-        payload.lines = lines.map((l) => ({
-          account_code: l.account_code,
-          debit: l.debit.trim() ? l.debit.trim() : null,
-          credit: l.credit.trim() ? l.credit.trim() : null,
-        }));
+        // A side counts as used only if its cents value is positive — mirror
+        // and payload must agree; never key on string emptiness (a "0.00"
+        // string is non-empty but is NOT a used side).
+        payload.lines = lines.map((l) => {
+          const d = toCents(l.debit);
+          const c = toCents(l.credit);
+          return {
+            account_code: l.account_code,
+            debit: typeof d === 'number' && !Number.isNaN(d) && d > 0 ? l.debit.trim() : null,
+            credit: typeof c === 'number' && !Number.isNaN(c) && c > 0 ? l.credit.trim() : null,
+          };
+        });
       }
       const res = await api.post('/api/accounting/opening-balance/', payload);
       // Leg 1: the api interceptor RESOLVES non-401 HTTP errors (it returns
