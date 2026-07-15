@@ -1,7 +1,8 @@
 // Bank Connections (P2-C1) — Plaid Link flow + connected-institutions list.
-// Mirrors the TaxProfile page precedent: private route, NO route-level role
-// guard; owner-gating enforced inside the page via useOrgMe() (and again
-// server-side — every Plaid endpoint is owner-only).
+// The route carries the interim RequireStaffOrSuperuser gate (s14/a0)
+// (TODO: swap to the Tier 2 subscription check with §21); owner-gating is
+// ADDITIONALLY enforced in-page via useOrgMe() and server-side — every Plaid
+// endpoint is owner-only.
 //
 // NOTE on components: the shared Badge/Button/Toast in components/ are dead
 // react-bootstrap legacy (react-bootstrap is NOT installed; the global toast
@@ -55,11 +56,11 @@ const StatusBadge: FC<{ status: string }> = ({ status }) => {
     <span
       className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${
         active
-          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-          : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+          : 'bg-amber-50 text-amber-700 border border-amber-200'
       }`}
     >
-      <span className={`w-1.5 h-1.5 rounded-full ${active ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+      <span className={`w-1.5 h-1.5 rounded-full ${active ? 'bg-emerald-500' : 'bg-amber-500'}`} />
       {active ? 'Active' : status.replace(/_/g, ' ')}
     </span>
   );
@@ -75,11 +76,11 @@ const ItemCard: FC<{
   item: PlaidItem;
   onReconnect?: (item: PlaidItem) => void;
 }> = ({ item, onReconnect }) => (
-  <div className="rounded-2xl bg-[#0A1628] border border-white/10 p-5">
+  <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-5">
     <div className="flex items-center justify-between gap-3 flex-wrap">
       <div>
-        <p className="text-sm font-semibold text-white">{item.institution_name}</p>
-        <p className="mt-0.5 text-xs text-white/40">
+        <p className="text-sm font-semibold text-gray-900">{item.institution_name}</p>
+        <p className="mt-0.5 text-xs text-gray-400">
           Connected {new Date(item.created_at).toLocaleDateString()}
         </p>
       </div>
@@ -88,7 +89,7 @@ const ItemCard: FC<{
         {onReconnect && RECONNECTABLE_STATUSES.has(item.status) && (
           <button
             onClick={() => onReconnect(item)}
-            className="rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 px-3 py-1 text-xs font-semibold transition-colors"
+            className="rounded-lg bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 px-3 py-1 text-xs font-semibold transition-colors"
           >
             Reconnect
           </button>
@@ -99,12 +100,12 @@ const ItemCard: FC<{
       {item.accounts.map((account) => (
         <li
           key={`${account.name}-${account.mask}`}
-          className="flex items-center gap-2 text-sm text-white/70"
+          className="flex items-center gap-2 text-sm text-gray-700"
         >
           <span>{account.name}</span>
-          {account.mask && <span className="text-white/40">····{account.mask}</span>}
+          {account.mask && <span className="text-gray-400">····{account.mask}</span>}
           {account.ledger_account_code && (
-            <span className="text-white/40">→ {account.ledger_account_code}</span>
+            <span className="text-gray-400">→ {account.ledger_account_code}</span>
           )}
         </li>
       ))}
@@ -253,14 +254,14 @@ export const BankConnections: FC = () => {
   // ── Loading (org role + items) ──
   if (orgLoading || isLoading) {
     return (
-      <div className="min-h-screen bg-[#0f172a] text-white">
+      <div className="min-h-screen bg-gray-50 text-gray-900">
         <div className="max-w-2xl mx-auto px-6 py-8">
-          <div className="h-7 w-56 bg-white/8 rounded animate-pulse mb-2" />
-          <div className="h-4 w-72 bg-white/8 rounded animate-pulse mb-8" />
+          <div className="h-7 w-56 bg-gray-200 rounded animate-pulse mb-2" />
+          <div className="h-4 w-72 bg-gray-200 rounded animate-pulse mb-8" />
           {Array.from({ length: 2 }).map((_, i) => (
-            <div key={i} className="rounded-2xl bg-[#0A1628] border border-white/10 p-5 mb-4">
-              <div className="h-4 w-40 bg-white/8 rounded animate-pulse mb-3" />
-              <div className="h-3 w-64 bg-white/8 rounded animate-pulse" />
+            <div key={i} className="rounded-2xl bg-white border border-gray-100 shadow-sm p-5 mb-4">
+              <div className="h-4 w-40 bg-gray-100 rounded animate-pulse mb-3" />
+              <div className="h-3 w-64 bg-gray-100 rounded animate-pulse" />
             </div>
           ))}
         </div>
@@ -269,15 +270,15 @@ export const BankConnections: FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-white">
+    <div className="min-h-screen bg-gray-50 text-gray-900">
       <Toast toast={toast} />
 
       <div className="max-w-2xl mx-auto px-6 py-8">
 
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-white">Bank Connections</h1>
-          <p className="mt-1 text-sm text-white/50">
+          <h1 className="text-2xl font-bold text-gray-900">Bank Connections</h1>
+          <p className="mt-1 text-sm text-gray-500">
             Connect your bank so transactions flow into your books automatically.
           </p>
         </div>
@@ -285,19 +286,19 @@ export const BankConnections: FC = () => {
         {/* Non-owner: the read-only-note treatment TaxProfile uses — but the
             Plaid endpoints are owner-only, so there is nothing to view. */}
         {!isOwner ? (
-          <div className="rounded-xl bg-white/5 border border-white/10 px-4 py-3 text-sm text-white/60">
+          <div className="rounded-xl bg-gray-50 border border-gray-200 px-4 py-3 text-sm text-gray-600">
             Only the account owner can manage bank connections.
           </div>
         ) : (
           <>
             {/* Load error */}
             {error && (
-              <div className="rounded-xl bg-red-500/10 border border-red-500/20 px-5 py-4 flex items-center gap-3 mb-6">
-                <svg className="w-5 h-5 text-red-400 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <div className="rounded-xl bg-red-50 border border-red-200 px-5 py-4 flex items-center gap-3 mb-6">
+                <svg className="w-5 h-5 text-red-500 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
                 </svg>
-                <p className="flex-1 text-sm text-red-400">{error}</p>
-                <button onClick={refetch} className="text-xs text-red-400 hover:text-red-300 underline">
+                <p className="flex-1 text-sm text-red-700">{error}</p>
+                <button onClick={refetch} className="text-xs text-red-700 hover:text-red-800 underline">
                   Retry
                 </button>
               </div>
@@ -311,12 +312,12 @@ export const BankConnections: FC = () => {
                 ))}
               </div>
             ) : !error && (
-              <div className="rounded-2xl bg-[#0A1628] border border-white/10 border-dashed p-10 text-center mb-6">
-                <svg className="w-10 h-10 mx-auto text-white/20 mb-3" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+              <div className="rounded-2xl bg-white border border-gray-200 border-dashed p-10 text-center mb-6">
+                <svg className="w-10 h-10 mx-auto text-gray-300 mb-3" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0012 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75z" />
                 </svg>
-                <p className="text-sm font-medium text-white/70">No banks connected yet</p>
-                <p className="mt-1 text-xs text-white/40">
+                <p className="text-sm font-medium text-gray-700">No banks connected yet</p>
+                <p className="mt-1 text-xs text-gray-400">
                   Connect a chequing, savings, or credit card account to start the automatic feed.
                 </p>
               </div>
