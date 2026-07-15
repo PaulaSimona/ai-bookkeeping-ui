@@ -33,6 +33,7 @@ import { PlaidOauthCallback } from '@/views/accounting/PlaidOauthCallback';
 import { AccountingReview } from '@/pages/accounting/AccountingReview';
 import { TaxProfile } from '@/pages/accounting/TaxProfile';
 import { Onboarding } from '@/pages/accounting/Onboarding';
+import { OnboardingGate } from '@/components/accounting/OnboardingGate';
 import { ReviewerManagement } from '@/pages/accounting/ReviewerManagement';
 import { BlogList } from '@/views/blog/BlogList';
 import { BlogPost } from '@/views/blog/BlogPost';
@@ -41,7 +42,12 @@ import { FAQ } from '@/views/faq';
 const PrivateLayout: FC = () => (
   <RedirectPage privatePath>
     <AppShell>
-      <Outlet />
+      {/* Onboarding soft-gate (§14 14A-2): banner + once-per-session redirect,
+          tier-scoped inside the component — Tier 1 users pass through with
+          zero cost. Mounted here (not in AppShell, which is Tier 1-shared). */}
+      <OnboardingGate>
+        <Outlet />
+      </OnboardingGate>
     </AppShell>
   </RedirectPage>
 );
