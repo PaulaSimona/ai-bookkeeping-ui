@@ -43,6 +43,13 @@ export interface OrgMe {
   org_name: string;
   role: OrgRole;
   base_currency: string;
+  // §14 onboarding-completeness reads (backend 14A-1, merged 4249a88).
+  // has_tax_profile is a real boolean, never null; opening_balance_choice is
+  // serialized ''→null server-side, so null = not yet recorded;
+  // books_start_date is an ISO 'YYYY-MM-DD' string or null.
+  has_tax_profile: boolean;
+  opening_balance_choice: 'starting_fresh' | 'opening_balances' | null;
+  books_start_date: string | null;
 }
 
 export interface CreateAccountPayload {
@@ -60,10 +67,14 @@ export const useOrgMe = () => {
   const [data, setData] = useState<OrgMe | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [revision, setRevision] = useState(0);
+
+  const refetch = useCallback(() => setRevision((r) => r + 1), []);
 
   useEffect(() => {
     let cancelled = false;
     setIsLoading(true);
+    setError(null);
     api.get('/api/accounting/me/')
       .then((res) => {
         if (!cancelled) setData(res?.data ?? null);
@@ -73,9 +84,20 @@ export const useOrgMe = () => {
       })
       .finally(() => { if (!cancelled) setIsLoading(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [revision]);
 
-  return { orgId: data?.org_id, orgName: data?.org_name, role: data?.role, baseCurrency: data?.base_currency, isLoading, error };
+  return {
+    orgId: data?.org_id,
+    orgName: data?.org_name,
+    role: data?.role,
+    baseCurrency: data?.base_currency,
+    hasTaxProfile: data?.has_tax_profile,
+    openingBalanceChoice: data?.opening_balance_choice,
+    booksStartDate: data?.books_start_date,
+    isLoading,
+    error,
+    refetch,
+  };
 };
 
 // ── useAccounts ───────────────────────────────────────────────────────────────
