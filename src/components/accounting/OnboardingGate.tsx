@@ -35,20 +35,28 @@ const GatedLayer: FC<PropsWithChildren> = ({ children }) => {
   }, [pathname, refetch]);
 
   // Once-per-session redirect (D1 first-login + D-14A2-3): keys on
-  // !hasTaxProfile ONLY. The flag is set FIRST so nothing can ever loop the
-  // user back — one redirect per browser session, then every page (uploads
-  // included) stays reachable: a nudge, never a wall. No redirect mid-load.
+  // hasTaxProfile === false ONLY — STRICT (F-14A2-a). The contract says
+  // has_tax_profile is a real boolean, never null, so undefined here means
+  // "org load failed / state unknown", and a soft-gate must fail SILENT on an
+  // error state — inert: no redirect, no banner, children as-is. The flag is
+  // set FIRST so nothing can ever loop the user back — one redirect per
+  // browser session, then every page (uploads included) stays reachable: a
+  // nudge, never a wall. No redirect mid-load.
   useEffect(() => {
     if (isLoading) return;
-    if (hasTaxProfile) return;
+    if (hasTaxProfile !== false) return;
     if (pathname === '/onboarding') return;
     if (sessionStorage.getItem(REDIRECT_FLAG)) return;
     sessionStorage.setItem(REDIRECT_FLAG, '1');
     navigate('/onboarding');
   }, [isLoading, hasTaxProfile, pathname, navigate]);
 
+  // Banner only on KNOWN-incomplete states (strict boolean checks — undefined
+  // = unknown = inert, never nag on a failed load).
   const showBanner =
-    !isLoading && (!hasTaxProfile || !openingBalanceChoice) && pathname !== '/onboarding';
+    !isLoading &&
+    pathname !== '/onboarding' &&
+    (hasTaxProfile === false || (hasTaxProfile === true && openingBalanceChoice == null));
 
   return (
     <>
