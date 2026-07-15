@@ -32,6 +32,7 @@ import { BankConnections } from '@/views/accounting/BankConnections';
 import { PlaidOauthCallback } from '@/views/accounting/PlaidOauthCallback';
 import { AccountingReview } from '@/pages/accounting/AccountingReview';
 import { TaxProfile } from '@/pages/accounting/TaxProfile';
+import { Onboarding } from '@/pages/accounting/Onboarding';
 import { ReviewerManagement } from '@/pages/accounting/ReviewerManagement';
 import { BlogList } from '@/views/blog/BlogList';
 import { BlogPost } from '@/views/blog/BlogPost';
@@ -115,6 +116,9 @@ const App: FC = () => {
         {/* TODO: swap to Tier 2 subscription check when Advanced plan is live */}
         <Route path="/accounting/tax-profile" element={<RequireStaffOrSuperuser><TaxProfile /></RequireStaffOrSuperuser>} />
         <Route path="/accounting/bank-connections" element={<RequireStaffOrSuperuser><BankConnections /></RequireStaffOrSuperuser>} />
+        {/* Onboarding wizard (§14 14A-2) — interim staff/superuser gate (D-14A2-4). */}
+        {/* TODO: swap to Tier 2 subscription check when Advanced plan is live */}
+        <Route path="/onboarding" element={<RequireStaffOrSuperuser><Onboarding /></RequireStaffOrSuperuser>} />
         {/* MUST match the Plaid-registered redirect URI verbatim
             (https://ai-bookkeeping.ai/plaid/oauth-callback) — do not rename.
             Deliberately NOT under /accounting: the registered URI has no prefix. */}
