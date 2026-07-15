@@ -77,7 +77,19 @@ export const useOrgMe = () => {
     setError(null);
     api.get('/api/accounting/me/')
       .then((res) => {
-        if (!cancelled) setData(res?.data ?? null);
+        if (cancelled) return;
+        // The api interceptor RESOLVES non-401 HTTP errors (it returns
+        // error.response) and resolves cancellations to null — so a 403 body
+        // ("No active organization membership found") would land HERE, not in
+        // .catch. Consumers must never receive a non-200 body as data:
+        // status-check before trusting it. null = cancelled → no-op.
+        if (res == null) return;
+        if (res.status === 200) {
+          setData(res.data);
+        } else {
+          setData(null);
+          setError(res.data?.detail ?? 'Failed to load org info');
+        }
       })
       .catch((err) => {
         if (!cancelled) setError(err?.response?.data?.detail ?? 'Failed to load org info');
