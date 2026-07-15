@@ -57,8 +57,6 @@ const NAV_MAIN = [
   { to: '/workbook',  label: 'Workbook',           icon: ICONS.workbook  },
   { to: '/reports',   label: 'Reports',            icon: ICONS.reports   },
   { to: '/settings',  label: 'Settings',           icon: ICONS.settings  },
-  { to: '/accounting/tax-profile', label: 'Tax Profile', icon: ICONS.taxProfile },
-  { to: '/accounting/bank-connections', label: 'Bank connections', icon: ICONS.bank },
 ];
 
 const NAV_BOTTOM = [
@@ -163,6 +161,14 @@ export const Sidebar: FC = () => {
           {NAV_MAIN.map(({ to, label, icon }) => (
             <NavItem key={to} to={to} label={label} icon={icon} />
           ))}
+          {/* Tier 2 owner features — interim staff/superuser gate; stay in the main-nav group (no divider). */}
+          {/* TODO: swap to Tier 2 subscription check when Advanced plan is live */}
+          {(isStaff || isSuperuser) && (
+            <>
+              <NavItem to="/accounting/tax-profile" label="Tax Profile" icon={ICONS.taxProfile} />
+              <NavItem to="/accounting/bank-connections" label="Bank connections" icon={ICONS.bank} />
+            </>
+          )}
           {/* Chart of Accounts — Tier 2 feature, superuser-only for now. */}
           {/* TODO: swap to Tier 2 subscription check when Advanced plan is live */}
           {isSuperuser && (

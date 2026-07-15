@@ -110,13 +110,11 @@ const App: FC = () => {
         <Route path="/workbook"             element={<Workbook />} />
         <Route path="/reports"              element={<Reports />} />
         <Route path="/settings"             element={<Settings />} />
-        {/* Owner-facing Tier 2 setting — owner-gating is enforced inside the
-            page via useOrgMe(), so NO staff guard here (unlike /accounts and
-            /accounting-review, which gate on is_staff/is_superuser). */}
-        <Route path="/accounting/tax-profile" element={<TaxProfile />} />
-        {/* Owner-facing Tier 2 setting — same shape as tax-profile: owner
-            gating enforced inside the page via useOrgMe(), no staff guard. */}
-        <Route path="/accounting/bank-connections" element={<BankConnections />} />
+        {/* Tier 2 owner features — interim staff/superuser route gate (owner
+            gating is also enforced inside each page via useOrgMe()). */}
+        {/* TODO: swap to Tier 2 subscription check when Advanced plan is live */}
+        <Route path="/accounting/tax-profile" element={<RequireStaffOrSuperuser><TaxProfile /></RequireStaffOrSuperuser>} />
+        <Route path="/accounting/bank-connections" element={<RequireStaffOrSuperuser><BankConnections /></RequireStaffOrSuperuser>} />
         {/* MUST match the Plaid-registered redirect URI verbatim
             (https://ai-bookkeeping.ai/plaid/oauth-callback) — do not rename.
             Deliberately NOT under /accounting: the registered URI has no prefix. */}
