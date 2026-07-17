@@ -12,6 +12,7 @@ import { type FC, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOrgMe } from '@/hooks/useAccounts';
 import { PageLoader } from '@/components/Loader';
+import { Tier2UploadZone } from './documents/Tier2UploadZone';
 
 export const DocumentsPage: FC = () => {
   const navigate = useNavigate();
@@ -43,10 +44,11 @@ export const DocumentsPage: FC = () => {
           </p>
         </div>
 
-        {/* Upload area — filled by commit 2 */}
+        {/* Upload area */}
         <section className="mb-8">
           <h2 className="text-base font-semibold text-gray-900 mb-3">Upload</h2>
-          <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-6" />
+          {/* onUploaded wired to the status-list refetch in commit 3 */}
+          <Tier2UploadZone onUploaded={() => {}} />
         </section>
 
         {/* Status list — filled by commit 3 */}
