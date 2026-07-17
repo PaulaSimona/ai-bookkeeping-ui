@@ -29,6 +29,7 @@ import { ReviewerDashboard } from '@/views/reviewer';
 import { LandingPage } from '@/pages/LandingPage';
 import { ChartOfAccounts } from '@/pages/accounts/ChartOfAccounts';
 import { BankConnections } from '@/views/accounting/BankConnections';
+import { DocumentsPage } from '@/views/accounting/DocumentsPage';
 import { PlaidOauthCallback } from '@/views/accounting/PlaidOauthCallback';
 import { AccountingReview } from '@/pages/accounting/AccountingReview';
 import { TaxProfile } from '@/pages/accounting/TaxProfile';
@@ -122,6 +123,7 @@ const App: FC = () => {
         {/* TODO: swap to Tier 2 subscription check when Advanced plan is live */}
         <Route path="/accounting/tax-profile" element={<RequireStaffOrSuperuser><TaxProfile /></RequireStaffOrSuperuser>} />
         <Route path="/accounting/bank-connections" element={<RequireStaffOrSuperuser><BankConnections /></RequireStaffOrSuperuser>} />
+        <Route path="/accounting/documents" element={<RequireStaffOrSuperuser><DocumentsPage /></RequireStaffOrSuperuser>} />
         {/* Onboarding wizard (§14 14A-2) — interim staff/superuser gate (D-14A2-4). */}
         {/* TODO: swap to Tier 2 subscription check when Advanced plan is live */}
         <Route path="/onboarding" element={<RequireStaffOrSuperuser><Onboarding /></RequireStaffOrSuperuser>} />
