@@ -1,8 +1,13 @@
 // Tier 2 Documents page (§14 14A-3) — the owner/accountant view of what the
 // accounting agent has done with each uploaded document. Its OWN data layer
-// (the /api/accounting/documents/status/ endpoint, wired in commits 2–3);
-// shares only the design system with Tier 1's /documents page, never its
-// hooks or routes (MASTER_T2 §14–§15).
+// (the /api/accounting/documents/status/ endpoint); shares only the design
+// system with Tier 1's /documents page, never its hooks or routes
+// (MASTER_T2 §14–§15).
+//
+// Wiring choice (D-14A3-6, A.7): usePaginatedList is LIFTED here rather than
+// living inside DocumentStatusList, so the upload zone's onUploaded and the
+// list share ONE refetch without a ref/imperative handle — that same refetch
+// also drives the 30s freshness interval below. The list is presentational.
 //
 // Two-layer gating mirrors the other Tier 2 pages: the route is wrapped in
 // <RequireStaffOrSuperuser> (interim), and this page redirects on the real
@@ -11,13 +16,24 @@
 import { type FC, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOrgMe } from '@/hooks/useAccounts';
+import { usePaginatedList } from '@/hooks/usePaginatedList';
 import { PageLoader } from '@/components/Loader';
 import { Tier2UploadZone } from './documents/Tier2UploadZone';
+import { DocumentStatusList, type DocumentStatusRow } from './documents/DocumentStatusList';
+
+const FRESHNESS_MS = 30_000;
 
 export const DocumentsPage: FC = () => {
   const navigate = useNavigate();
   const { role, isLoading: orgLoading } = useOrgMe();
   const canView = role === 'owner' || role === 'accountant';
+
+  // Lifted list state (see header). Hooks run unconditionally, before the
+  // early returns below — the route gate already restricts this page to
+  // staff/superuser, so the extra GET during org-load is benign.
+  const {
+    items, count, page, setPage, pageSize, isLoading, error, refetch,
+  } = usePaginatedList<DocumentStatusRow>('/api/accounting/documents/status/');
 
   // Redirect members without accounting access — same structural pattern as
   // AccountingReview, gated on org role (the backend enforces org membership
@@ -27,6 +43,13 @@ export const DocumentsPage: FC = () => {
       navigate('/dashboard', { replace: true });
     }
   }, [orgLoading, canView, navigate]);
+
+  // Freshness (D-14A3-6): agent processing is asynchronous, so poll the status
+  // list every 30s; cleared on unmount.
+  useEffect(() => {
+    const t = setInterval(refetch, FRESHNESS_MS);
+    return () => clearInterval(t);
+  }, [refetch]);
 
   if (orgLoading) return <PageLoader />;
   if (!canView) return null; // redirect in flight — don't flash the page
@@ -47,14 +70,21 @@ export const DocumentsPage: FC = () => {
         {/* Upload area */}
         <section className="mb-8">
           <h2 className="text-base font-semibold text-gray-900 mb-3">Upload</h2>
-          {/* onUploaded wired to the status-list refetch in commit 3 */}
-          <Tier2UploadZone onUploaded={() => {}} />
+          <Tier2UploadZone onUploaded={refetch} />
         </section>
 
-        {/* Status list — filled by commit 3 */}
+        {/* Status list */}
         <section>
           <h2 className="text-base font-semibold text-gray-900 mb-3">Document status</h2>
-          <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-6" />
+          <DocumentStatusList
+            items={items}
+            count={count}
+            page={page}
+            setPage={setPage}
+            pageSize={pageSize}
+            isLoading={isLoading}
+            error={error}
+          />
         </section>
 
       </div>
