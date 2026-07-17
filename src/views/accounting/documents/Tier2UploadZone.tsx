@@ -167,6 +167,7 @@ export const Tier2UploadZone: FC<Props> = ({ onUploaded }) => {
   };
 
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (busy) { e.target.value = ''; return; }
     if (e.target.files?.length) processFiles(e.target.files);
     e.target.value = '';
   };
