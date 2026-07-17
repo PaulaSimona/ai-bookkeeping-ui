@@ -165,6 +165,7 @@ export const Sidebar: FC = () => {
           {/* TODO: swap to Tier 2 subscription check when Advanced plan is live */}
           {(isStaff || isSuperuser) && (
             <>
+              <NavItem to="/accounting/documents" label="Documents" icon={ICONS.documents} />
               <NavItem to="/accounting/tax-profile" label="Tax Profile" icon={ICONS.taxProfile} />
               <NavItem to="/accounting/bank-connections" label="Bank connections" icon={ICONS.bank} />
             </>
