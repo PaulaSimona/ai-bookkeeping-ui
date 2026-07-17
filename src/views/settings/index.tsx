@@ -466,14 +466,7 @@ interface PkgStatus {
   number_of_documents_uploaded: number;
   storage_space_total: number;
   storage_space_used: number;
-}
-
-function planName(status: PkgStatus): string {
-  const total = status.number_of_documents_to_upload_total + status.number_of_documents_uploaded;
-  if (total <= 5)   return 'Free Trial';
-  if (total <= 100) return 'Starter';
-  if (total <= 300) return 'Growth';
-  return 'Pro';
+  plan_name: string;
 }
 
 const SubscriptionSection: FC<{ showError: (m: string) => void }> = ({ showError }) => {
@@ -512,7 +505,7 @@ const SubscriptionSection: FC<{ showError: (m: string) => void }> = ({ showError
       ) : status ? (
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
-            <p className="text-sm font-semibold text-gray-900">{planName(status)}</p>
+            <p className="text-sm font-semibold text-gray-900">{status.plan_name}</p>
             <p className="mt-1 text-xs text-gray-400">
               {status.number_of_documents_to_upload_total} document{status.number_of_documents_to_upload_total !== 1 ? 's' : ''} remaining
               {' · '}{status.number_of_documents_uploaded} used
