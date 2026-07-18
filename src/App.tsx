@@ -64,7 +64,8 @@ const HomeRedirect: FC = () => {
 // Tier 2 feature route guards. Mirror the /reviewer page's auth check
 // (auth.user flags, wait out inProgress, redirect to /dashboard) but enforce it
 // at the route so a Tier 1 user can't reach the page by typing the URL.
-// TODO: swap to Tier 2 subscription check when Advanced plan is live
+// §21: /accounts + /reviewer-management stay superuser (staff tools). Chart of
+// Accounts is exposed to Tier 2 users deliberately at §14 — no swap here yet.
 const RequireSuperuser: FC<PropsWithChildren> = ({ children }) => {
   const { user, inProgress } = useSelector((s: RootState) => s.auth);
   const isSuperuser = user?.user?.is_superuser ?? user?.is_superuser ?? false;
@@ -73,13 +74,26 @@ const RequireSuperuser: FC<PropsWithChildren> = ({ children }) => {
   return <>{children}</>;
 };
 
-// TODO: swap to Tier 2 subscription check when Advanced plan is live
+// §21: retained for the staff-only Accounting Review queue (internal reviewer
+// surface) — deliberately NOT swapped to the Tier 2 entitlement gate (D-21-4).
 const RequireStaffOrSuperuser: FC<PropsWithChildren> = ({ children }) => {
   const { user, inProgress } = useSelector((s: RootState) => s.auth);
   const isStaff = user?.user?.is_staff ?? user?.is_staff ?? false;
   const isSuperuser = user?.user?.is_superuser ?? user?.is_superuser ?? false;
   if (inProgress) return <PageLoader />;
   if (!isStaff && !isSuperuser) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+};
+
+// §21 Tier 2 entitlement gate (D-21-4, 2026-07-18) — user Tier 2 surfaces render
+// iff the account has Tier 2 access (has_tier2: an active membership in an
+// entitled org). Replaces the interim staff/superuser gate on client Tier 2
+// pages; mirrors RequireStaffOrSuperuser (inProgress → loader, else /dashboard).
+const RequireTier2: FC<PropsWithChildren> = ({ children }) => {
+  const { user, inProgress } = useSelector((s: RootState) => s.auth);
+  const hasTier2 = user?.user?.has_tier2 ?? user?.has_tier2 ?? false;
+  if (inProgress) return <PageLoader />;
+  if (!hasTier2) return <Navigate to="/dashboard" replace />;
   return <>{children}</>;
 };
 
@@ -118,15 +132,14 @@ const App: FC = () => {
         <Route path="/workbook"             element={<Workbook />} />
         <Route path="/reports"              element={<Reports />} />
         <Route path="/settings"             element={<Settings />} />
-        {/* Tier 2 owner features — interim staff/superuser route gate (owner
-            gating is also enforced inside each page via useOrgMe()). */}
-        {/* TODO: swap to Tier 2 subscription check when Advanced plan is live */}
-        <Route path="/accounting/tax-profile" element={<RequireStaffOrSuperuser><TaxProfile /></RequireStaffOrSuperuser>} />
-        <Route path="/accounting/bank-connections" element={<RequireStaffOrSuperuser><BankConnections /></RequireStaffOrSuperuser>} />
-        <Route path="/accounting/documents" element={<RequireStaffOrSuperuser><DocumentsPage /></RequireStaffOrSuperuser>} />
-        {/* Onboarding wizard (§14 14A-2) — interim staff/superuser gate (D-14A2-4). */}
-        {/* TODO: swap to Tier 2 subscription check when Advanced plan is live */}
-        <Route path="/onboarding" element={<RequireStaffOrSuperuser><Onboarding /></RequireStaffOrSuperuser>} />
+        {/* Tier 2 user features — §21 Tier 2 entitlement gate (owner gating is
+            also enforced inside each page via useOrgMe()). */}
+        {/* §21 gate swap DONE (D-21-4, 2026-07-18) — was interim staff/superuser. */}
+        <Route path="/accounting/tax-profile" element={<RequireTier2><TaxProfile /></RequireTier2>} />
+        <Route path="/accounting/bank-connections" element={<RequireTier2><BankConnections /></RequireTier2>} />
+        <Route path="/accounting/documents" element={<RequireTier2><DocumentsPage /></RequireTier2>} />
+        {/* Onboarding wizard (§14 14A-2) — §21 gate swap DONE (D-21-4, 2026-07-18). */}
+        <Route path="/onboarding" element={<RequireTier2><Onboarding /></RequireTier2>} />
         {/* MUST match the Plaid-registered redirect URI verbatim
             (https://ai-bookkeeping.ai/plaid/oauth-callback) — do not rename.
             Deliberately NOT under /accounting: the registered URI has no prefix. */}

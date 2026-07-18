@@ -80,16 +80,15 @@ const GatedLayer: FC<PropsWithChildren> = ({ children }) => {
 
 export const OnboardingGate: FC<PropsWithChildren> = ({ children }) => {
   const auth = useSelector((s: RootState) => s.auth);
-  const isStaff = auth.user?.user?.is_staff ?? auth.user?.is_staff ?? false;
-  const isSuperuser = auth.user?.user?.is_superuser ?? auth.user?.is_superuser ?? false;
-  // §21 entitlement flag (D-21-3) — derived here in the same double-nested
-  // fallback shape as isStaff/isSuperuser; wired into the outer gate in D-21-4.
+  // §21 entitlement flag (D-21-3) — same double-nested fallback shape as the
+  // staff flags. Tier scope now keys on Tier 2 access (D-21-4).
   const hasTier2 = auth.user?.user?.has_tier2 ?? auth.user?.has_tier2 ?? false;
 
-  // Interim tier scope (D-14A2-2): non-staff Tier 1 users bypass the gated
-  // layer entirely — the org fetch never happens for them.
-  // TODO: swap to Tier 2 subscription check when Advanced plan is live
-  if (!isStaff && !isSuperuser) return <>{children}</>;
+  // §21 gate swap DONE (D-21-4, 2026-07-18) — was the interim !isStaff &&
+  // !isSuperuser check. A non-tier2 user bypasses the gated layer entirely (the
+  // org fetch never happens — byte-identical to today's Tier 1 experience); a
+  // tier2 user gets the onboarding banner + once-per-session redirect.
+  if (!hasTier2) return <>{children}</>;
 
   return <GatedLayer>{children}</GatedLayer>;
 };
