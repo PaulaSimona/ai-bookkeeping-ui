@@ -130,6 +130,9 @@ export const Sidebar: FC = () => {
   const auth      = useSelector((s: RootState) => s.auth);
   const isStaff   = auth.user?.user?.is_staff ?? auth.user?.is_staff ?? false;
   const isSuperuser = auth.user?.user?.is_superuser ?? auth.user?.is_superuser ?? false;
+  // §21 entitlement flag (D-21-3) — same derivation shape as the staff flags;
+  // wired into the Tier 2 nav block + single-Documents rule in D-21-5.
+  const hasTier2 = auth.user?.user?.has_tier2 ?? auth.user?.has_tier2 ?? false;
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
 
   const confirmLogout = async () => {
@@ -158,20 +161,23 @@ export const Sidebar: FC = () => {
 
         {/* Main nav */}
         <nav className="flex-1 px-3 py-4 space-y-0.5">
-          {NAV_MAIN.map(({ to, label, icon }) => (
+          {/* One "Documents" per user (§21 D-21-5): the Tier 1 Documents entry is
+              hidden for Tier 2 users, who get the Tier 2 Documents entry below.
+              hasTier2=false renders NAV_MAIN byte-identically to today. */}
+          {NAV_MAIN.filter((item) => !(hasTier2 && item.to === '/documents')).map(({ to, label, icon }) => (
             <NavItem key={to} to={to} label={label} icon={icon} />
           ))}
-          {/* Tier 2 owner features — interim staff/superuser gate; stay in the main-nav group (no divider). */}
-          {/* TODO: swap to Tier 2 subscription check when Advanced plan is live */}
-          {(isStaff || isSuperuser) && (
+          {/* Tier 2 user features — §21 entitlement gate (D-21-5); stay in the main-nav group (no divider). */}
+          {hasTier2 && (
             <>
               <NavItem to="/accounting/documents" label="Documents" icon={ICONS.documents} />
               <NavItem to="/accounting/tax-profile" label="Tax Profile" icon={ICONS.taxProfile} />
               <NavItem to="/accounting/bank-connections" label="Bank connections" icon={ICONS.bank} />
             </>
           )}
-          {/* Chart of Accounts — Tier 2 feature, superuser-only for now. */}
-          {/* TODO: swap to Tier 2 subscription check when Advanced plan is live */}
+          {/* Chart of Accounts + Reviewer Management — staff tools, superuser-only.
+              §21: stays superuser; Chart of Accounts is exposed to Tier 2 users
+              deliberately at §14 (D-21-5). */}
           {isSuperuser && (
             <>
               <div className="my-2 border-t border-white/10" />
@@ -179,8 +185,8 @@ export const Sidebar: FC = () => {
               <NavItem to="/reviewer-management" label="Reviewer Management" icon={ICONS.reviewer} />
             </>
           )}
-          {/* Accounting Review — Tier 2 feature, superuser or staff/reviewer only. */}
-          {/* TODO: swap to Tier 2 subscription check when Advanced plan is live */}
+          {/* Accounting Review — staff-only internal reviewer queue (superuser or
+              staff/reviewer). §21: stays staff-gated, not a Tier 2 user surface (D-21-5). */}
           {(isSuperuser || isStaff) && (
             <>
               <div className="my-2 border-t border-white/10" />
