@@ -82,6 +82,9 @@ export const OnboardingGate: FC<PropsWithChildren> = ({ children }) => {
   const auth = useSelector((s: RootState) => s.auth);
   const isStaff = auth.user?.user?.is_staff ?? auth.user?.is_staff ?? false;
   const isSuperuser = auth.user?.user?.is_superuser ?? auth.user?.is_superuser ?? false;
+  // §21 entitlement flag (D-21-3) — derived here in the same double-nested
+  // fallback shape as isStaff/isSuperuser; wired into the outer gate in D-21-4.
+  const hasTier2 = auth.user?.user?.has_tier2 ?? auth.user?.has_tier2 ?? false;
 
   // Interim tier scope (D-14A2-2): non-staff Tier 1 users bypass the gated
   // layer entirely — the org fetch never happens for them.

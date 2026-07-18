@@ -130,6 +130,9 @@ export const Sidebar: FC = () => {
   const auth      = useSelector((s: RootState) => s.auth);
   const isStaff   = auth.user?.user?.is_staff ?? auth.user?.is_staff ?? false;
   const isSuperuser = auth.user?.user?.is_superuser ?? auth.user?.is_superuser ?? false;
+  // §21 entitlement flag (D-21-3) — same derivation shape as the staff flags;
+  // wired into the Tier 2 nav block + single-Documents rule in D-21-5.
+  const hasTier2 = auth.user?.user?.has_tier2 ?? auth.user?.has_tier2 ?? false;
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
 
   const confirmLogout = async () => {
