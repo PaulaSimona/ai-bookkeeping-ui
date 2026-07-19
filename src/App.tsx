@@ -54,11 +54,13 @@ const PrivateLayout: FC = () => (
   </RedirectPage>
 );
 
-// Unauthenticated → landing page, authenticated → /documents
+// Unauthenticated → landing page; authenticated → Tier 2 users land on the
+// Tier 2 dashboard, everyone else keeps today's /documents landing (D-14B-7).
 const HomeRedirect: FC = () => {
   const { user, inProgress } = useSelector((s: RootState) => s.auth);
+  const hasTier2 = user?.user?.has_tier2 ?? user?.has_tier2 ?? false;
   if (inProgress) return <PageLoader />;
-  if (user) return <Navigate to="/documents" replace />;
+  if (user) return <Navigate to={hasTier2 ? '/accounting/dashboard' : '/documents'} replace />;
   return <LandingPage />;
 };
 
