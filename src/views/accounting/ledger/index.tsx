@@ -1,14 +1,332 @@
-import { FC } from 'react';
+import { FC, Fragment, ReactNode, useState } from 'react';
+import {
+  useLedgerEntries,
+  LEDGER_TABS,
+  LedgerTab,
+  LedgerEntryRow,
+  LedgerEntryLine,
+} from '@/hooks/useLedgerEntries';
 
-// §14 14-C Tier 2 Ledger register. Placeholder heading only (U1); the five-tab
-// register body (tabs, filters, table) lands in U2, consuming useLedgerEntries.
-// Exported as LedgerRegister to avoid colliding with any other page component.
-export const LedgerRegister: FC = () => {
+// §14 14-C Tier 2 Ledger register (D-14C-3..5). Read-only: five-tab strip +
+// filters over the org's journal entries, calm status badges, and a read-only
+// line drill-down on row expand. NO row actions (edit/reverse live on the
+// accountant/staff surfaces). All local, inline-Tailwind, light convention
+// (TaxProfile/dashboard precedent) — nothing imported from the Tier 1 /
+// react-bootstrap component set (separate-data-layer rule).
+
+// Display-only money formatting: the backend two-decimal STRINGS are the source
+// of truth; Number() only hands a numeric to Intl. Never arithmetic in JS.
+const CAD = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' });
+const fmtMoney = (v: string | null): string => (v == null || v === '' ? '' : CAD.format(Number(v)));
+
+const fmtDate = (iso: string): string =>
+  new Date(iso).toLocaleDateString('en-CA', { year: 'numeric', month: 'short', day: 'numeric' });
+
+const inputCls =
+  'rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0066FF] focus:border-transparent transition';
+
+const STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: '', label: 'All statuses' },
+  { value: 'draft', label: 'Draft' },
+  { value: 'posted', label: 'Posted' },
+  { value: 'reversed', label: 'Reversed' },
+  { value: 'replaced', label: 'Replaced' },
+];
+
+const PageShell: FC<{ children: ReactNode }> = ({ children }) => (
+  <div className="min-h-screen bg-gray-50 text-gray-900">
+    <div className="max-w-5xl mx-auto px-6 py-8">{children}</div>
+  </div>
+);
+
+// Status badge (D-14C-3): needs_review wins, then the entry status. Unknown
+// status falls back to the calm "Draft" styling. Raw status text never leaks
+// beyond this map.
+const badgeFor = (row: LedgerEntryRow): { label: string; cls: string } => {
+  if (row.needs_review) {
+    return { label: 'Needs review', cls: 'bg-amber-50 text-amber-700' };
+  }
+  switch (row.status) {
+    case 'draft':
+      return { label: 'Draft', cls: 'bg-gray-100 text-gray-600' };
+    case 'posted':
+      return { label: 'Posted', cls: 'bg-emerald-50 text-emerald-700' };
+    case 'reversed':
+      return { label: 'Reversed', cls: 'bg-blue-50 text-blue-700' };
+    case 'replaced':
+      return { label: 'Replaced', cls: 'bg-gray-100 text-gray-600' };
+    default:
+      return { label: 'Draft', cls: 'bg-gray-100 text-gray-600' };
+  }
+};
+
+const StatusBadge: FC<{ row: LedgerEntryRow }> = ({ row }) => {
+  const { label, cls } = badgeFor(row);
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
-      <div className="max-w-5xl mx-auto px-6 py-8">
-        <h1 className="text-2xl font-bold text-gray-900">Ledger</h1>
-      </div>
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${cls}`}>
+      {label}
+    </span>
+  );
+};
+
+const TabButton: FC<{ label: string; active: boolean; onClick: () => void }> = ({
+  label, active, onClick,
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+      active
+        ? 'bg-gray-900 text-white'
+        : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+    }`}
+  >
+    {label}
+  </button>
+);
+
+const Chevron: FC<{ open: boolean }> = ({ open }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+    strokeWidth={2} stroke="currentColor"
+    className={`w-4 h-4 text-gray-400 transition-transform ${open ? 'rotate-90' : ''}`}
+  >
+    <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+  </svg>
+);
+
+const LineDetail: FC<{ lines: LedgerEntryLine[] }> = ({ lines }) => {
+  const ordered = [...lines].sort((a, b) => a.line_order - b.line_order);
+  return (
+    <div className="bg-gray-50 border-t border-gray-100 px-4 py-3">
+      <table className="w-full text-xs">
+        <tbody>
+          {ordered.map((l) => (
+            <tr key={l.id} className="text-gray-600">
+              <td className="py-1 pr-3 font-mono text-gray-500 whitespace-nowrap">{l.account_code ?? ''}</td>
+              <td className="py-1 pr-3">{l.account_name ?? ''}</td>
+              <td className="py-1 pl-3 text-right tabular-nums whitespace-nowrap">{fmtMoney(l.debit)}</td>
+              <td className="py-1 pl-3 text-right tabular-nums whitespace-nowrap">{fmtMoney(l.credit)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
+  );
+};
+
+const LoadingSkeleton: FC = () => (
+  <>
+    <div className="h-8 w-40 bg-gray-100 rounded animate-pulse" />
+    <div className="mt-4 flex gap-2">
+      {[0, 1, 2, 3, 4, 5].map((i) => (
+        <div key={i} className="h-8 w-20 bg-gray-100 rounded-full animate-pulse" />
+      ))}
+    </div>
+    <div className="mt-6 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+        <div key={i} className="flex items-center gap-4 px-4 py-3 border-b border-gray-50 last:border-0">
+          <div className="h-4 w-24 bg-gray-100 rounded animate-pulse" />
+          <div className="h-4 w-16 bg-gray-100 rounded animate-pulse" />
+          <div className="h-4 flex-1 bg-gray-100 rounded animate-pulse" />
+          <div className="h-4 w-20 bg-gray-100 rounded animate-pulse" />
+        </div>
+      ))}
+    </div>
+  </>
+);
+
+const ErrorState: FC<{ error: string; onRetry: () => void }> = ({ error, onRetry }) => (
+  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 max-w-md">
+    <p className="text-sm text-gray-700">{error}</p>
+    <button
+      type="button"
+      onClick={onRetry}
+      className="mt-4 inline-flex items-center rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
+    >
+      Try again
+    </button>
+  </div>
+);
+
+const EmptyState: FC<{ filtered: boolean; onClear: () => void }> = ({ filtered, onClear }) => (
+  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 text-center">
+    <p className="text-sm text-gray-500">
+      {filtered ? 'No entries match these filters.' : 'No entries yet.'}
+    </p>
+    {filtered && (
+      <button
+        type="button"
+        onClick={onClear}
+        className="mt-4 inline-flex items-center rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+      >
+        Clear filters
+      </button>
+    )}
+  </div>
+);
+
+export const LedgerRegister: FC = () => {
+  const [activeTab, setActiveTab] = useState<LedgerTab | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [dateFrom, setDateFrom] = useState<string | null>(null);
+  const [dateTo, setDateTo] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const { items, count, page, setPage, pageSize, isLoading, error, refetch } =
+    useLedgerEntries({
+      tab: activeTab ?? undefined,
+      status: statusFilter ?? undefined,
+      date_from: dateFrom ?? undefined,
+      date_to: dateTo ?? undefined,
+    });
+
+  const anyFilterSet =
+    activeTab !== null || statusFilter !== null || !!dateFrom || !!dateTo;
+
+  // The hook does not auto-reset page when params change — every filter change
+  // resets to page 1 (and collapses any open drill-down) so results stay truthful.
+  const selectTab = (tab: LedgerTab | null) => { setActiveTab(tab); setPage(1); setExpandedId(null); };
+  const changeStatus = (v: string) => { setStatusFilter(v || null); setPage(1); setExpandedId(null); };
+  const changeFrom = (v: string) => { setDateFrom(v || null); setPage(1); setExpandedId(null); };
+  const changeTo = (v: string) => { setDateTo(v || null); setPage(1); setExpandedId(null); };
+  const clearFilters = () => {
+    setActiveTab(null); setStatusFilter(null); setDateFrom(null); setDateTo(null);
+    setPage(1); setExpandedId(null);
+  };
+
+  const showPager = count > pageSize;
+  const from = count === 0 ? 0 : (page - 1) * pageSize + 1;
+  const to = Math.min(page * pageSize, count);
+
+  return (
+    <PageShell>
+      <h1 className="text-2xl font-bold text-gray-900">Ledger</h1>
+      <p className="mt-1 text-sm text-gray-500">Your journal entries</p>
+
+      {/* Tab strip */}
+      <div className="mt-5 flex flex-wrap gap-2">
+        <TabButton label="All" active={activeTab === null} onClick={() => selectTab(null)} />
+        {LEDGER_TABS.map((t) => (
+          <TabButton
+            key={t.value}
+            label={t.label}
+            active={activeTab === t.value}
+            onClick={() => selectTab(t.value)}
+          />
+        ))}
+      </div>
+
+      {/* Secondary filters */}
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <select
+          value={statusFilter ?? ''}
+          onChange={(e) => changeStatus(e.target.value)}
+          className={inputCls}
+          aria-label="Filter by status"
+        >
+          {STATUS_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        <label className="flex items-center gap-2 text-sm text-gray-500">
+          From
+          <input type="date" value={dateFrom ?? ''} onChange={(e) => changeFrom(e.target.value)} className={inputCls} />
+        </label>
+        <label className="flex items-center gap-2 text-sm text-gray-500">
+          To
+          <input type="date" value={dateTo ?? ''} onChange={(e) => changeTo(e.target.value)} className={inputCls} />
+        </label>
+        {anyFilterSet && (
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="text-sm font-medium text-[#0066FF] hover:underline"
+          >
+            Clear filters
+          </button>
+        )}
+      </div>
+
+      <div className="mt-6">
+        {isLoading ? (
+          <LoadingSkeleton />
+        ) : error ? (
+          <ErrorState error={error} onRetry={refetch} />
+        ) : count === 0 ? (
+          <EmptyState filtered={anyFilterSet} onClear={clearFilters} />
+        ) : (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs font-medium text-gray-500 uppercase tracking-wide border-b border-gray-100">
+                    <th className="px-4 py-3 w-6" />
+                    <th className="px-4 py-3">Date</th>
+                    <th className="px-4 py-3">Entry #</th>
+                    <th className="px-4 py-3">Description</th>
+                    <th className="px-4 py-3 text-right">Debits</th>
+                    <th className="px-4 py-3 text-right">Credits</th>
+                    <th className="px-4 py-3">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((row) => {
+                    const open = expandedId === row.id;
+                    return (
+                      <Fragment key={row.id}>
+                        <tr
+                          onClick={() => setExpandedId(open ? null : row.id)}
+                          className="border-b border-gray-50 last:border-0 cursor-pointer hover:bg-gray-50/60 transition-colors"
+                        >
+                          <td className="px-4 py-3"><Chevron open={open} /></td>
+                          <td className="px-4 py-3 whitespace-nowrap text-gray-700">{fmtDate(row.entry_date)}</td>
+                          <td className="px-4 py-3 whitespace-nowrap font-mono text-xs text-gray-500">{row.entry_number_display ?? ''}</td>
+                          <td className="px-4 py-3 text-gray-900">{row.description}</td>
+                          <td className="px-4 py-3 text-right tabular-nums whitespace-nowrap text-gray-700">{fmtMoney(row.total_debits)}</td>
+                          <td className="px-4 py-3 text-right tabular-nums whitespace-nowrap text-gray-700">{fmtMoney(row.total_credits)}</td>
+                          <td className="px-4 py-3"><StatusBadge row={row} /></td>
+                        </tr>
+                        {open && (
+                          <tr>
+                            <td colSpan={7} className="p-0">
+                              <LineDetail lines={row.lines} />
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {showPager && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
+                <span className="text-xs text-gray-500">{from}–{to} of {count}</span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPage(page - 1)}
+                    disabled={page <= 1}
+                    className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:hover:bg-transparent transition-colors"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPage(page + 1)}
+                    disabled={page * pageSize >= count}
+                    className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:hover:bg-transparent transition-colors"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </PageShell>
   );
 };
