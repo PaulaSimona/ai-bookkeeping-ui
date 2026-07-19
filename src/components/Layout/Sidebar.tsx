@@ -33,6 +33,8 @@ const ICONS = {
   dashboard: 'M3 3h7v7H3V3zm11 0h7v7h-7V3zM3 14h7v7H3v-7zm11 0h7v7h-7v-7z',
   documents:
     'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
+  ledger:
+    'M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25',
   workbook:
     'M3 10h18M3 14h18M10 3v18M6 3h12a3 3 0 013 3v12a3 3 0 01-3 3H6a3 3 0 01-3-3V6a3 3 0 013-3z',
   reports:
@@ -161,22 +163,30 @@ export const Sidebar: FC = () => {
 
         {/* Main nav */}
         <nav className="flex-1 px-3 py-4 space-y-0.5">
-          {/* One "Documents" + one "Dashboard" per user (§21 D-21-5, §14 D-14B-6):
-              the Tier 1 Documents and Dashboard entries are hidden for Tier 2
-              users, who get the Tier 2 equivalents below. hasTier2=false renders
-              NAV_MAIN byte-identically to today. */}
-          {NAV_MAIN.filter((item) => !(hasTier2 && (item.to === '/documents' || item.to === '/dashboard'))).map(({ to, label, icon }) => (
-            <NavItem key={to} to={to} label={label} icon={icon} />
-          ))}
-          {/* Tier 2 user features — §21 entitlement gate (D-21-5); stay in the main-nav group (no divider). */}
+          {/* Tier 2 user features — §21 entitlement gate (D-21-5); §14 D-14C-6
+              nav order. The Tier 2 group renders BEFORE the surviving NAV_MAIN
+              items, so the on-screen order for a hasTier2 user is:
+              Dashboard · Documents · Ledger · Tax Profile · Bank connections ·
+              Workbook · Reports · Settings. Stays in the main-nav group (no
+              divider). */}
           {hasTier2 && (
             <>
               <NavItem to="/accounting/dashboard" label="Dashboard" icon={ICONS.dashboard} />
               <NavItem to="/accounting/documents" label="Documents" icon={ICONS.documents} />
+              <NavItem to="/accounting/ledger" label="Ledger" icon={ICONS.ledger} />
               <NavItem to="/accounting/tax-profile" label="Tax Profile" icon={ICONS.taxProfile} />
               <NavItem to="/accounting/bank-connections" label="Bank connections" icon={ICONS.bank} />
             </>
           )}
+          {/* One "Documents" + one "Dashboard" per user (§21 D-21-5, §14 D-14B-6):
+              the Tier 1 Documents and Dashboard entries are hidden for Tier 2
+              users, who get the Tier 2 equivalents above. hasTier2=false renders
+              NAV_MAIN byte-identically to today — the Tier 2 block above
+              collapses to nothing and this filter predicate collapses to
+              !(false) = keep-all, so the map output is unchanged. */}
+          {NAV_MAIN.filter((item) => !(hasTier2 && (item.to === '/documents' || item.to === '/dashboard'))).map(({ to, label, icon }) => (
+            <NavItem key={to} to={to} label={label} icon={icon} />
+          ))}
           {/* Chart of Accounts + Reviewer Management — staff tools, superuser-only.
               §21: stays superuser; Chart of Accounts is exposed to Tier 2 users
               deliberately at §14 (D-21-5). */}
