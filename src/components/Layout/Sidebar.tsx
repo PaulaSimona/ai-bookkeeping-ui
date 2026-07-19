@@ -161,15 +161,17 @@ export const Sidebar: FC = () => {
 
         {/* Main nav */}
         <nav className="flex-1 px-3 py-4 space-y-0.5">
-          {/* One "Documents" per user (§21 D-21-5): the Tier 1 Documents entry is
-              hidden for Tier 2 users, who get the Tier 2 Documents entry below.
-              hasTier2=false renders NAV_MAIN byte-identically to today. */}
-          {NAV_MAIN.filter((item) => !(hasTier2 && item.to === '/documents')).map(({ to, label, icon }) => (
+          {/* One "Documents" + one "Dashboard" per user (§21 D-21-5, §14 D-14B-6):
+              the Tier 1 Documents and Dashboard entries are hidden for Tier 2
+              users, who get the Tier 2 equivalents below. hasTier2=false renders
+              NAV_MAIN byte-identically to today. */}
+          {NAV_MAIN.filter((item) => !(hasTier2 && (item.to === '/documents' || item.to === '/dashboard'))).map(({ to, label, icon }) => (
             <NavItem key={to} to={to} label={label} icon={icon} />
           ))}
           {/* Tier 2 user features — §21 entitlement gate (D-21-5); stay in the main-nav group (no divider). */}
           {hasTier2 && (
             <>
+              <NavItem to="/accounting/dashboard" label="Dashboard" icon={ICONS.dashboard} />
               <NavItem to="/accounting/documents" label="Documents" icon={ICONS.documents} />
               <NavItem to="/accounting/tax-profile" label="Tax Profile" icon={ICONS.taxProfile} />
               <NavItem to="/accounting/bank-connections" label="Bank connections" icon={ICONS.bank} />
