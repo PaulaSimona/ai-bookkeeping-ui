@@ -30,6 +30,7 @@ import { LandingPage } from '@/pages/LandingPage';
 import { ChartOfAccounts } from '@/pages/accounts/ChartOfAccounts';
 import { BankConnections } from '@/views/accounting/BankConnections';
 import { DocumentsPage } from '@/views/accounting/DocumentsPage';
+import { AccountingDashboard } from '@/views/accounting/dashboard';
 import { PlaidOauthCallback } from '@/views/accounting/PlaidOauthCallback';
 import { AccountingReview } from '@/pages/accounting/AccountingReview';
 import { TaxProfile } from '@/pages/accounting/TaxProfile';
@@ -53,11 +54,13 @@ const PrivateLayout: FC = () => (
   </RedirectPage>
 );
 
-// Unauthenticated → landing page, authenticated → /documents
+// Unauthenticated → landing page; authenticated → Tier 2 users land on the
+// Tier 2 dashboard, everyone else keeps today's /documents landing (D-14B-7).
 const HomeRedirect: FC = () => {
   const { user, inProgress } = useSelector((s: RootState) => s.auth);
+  const hasTier2 = user?.user?.has_tier2 ?? user?.has_tier2 ?? false;
   if (inProgress) return <PageLoader />;
-  if (user) return <Navigate to="/documents" replace />;
+  if (user) return <Navigate to={hasTier2 ? '/accounting/dashboard' : '/documents'} replace />;
   return <LandingPage />;
 };
 
@@ -135,6 +138,7 @@ const App: FC = () => {
         {/* Tier 2 user features — §21 Tier 2 entitlement gate (owner gating is
             also enforced inside each page via useOrgMe()). */}
         {/* §21 gate swap DONE (D-21-4, 2026-07-18) — was interim staff/superuser. */}
+        <Route path="/accounting/dashboard" element={<RequireTier2><AccountingDashboard /></RequireTier2>} />
         <Route path="/accounting/tax-profile" element={<RequireTier2><TaxProfile /></RequireTier2>} />
         <Route path="/accounting/bank-connections" element={<RequireTier2><BankConnections /></RequireTier2>} />
         <Route path="/accounting/documents" element={<RequireTier2><DocumentsPage /></RequireTier2>} />
