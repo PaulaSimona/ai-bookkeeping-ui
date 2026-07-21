@@ -8,13 +8,15 @@ import {
   LedgerEntryLine,
 } from '@/hooks/useLedgerEntries';
 import { useCounterparties } from '@/hooks/useCounterparties';
+import { Card } from '@/components/t2/Card';
+import { PageHeader } from '@/components/t2/PageHeader';
+import { FilterChip } from '@/components/t2/FilterChip';
 
-// §14 14-C Tier 2 Ledger register (D-14C-3..5). Read-only: five-tab strip +
-// filters over the org's journal entries, calm status badges, and a read-only
-// line drill-down on row expand. NO row actions (edit/reverse live on the
-// accountant/staff surfaces). All local, inline-Tailwind, light convention
-// (TaxProfile/dashboard precedent) — nothing imported from the Tier 1 /
-// react-bootstrap component set (separate-data-layer rule).
+// §14 14-C Tier 2 Ledger register (D-14C-3..5), restyled onto the t2/ language
+// (s22 B3). Read-only: tab strip + filters over the org's journal entries, calm
+// status badges, and a read-only line drill-down on row expand. NO row actions
+// (edit/reverse live on the accountant/staff surfaces). Own data layer — nothing
+// imported from the Tier 1 / react-bootstrap component set.
 
 // Display-only money formatting: the backend two-decimal STRINGS are the source
 // of truth; Number() only hands a numeric to Intl. Never arithmetic in JS.
@@ -24,8 +26,10 @@ const fmtMoney = (v: string | null): string => (v == null || v === '' ? '' : CAD
 const fmtDate = (iso: string): string =>
   new Date(iso).toLocaleDateString('en-CA', { year: 'numeric', month: 'short', day: 'numeric' });
 
+const MONO = 'font-[var(--font-family-mono)]';
+
 const inputCls =
-  'rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0066FF] focus:border-transparent transition';
+  'rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent transition';
 
 const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: '', label: 'All statuses' },
@@ -37,13 +41,13 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
 
 const PageShell: FC<{ children: ReactNode }> = ({ children }) => (
   <div className="min-h-screen bg-gray-50 text-gray-900">
-    <div className="max-w-5xl mx-auto px-6 py-8">{children}</div>
+    <div className="mx-auto max-w-5xl px-6 py-8">{children}</div>
   </div>
 );
 
 // Status badge (D-14C-3): needs_review wins, then the entry status. Unknown
 // status falls back to the calm "Draft" styling. Raw status text never leaks
-// beyond this map.
+// beyond this map. Local pill — t2/StatusBadge is edit-forbidden.
 const badgeFor = (row: LedgerEntryRow): { label: string; cls: string } => {
   if (row.needs_review) {
     return { label: 'Needs review', cls: 'bg-amber-50 text-amber-700' };
@@ -65,50 +69,44 @@ const badgeFor = (row: LedgerEntryRow): { label: string; cls: string } => {
 const StatusBadge: FC<{ row: LedgerEntryRow }> = ({ row }) => {
   const { label, cls } = badgeFor(row);
   return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${cls}`}>
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${cls}`}>
       {label}
     </span>
   );
 };
 
-const TabButton: FC<{ label: string; active: boolean; onClick: () => void }> = ({
-  label, active, onClick,
-}) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
-      active
-        ? 'bg-gray-900 text-white'
-        : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
-    }`}
-  >
-    {label}
-  </button>
-);
-
 const Chevron: FC<{ open: boolean }> = ({ open }) => (
   <svg
     xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
     strokeWidth={2} stroke="currentColor"
-    className={`w-4 h-4 text-gray-400 transition-transform ${open ? 'rotate-90' : ''}`}
+    className={`h-4 w-4 text-gray-400 transition-transform ${open ? 'rotate-90' : ''}`}
   >
     <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
   </svg>
 );
 
+// Nested debit/credit sub-table (ACCT · ACCOUNT · DEBIT · CREDIT header band,
+// mono figures). Presentational; ordering by line_order preserved.
 const LineDetail: FC<{ lines: LedgerEntryLine[] }> = ({ lines }) => {
   const ordered = [...lines].sort((a, b) => a.line_order - b.line_order);
   return (
-    <div className="bg-gray-50 border-t border-gray-100 px-4 py-3">
+    <div className="border-t border-gray-100 bg-gray-50 px-4 py-3">
       <table className="w-full text-xs">
+        <thead>
+          <tr className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+            <th className="py-1 pr-3 text-left">Acct</th>
+            <th className="py-1 pr-3 text-left">Account</th>
+            <th className="py-1 pl-3 text-right">Debit</th>
+            <th className="py-1 pl-3 text-right">Credit</th>
+          </tr>
+        </thead>
         <tbody>
           {ordered.map((l) => (
             <tr key={l.id} className="text-gray-600">
-              <td className="py-1 pr-3 font-mono text-gray-500 whitespace-nowrap">{l.account_code ?? ''}</td>
+              <td className={`whitespace-nowrap py-1 pr-3 text-gray-500 ${MONO}`}>{l.account_code ?? ''}</td>
               <td className="py-1 pr-3">{l.account_name ?? ''}</td>
-              <td className="py-1 pl-3 text-right tabular-nums whitespace-nowrap">{fmtMoney(l.debit)}</td>
-              <td className="py-1 pl-3 text-right tabular-nums whitespace-nowrap">{fmtMoney(l.credit)}</td>
+              <td className={`whitespace-nowrap py-1 pl-3 text-right tabular-nums ${MONO}`}>{fmtMoney(l.debit)}</td>
+              <td className={`whitespace-nowrap py-1 pl-3 text-right tabular-nums ${MONO}`}>{fmtMoney(l.credit)}</td>
             </tr>
           ))}
         </tbody>
@@ -117,10 +115,10 @@ const LineDetail: FC<{ lines: LedgerEntryLine[] }> = ({ lines }) => {
   );
 };
 
-// Counterparty chip (14-C-2b) — read-only, current page's badge idiom (neutral
-// pill). NOT the t2/ redesign component; the ledger keeps its current styling.
+// Counterparty chip (14-C-2b) — read-only neutral pill. Page-local; not the
+// t2/ redesign component.
 const CounterpartyChip: FC<{ name: string }> = ({ name }) => (
-  <span className="inline-flex items-center rounded-full bg-gray-100 text-gray-600 px-2 py-0.5 text-xs font-medium">
+  <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
     {name}
   </span>
 );
@@ -128,7 +126,7 @@ const CounterpartyChip: FC<{ name: string }> = ({ name }) => (
 // Assign control (D-14C2-6/-16): shown in the drill-down of an UNATTRIBUTED
 // entry only. Picker is ACTIVE counterparties only (archived excluded per
 // D-14C2-9/-17). Assign POSTs the attribution action; success refetches, and
-// 409/400/404 detail messages surface verbatim.
+// 409/400/404 detail messages surface verbatim. Page-local.
 const AssignCounterpartyControl: FC<{ entryId: string; onAssigned: () => void }> = ({
   entryId, onAssigned,
 }) => {
@@ -179,7 +177,7 @@ const AssignCounterpartyControl: FC<{ entryId: string; onAssigned: () => void }>
         type="button"
         disabled={!selected || submitting}
         onClick={assign}
-        className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-800 disabled:opacity-40 transition-colors"
+        className="rounded-lg bg-[var(--color-navy)] px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
       >
         {submitting ? 'Assigning…' : 'Assign'}
       </button>
@@ -190,19 +188,19 @@ const AssignCounterpartyControl: FC<{ entryId: string; onAssigned: () => void }>
 
 const LoadingSkeleton: FC = () => (
   <>
-    <div className="h-8 w-40 bg-gray-100 rounded animate-pulse" />
+    <div className="h-8 w-40 animate-pulse rounded bg-gray-100" />
     <div className="mt-4 flex gap-2">
       {[0, 1, 2, 3, 4, 5].map((i) => (
-        <div key={i} className="h-8 w-20 bg-gray-100 rounded-full animate-pulse" />
+        <div key={i} className="h-8 w-20 animate-pulse rounded-full bg-gray-100" />
       ))}
     </div>
-    <div className="mt-6 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+    <div className="mt-6 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
       {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
-        <div key={i} className="flex items-center gap-4 px-4 py-3 border-b border-gray-50 last:border-0">
-          <div className="h-4 w-24 bg-gray-100 rounded animate-pulse" />
-          <div className="h-4 w-16 bg-gray-100 rounded animate-pulse" />
-          <div className="h-4 flex-1 bg-gray-100 rounded animate-pulse" />
-          <div className="h-4 w-20 bg-gray-100 rounded animate-pulse" />
+        <div key={i} className="flex items-center gap-4 border-b border-gray-50 px-4 py-3 last:border-0">
+          <div className="h-4 w-24 animate-pulse rounded bg-gray-100" />
+          <div className="h-4 w-16 animate-pulse rounded bg-gray-100" />
+          <div className="h-4 flex-1 animate-pulse rounded bg-gray-100" />
+          <div className="h-4 w-20 animate-pulse rounded bg-gray-100" />
         </div>
       ))}
     </div>
@@ -210,7 +208,7 @@ const LoadingSkeleton: FC = () => (
 );
 
 const ErrorState: FC<{ error: string; onRetry: () => void }> = ({ error, onRetry }) => (
-  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 max-w-md">
+  <div className="max-w-md rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
     <p className="text-sm text-gray-700">{error}</p>
     <button
       type="button"
@@ -223,7 +221,7 @@ const ErrorState: FC<{ error: string; onRetry: () => void }> = ({ error, onRetry
 );
 
 const EmptyState: FC<{ filtered: boolean; onClear: () => void }> = ({ filtered, onClear }) => (
-  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 text-center">
+  <div className="rounded-2xl border border-gray-100 bg-white p-10 text-center shadow-sm">
     <p className="text-sm text-gray-500">
       {filtered ? 'No entries match these filters.' : 'No entries yet.'}
     </p>
@@ -277,19 +275,22 @@ export const LedgerRegister: FC = () => {
 
   return (
     <PageShell>
-      <h1 className="text-2xl font-bold text-gray-900">Ledger</h1>
-      <p className="mt-1 text-sm text-gray-500">Your journal entries</p>
+      <PageHeader
+        title="Ledger"
+        subtitle="Every transaction, posted by the AI bookkeeper. Read-only — corrections post as new entries."
+      />
 
       {/* Tab strip */}
       <div className="mt-5 flex flex-wrap gap-2">
-        <TabButton label="All" active={activeTab === null} onClick={() => selectTab(null)} />
+        <FilterChip active={activeTab === null} onClick={() => selectTab(null)}>All</FilterChip>
         {LEDGER_TABS.map((t) => (
-          <TabButton
+          <FilterChip
             key={t.value}
-            label={t.label}
             active={activeTab === t.value}
             onClick={() => selectTab(t.value)}
-          />
+          >
+            {t.label}
+          </FilterChip>
         ))}
       </div>
 
@@ -314,22 +315,12 @@ export const LedgerRegister: FC = () => {
           <input type="date" value={dateTo ?? ''} onChange={(e) => changeTo(e.target.value)} className={inputCls} />
         </label>
         {/* 14-C-2b (D-14C2-21): unattributed-only toggle. */}
-        <button
-          type="button"
-          onClick={toggleUnattributed}
-          className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-            unattributed
-              ? 'bg-gray-900 text-white'
-              : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
-          }`}
-        >
-          Unassigned
-        </button>
+        <FilterChip active={unattributed} onClick={toggleUnattributed}>Unassigned</FilterChip>
         {anyFilterSet && (
           <button
             type="button"
             onClick={clearFilters}
-            className="text-sm font-medium text-[#0066FF] hover:underline"
+            className="text-sm font-medium text-[var(--color-primary)] hover:underline"
           >
             Clear filters
           </button>
@@ -344,12 +335,12 @@ export const LedgerRegister: FC = () => {
         ) : count === 0 ? (
           <EmptyState filtered={anyFilterSet} onClear={clearFilters} />
         ) : (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <Card>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-xs font-medium text-gray-500 uppercase tracking-wide border-b border-gray-100">
-                    <th className="px-4 py-3 w-6" />
+                  <tr className="border-b border-gray-100 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                    <th className="w-6 px-4 py-3" />
                     <th className="px-4 py-3">Date</th>
                     <th className="px-4 py-3">Entry #</th>
                     <th className="px-4 py-3">Description</th>
@@ -365,11 +356,11 @@ export const LedgerRegister: FC = () => {
                       <Fragment key={row.id}>
                         <tr
                           onClick={() => setExpandedId(open ? null : row.id)}
-                          className="border-b border-gray-50 last:border-0 cursor-pointer hover:bg-gray-50/60 transition-colors"
+                          className="cursor-pointer border-b border-gray-50 transition-colors last:border-0 hover:bg-gray-50/60"
                         >
                           <td className="px-4 py-3"><Chevron open={open} /></td>
-                          <td className="px-4 py-3 whitespace-nowrap text-gray-700">{fmtDate(row.entry_date)}</td>
-                          <td className="px-4 py-3 whitespace-nowrap font-mono text-xs text-gray-500">{row.entry_number_display ?? ''}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-gray-700">{fmtDate(row.entry_date)}</td>
+                          <td className={`whitespace-nowrap px-4 py-3 text-xs text-gray-500 ${MONO}`}>{row.entry_number_display ?? ''}</td>
                           <td className="px-4 py-3 text-gray-900">
                             <span className="inline-flex flex-wrap items-center gap-2">
                               <span>{row.description}</span>
@@ -377,8 +368,8 @@ export const LedgerRegister: FC = () => {
                               {row.counterparty && <CounterpartyChip name={row.counterparty.name} />}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-right tabular-nums whitespace-nowrap text-gray-700">{fmtMoney(row.total_debits)}</td>
-                          <td className="px-4 py-3 text-right tabular-nums whitespace-nowrap text-gray-700">{fmtMoney(row.total_credits)}</td>
+                          <td className={`whitespace-nowrap px-4 py-3 text-right tabular-nums text-gray-700 ${MONO}`}>{fmtMoney(row.total_debits)}</td>
+                          <td className={`whitespace-nowrap px-4 py-3 text-right tabular-nums text-gray-700 ${MONO}`}>{fmtMoney(row.total_credits)}</td>
                           <td className="px-4 py-3"><StatusBadge row={row} /></td>
                         </tr>
                         {open && (
@@ -412,14 +403,14 @@ export const LedgerRegister: FC = () => {
             </div>
 
             {showPager && (
-              <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
+              <div className="flex items-center justify-between border-t border-gray-100 px-4 py-3">
                 <span className="text-xs text-gray-500">{from}–{to} of {count}</span>
                 <div className="flex gap-2">
                   <button
                     type="button"
                     onClick={() => setPage(page - 1)}
                     disabled={page <= 1}
-                    className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:hover:bg-transparent transition-colors"
+                    className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-40 disabled:hover:bg-transparent"
                   >
                     Previous
                   </button>
@@ -427,14 +418,14 @@ export const LedgerRegister: FC = () => {
                     type="button"
                     onClick={() => setPage(page + 1)}
                     disabled={page * pageSize >= count}
-                    className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:hover:bg-transparent transition-colors"
+                    className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-40 disabled:hover:bg-transparent"
                   >
                     Next
                   </button>
                 </div>
               </div>
             )}
-          </div>
+          </Card>
         )}
       </div>
     </PageShell>
