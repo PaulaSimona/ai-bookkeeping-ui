@@ -14,6 +14,8 @@ const CONFIG: RoleConfig = {
   emptyActive: 'No suppliers yet. Add your first supplier to start tracking payables.',
   emptyArchived:
     'No archived suppliers. Archiving keeps all history intact — it only removes the supplier from pickers.',
+  archivedExplainer:
+    'Archiving keeps all history intact — it only removes the supplier from pickers.',
   avatarTint: 'green',
 };
 
