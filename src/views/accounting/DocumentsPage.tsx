@@ -18,8 +18,19 @@ import { useNavigate } from 'react-router-dom';
 import { useOrgMe } from '@/hooks/useAccounts';
 import { usePaginatedList } from '@/hooks/usePaginatedList';
 import { PageLoader } from '@/components/Loader';
+import { PageHeader } from '@/components/t2/PageHeader';
+import { Card } from '@/components/t2/Card';
 import { Tier2UploadZone } from './documents/Tier2UploadZone';
 import { DocumentStatusList, type DocumentStatusRow } from './documents/DocumentStatusList';
+
+// Static "how it works" copy for the right column — guidance, not data. The
+// prototype's stat tiles / filter chips / Telegram promo are OMITTED (no data /
+// out of scope — s22 B2), never mocked.
+const STEPS: string[] = [
+  'Drop in a receipt or invoice.',
+  'The accounting agent reads and books it.',
+  'Track each document’s status below.',
+];
 
 const FRESHNESS_MS = 30_000;
 
@@ -56,26 +67,41 @@ export const DocumentsPage: FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
-      <div className="max-w-5xl mx-auto px-6 py-8">
+      <div className="mx-auto max-w-5xl px-6 py-8">
 
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">Documents</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Upload receipts and invoices — track what the accounting agent has
-            done with each one.
-          </p>
+        <PageHeader
+          title="Documents"
+          subtitle="Drop in a receipt or invoice — the accounting agent reads it, books it, and tracks it here."
+        />
+
+        {/* Top region: upload zone (left) + a static how-it-works helper (right,
+            no data tiles). */}
+        <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <Tier2UploadZone onUploaded={refetch} />
+          </div>
+          <Card padding className="lg:col-span-1">
+            <div className="text-[11.5px] font-semibold uppercase tracking-wider text-gray-500">
+              How it works
+            </div>
+            <ol className="mt-3 space-y-3">
+              {STEPS.map((step, i) => (
+                <li key={i} className="flex items-start gap-2.5 text-[13.5px] text-gray-600">
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary-light)] text-[11px] font-semibold text-[var(--color-primary)]">
+                    {i + 1}
+                  </span>
+                  {step}
+                </li>
+              ))}
+            </ol>
+          </Card>
         </div>
 
-        {/* Upload area */}
-        <section className="mb-8">
-          <h2 className="text-base font-semibold text-gray-900 mb-3">Upload</h2>
-          <Tier2UploadZone onUploaded={refetch} />
-        </section>
-
         {/* Status list */}
-        <section>
-          <h2 className="text-base font-semibold text-gray-900 mb-3">Document status</h2>
+        <section className="mt-8">
+          <h2 className="mb-3 text-[13px] font-semibold uppercase tracking-wider text-gray-500">
+            Document status
+          </h2>
           <DocumentStatusList
             items={items}
             count={count}

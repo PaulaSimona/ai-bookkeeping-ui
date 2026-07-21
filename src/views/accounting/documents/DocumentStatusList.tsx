@@ -6,7 +6,13 @@
 //
 // D-14A3-5: raw routing_reason text is NEVER rendered — it only steers which
 // calm badge shows. No row actions of any kind (read-only surface).
+//
+// s22 B2: restyled onto the t2/ table look (t2/Card surface, letter-spaced
+// headers, StatusBadge-style pills built locally — t2/StatusBadge is not edited).
+// The prop shape, pagination behavior, and every loading/error/empty branch are
+// preserved exactly.
 import { type FC } from 'react';
+import { Card } from '@/components/t2/Card';
 
 export interface DocumentStatusRow {
   document_id: number;
@@ -52,10 +58,12 @@ const badgeFor = (row: DocumentStatusRow): { label: string; cls: string } => {
 const fmtDate = (s: string) =>
   new Date(s).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
 
+// Local StatusBadge-style pill (t2/StatusBadge is edit-forbidden). Colour pair
+// comes from badgeFor; shape matches the shipped t2 pill.
 const Badge: FC<{ row: DocumentStatusRow }> = ({ row }) => {
   const { label, cls } = badgeFor(row);
   return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${cls}`}>
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${cls}`}>
       {label}
     </span>
   );
@@ -65,11 +73,13 @@ const SkeletonRow: FC = () => (
   <tr>
     {[160, 90, 70].map((w, i) => (
       <td key={i} className="px-6 py-4">
-        <div className="h-3.5 bg-gray-100 rounded animate-pulse" style={{ width: w }} />
+        <div className="h-3.5 animate-pulse rounded bg-gray-100" style={{ width: w }} />
       </td>
     ))}
   </tr>
 );
+
+const HEADERS = ['Document', 'Uploaded', 'Status'];
 
 export const DocumentStatusList: FC<Props> = ({
   items, count, page, setPage, pageSize, isLoading, error,
@@ -79,13 +89,16 @@ export const DocumentStatusList: FC<Props> = ({
   const to = Math.min(page * pageSize, count);
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
+    <Card>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100">
-              {['Document', 'Uploaded', 'Status'].map((h) => (
-                <th key={h} className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">
+              {HEADERS.map((h) => (
+                <th
+                  key={h}
+                  className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500"
+                >
                   {h}
                 </th>
               ))}
@@ -108,9 +121,9 @@ export const DocumentStatusList: FC<Props> = ({
               </tr>
             ) : (
               items.map((row) => (
-                <tr key={row.document_id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 font-medium text-gray-900 max-w-[320px] truncate">{row.name}</td>
-                  <td className="px-6 py-4 text-gray-500 whitespace-nowrap">{fmtDate(row.created_at)}</td>
+                <tr key={row.document_id} className="transition-colors hover:bg-gray-50">
+                  <td className="max-w-[320px] truncate px-6 py-4 font-medium text-gray-900">{row.name}</td>
+                  <td className="whitespace-nowrap px-6 py-4 text-gray-500">{fmtDate(row.created_at)}</td>
                   <td className="px-6 py-4"><Badge row={row} /></td>
                 </tr>
               ))
@@ -121,26 +134,26 @@ export const DocumentStatusList: FC<Props> = ({
 
       {/* Pager — only when there is more than one page. */}
       {showPager && !isLoading && !error && (
-        <div className="flex items-center justify-between px-6 py-3 border-t border-gray-100">
+        <div className="flex items-center justify-between border-t border-gray-100 px-6 py-3">
           <span className="text-xs text-gray-500">{from}–{to} of {count}</span>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setPage(page - 1)}
               disabled={page <= 1}
-              className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:hover:bg-transparent transition-colors"
+              className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-40 disabled:hover:bg-transparent"
             >
               Prev
             </button>
             <button
               onClick={() => setPage(page + 1)}
               disabled={page * pageSize >= count}
-              className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:hover:bg-transparent transition-colors"
+              className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-40 disabled:hover:bg-transparent"
             >
               Next
             </button>
           </div>
         </div>
       )}
-    </div>
+    </Card>
   );
 };
