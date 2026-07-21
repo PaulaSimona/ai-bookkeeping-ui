@@ -32,6 +32,8 @@ import { BankConnections } from '@/views/accounting/BankConnections';
 import { DocumentsPage } from '@/views/accounting/DocumentsPage';
 import { AccountingDashboard } from '@/views/accounting/dashboard';
 import { LedgerRegister } from '@/views/accounting/ledger';
+import { Clients } from '@/views/accounting/Clients';
+import { Suppliers } from '@/views/accounting/Suppliers';
 import { PlaidOauthCallback } from '@/views/accounting/PlaidOauthCallback';
 import { AccountingReview } from '@/pages/accounting/AccountingReview';
 import { TaxProfile } from '@/pages/accounting/TaxProfile';
@@ -141,6 +143,8 @@ const App: FC = () => {
         {/* §21 gate swap DONE (D-21-4, 2026-07-18) — was interim staff/superuser. */}
         <Route path="/accounting/dashboard" element={<RequireTier2><AccountingDashboard /></RequireTier2>} />
         <Route path="/accounting/ledger" element={<RequireTier2><LedgerRegister /></RequireTier2>} />
+        <Route path="/accounting/clients" element={<RequireTier2><Clients /></RequireTier2>} />
+        <Route path="/accounting/suppliers" element={<RequireTier2><Suppliers /></RequireTier2>} />
         <Route path="/accounting/tax-profile" element={<RequireTier2><TaxProfile /></RequireTier2>} />
         <Route path="/accounting/bank-connections" element={<RequireTier2><BankConnections /></RequireTier2>} />
         <Route path="/accounting/documents" element={<RequireTier2><DocumentsPage /></RequireTier2>} />
