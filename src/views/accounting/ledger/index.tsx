@@ -1,11 +1,13 @@
-import { FC, Fragment, ReactNode, useState } from 'react';
+import { FC, Fragment, ReactNode, useEffect, useState } from 'react';
 import {
   useLedgerEntries,
+  attributeEntry,
   LEDGER_TABS,
   LedgerTab,
   LedgerEntryRow,
   LedgerEntryLine,
 } from '@/hooks/useLedgerEntries';
+import { useCounterparties } from '@/hooks/useCounterparties';
 
 // §14 14-C Tier 2 Ledger register (D-14C-3..5). Read-only: five-tab strip +
 // filters over the org's journal entries, calm status badges, and a read-only
@@ -115,6 +117,77 @@ const LineDetail: FC<{ lines: LedgerEntryLine[] }> = ({ lines }) => {
   );
 };
 
+// Counterparty chip (14-C-2b) — read-only, current page's badge idiom (neutral
+// pill). NOT the t2/ redesign component; the ledger keeps its current styling.
+const CounterpartyChip: FC<{ name: string }> = ({ name }) => (
+  <span className="inline-flex items-center rounded-full bg-gray-100 text-gray-600 px-2 py-0.5 text-xs font-medium">
+    {name}
+  </span>
+);
+
+// Assign control (D-14C2-6/-16): shown in the drill-down of an UNATTRIBUTED
+// entry only. Picker is ACTIVE counterparties only (archived excluded per
+// D-14C2-9/-17). Assign POSTs the attribution action; success refetches, and
+// 409/400/404 detail messages surface verbatim.
+const AssignCounterpartyControl: FC<{ entryId: string; onAssigned: () => void }> = ({
+  entryId, onAssigned,
+}) => {
+  const cp = useCounterparties({ archived: false });
+  const [selected, setSelected] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  // Load all active counterparties for the picker (server clamps at 200).
+  useEffect(() => {
+    cp.setPageSize(200);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const assign = async () => {
+    if (!selected) return;
+    setSubmitting(true);
+    setErr(null);
+    try {
+      const res = await attributeEntry(entryId, selected);
+      if (res?.status === 200) {
+        onAssigned();
+      } else {
+        setErr(res?.data?.detail ?? 'Could not assign counterparty.');
+      }
+    } catch (e: any) {
+      setErr(e?.response?.data?.detail ?? 'Could not assign counterparty.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs text-gray-500">Assign counterparty</span>
+      <select
+        value={selected}
+        onChange={(e) => setSelected(e.target.value)}
+        className={`${inputCls} py-1.5`}
+        aria-label="Select counterparty"
+      >
+        <option value="">Select…</option>
+        {cp.items.map((c) => (
+          <option key={c.id} value={c.id}>{c.name}</option>
+        ))}
+      </select>
+      <button
+        type="button"
+        disabled={!selected || submitting}
+        onClick={assign}
+        className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-800 disabled:opacity-40 transition-colors"
+      >
+        {submitting ? 'Assigning…' : 'Assign'}
+      </button>
+      {err && <span className="text-xs text-red-600">{err}</span>}
+    </div>
+  );
+};
+
 const LoadingSkeleton: FC = () => (
   <>
     <div className="h-8 w-40 bg-gray-100 rounded animate-pulse" />
@@ -171,6 +244,7 @@ export const LedgerRegister: FC = () => {
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [dateFrom, setDateFrom] = useState<string | null>(null);
   const [dateTo, setDateTo] = useState<string | null>(null);
+  const [unattributed, setUnattributed] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const { items, count, page, setPage, pageSize, isLoading, error, refetch } =
@@ -179,10 +253,11 @@ export const LedgerRegister: FC = () => {
       status: statusFilter ?? undefined,
       date_from: dateFrom ?? undefined,
       date_to: dateTo ?? undefined,
+      unattributed,
     });
 
   const anyFilterSet =
-    activeTab !== null || statusFilter !== null || !!dateFrom || !!dateTo;
+    activeTab !== null || statusFilter !== null || !!dateFrom || !!dateTo || unattributed;
 
   // The hook does not auto-reset page when params change — every filter change
   // resets to page 1 (and collapses any open drill-down) so results stay truthful.
@@ -190,9 +265,10 @@ export const LedgerRegister: FC = () => {
   const changeStatus = (v: string) => { setStatusFilter(v || null); setPage(1); setExpandedId(null); };
   const changeFrom = (v: string) => { setDateFrom(v || null); setPage(1); setExpandedId(null); };
   const changeTo = (v: string) => { setDateTo(v || null); setPage(1); setExpandedId(null); };
+  const toggleUnattributed = () => { setUnattributed((v) => !v); setPage(1); setExpandedId(null); };
   const clearFilters = () => {
     setActiveTab(null); setStatusFilter(null); setDateFrom(null); setDateTo(null);
-    setPage(1); setExpandedId(null);
+    setUnattributed(false); setPage(1); setExpandedId(null);
   };
 
   const showPager = count > pageSize;
@@ -237,6 +313,18 @@ export const LedgerRegister: FC = () => {
           To
           <input type="date" value={dateTo ?? ''} onChange={(e) => changeTo(e.target.value)} className={inputCls} />
         </label>
+        {/* 14-C-2b (D-14C2-21): unattributed-only toggle. */}
+        <button
+          type="button"
+          onClick={toggleUnattributed}
+          className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+            unattributed
+              ? 'bg-gray-900 text-white'
+              : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+          }`}
+        >
+          Unassigned
+        </button>
         {anyFilterSet && (
           <button
             type="button"
@@ -282,7 +370,13 @@ export const LedgerRegister: FC = () => {
                           <td className="px-4 py-3"><Chevron open={open} /></td>
                           <td className="px-4 py-3 whitespace-nowrap text-gray-700">{fmtDate(row.entry_date)}</td>
                           <td className="px-4 py-3 whitespace-nowrap font-mono text-xs text-gray-500">{row.entry_number_display ?? ''}</td>
-                          <td className="px-4 py-3 text-gray-900">{row.description}</td>
+                          <td className="px-4 py-3 text-gray-900">
+                            <span className="inline-flex flex-wrap items-center gap-2">
+                              <span>{row.description}</span>
+                              {/* Attributed → read-only name chip; unattributed → nothing. */}
+                              {row.counterparty && <CounterpartyChip name={row.counterparty.name} />}
+                            </span>
+                          </td>
                           <td className="px-4 py-3 text-right tabular-nums whitespace-nowrap text-gray-700">{fmtMoney(row.total_debits)}</td>
                           <td className="px-4 py-3 text-right tabular-nums whitespace-nowrap text-gray-700">{fmtMoney(row.total_credits)}</td>
                           <td className="px-4 py-3"><StatusBadge row={row} /></td>
@@ -290,6 +384,22 @@ export const LedgerRegister: FC = () => {
                         {open && (
                           <tr>
                             <td colSpan={7} className="p-0">
+                              {/* Counterparty section (D-14C2-16: set-only-when-null v1).
+                                  Attributed → read-only chip, no edit/clear. Unattributed
+                                  → Assign control. */}
+                              <div className="bg-gray-50 px-4 py-3">
+                                {row.counterparty ? (
+                                  <div className="flex items-center gap-2 text-xs">
+                                    <span className="text-gray-500">Counterparty</span>
+                                    <CounterpartyChip name={row.counterparty.name} />
+                                  </div>
+                                ) : (
+                                  <AssignCounterpartyControl
+                                    entryId={row.id}
+                                    onAssigned={() => { setExpandedId(null); refetch(); }}
+                                  />
+                                )}
+                              </div>
                               <LineDetail lines={row.lines} />
                             </td>
                           </tr>
