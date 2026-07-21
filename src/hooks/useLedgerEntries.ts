@@ -4,6 +4,7 @@
 // that are actually set become query params — the backend 400s on an empty
 // ?tab= (present-but-empty is invalid), so we never send blank values.
 import { usePaginatedList } from '@/hooks/usePaginatedList';
+import api from '@/utils/api';
 
 export type LedgerTab = 'revenue' | 'expenses' | 'payable' | 'receivable' | 'cash';
 
@@ -40,6 +41,8 @@ export interface LedgerEntryRow {
   status: string;
   needs_review: boolean;
   posted_at: string | null;
+  // 14-C-2b (D-14C2-19): read-only {id,name} when attributed, null otherwise.
+  counterparty: { id: string; name: string } | null;
   total_debits: string;
   total_credits: string;
   is_balanced: boolean;
@@ -53,6 +56,8 @@ export interface LedgerFilters {
   status?: string;
   date_from?: string;
   date_to?: string;
+  // 14-C-2b (D-14C2-21): true → only entries with no counterparty.
+  unattributed?: boolean;
 }
 
 export const useLedgerEntries = (filters: LedgerFilters) => {
@@ -61,5 +66,11 @@ export const useLedgerEntries = (filters: LedgerFilters) => {
   if (filters.status) params.status = filters.status;
   if (filters.date_from) params.date_from = filters.date_from;
   if (filters.date_to) params.date_to = filters.date_to;
+  if (filters.unattributed) params.unattributed = 'true';
   return usePaginatedList<LedgerEntryRow>('/api/accounting/entries/', params);
 };
+
+// Recorded attribution action (D-14C2-6/-16). Thin api-util wrapper; the caller
+// status-checks (200 ok; 409/400/404 surface res.data.detail verbatim).
+export const attributeEntry = (entryId: string, counterpartyId: string) =>
+  api.post(`/api/accounting/entries/${entryId}/attribute/`, { counterparty_id: counterpartyId });
