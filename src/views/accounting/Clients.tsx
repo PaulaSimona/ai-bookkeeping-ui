@@ -12,8 +12,7 @@ const CONFIG: RoleConfig = {
   noun: 'client',
   addLabel: 'Add client',
   emptyActive: 'No clients yet. Add your first client to start tracking receivables.',
-  emptyArchived:
-    'No archived clients. Archiving keeps all history intact — it only removes the client from pickers.',
+  emptyArchived: 'No archived clients.',
   archivedExplainer:
     'Archiving keeps all history intact — it only removes the client from new-invoice pickers.',
   avatarTint: 'blue',
