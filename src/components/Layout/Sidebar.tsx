@@ -194,7 +194,7 @@ export const Sidebar: FC = () => {
               NAV_MAIN byte-identically to today — the Tier 2 block above
               collapses to nothing and this filter predicate collapses to
               !(false) = keep-all, so the map output is unchanged. */}
-          {NAV_MAIN.filter((item) => !(hasTier2 && (item.to === '/documents' || item.to === '/dashboard'))).map(({ to, label, icon }) => (
+          {NAV_MAIN.filter((item) => !(hasTier2 && (item.to === '/documents' || item.to === '/dashboard' || item.to === '/reports' || item.to === '/workbook'))).map(({ to, label, icon }) => (
             <NavItem key={to} to={to} label={label} icon={icon} />
           ))}
           {/* Chart of Accounts + Reviewer Management — staff tools, superuser-only.
