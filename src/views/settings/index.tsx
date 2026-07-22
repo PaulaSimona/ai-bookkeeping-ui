@@ -7,6 +7,8 @@
 // tokens + Tailwind neutrals only; ZERO raw hex.
 import { type FC, type FormEvent, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useSelector } from 'react-redux';
+import { type RootState } from '@/store/store';
 import api from '@/utils/api';
 import { PageHeader } from '@/components/t2/PageHeader';
 import {
@@ -20,6 +22,9 @@ import {
   ToastBanner,
   useToast,
 } from './ui';
+import { TaxProfileTab } from './TaxProfileTab';
+import { PlaidConnectionsCard } from './PlaidConnectionsCard';
+import { ChartOfAccountsPanel } from './ChartOfAccountsPanel';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const CA_PROVINCES = [
@@ -473,16 +478,31 @@ const SecuritySection: FC<ToastFns> = ({ showSuccess, showError }) => {
 };
 
 // ─── Tabbed shell ─────────────────────────────────────────────────────────────
-const TABS = [
-  { id: 'business',     label: 'Business profile' },
-  { id: 'integrations', label: 'Bank & integrations' },
-  { id: 'subscription', label: 'Subscription' },
-  { id: 'security',     label: 'Security' },
-];
+// The three Tier-2 tabs (Tax profile, Chart of accounts) are shown ONLY to
+// entitled orgs, resolved via the same convention the s23 accounting surfaces use
+// (App.tsx RequireTier2): redux auth `has_tier2`. Non-entitled users see the U1
+// four-tab set unchanged. Team & access is U3.
+const BASE_TABS = {
+  business:     { id: 'business',     label: 'Business profile' },
+  tax:          { id: 'tax',          label: 'Tax profile' },
+  integrations: { id: 'integrations', label: 'Bank & integrations' },
+  chart:        { id: 'chart',        label: 'Chart of accounts' },
+  subscription: { id: 'subscription', label: 'Subscription' },
+  security:     { id: 'security',     label: 'Security' },
+};
 
 export const Settings: FC = () => {
   const { toast, showSuccess, showError } = useToast();
   const [active, setActive] = useState('business'); // default: Business profile
+
+  // Entitlement — identical expression to App.tsx RequireTier2 (do not invent a
+  // new check). Non-entitled → the U1 four-tab set only.
+  const { user } = useSelector((s: RootState) => s.auth);
+  const hasTier2 = user?.user?.has_tier2 ?? user?.has_tier2 ?? false;
+
+  const tabs = hasTier2
+    ? [BASE_TABS.business, BASE_TABS.tax, BASE_TABS.integrations, BASE_TABS.chart, BASE_TABS.subscription, BASE_TABS.security]
+    : [BASE_TABS.business, BASE_TABS.integrations, BASE_TABS.subscription, BASE_TABS.security];
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
@@ -493,12 +513,19 @@ export const Settings: FC = () => {
         />
 
         <div className="mt-6">
-          <TabBar tabs={TABS} active={active} onChange={setActive} />
+          <TabBar tabs={tabs} active={active} onChange={setActive} />
         </div>
 
         <div className="mt-6">
           {active === 'business'     && <BusinessProfileSection showSuccess={showSuccess} showError={showError} />}
-          {active === 'integrations' && <BankIntegrationsSection showSuccess={showSuccess} showError={showError} />}
+          {active === 'tax'          && hasTier2 && <TaxProfileTab onSaved={showSuccess} />}
+          {active === 'integrations' && (
+            <div className="space-y-6">
+              {hasTier2 && <PlaidConnectionsCard />}
+              <BankIntegrationsSection showSuccess={showSuccess} showError={showError} />
+            </div>
+          )}
+          {active === 'chart'        && hasTier2 && <ChartOfAccountsPanel />}
           {active === 'subscription' && <SubscriptionSection showError={showError} />}
           {active === 'security'     && <SecuritySection showSuccess={showSuccess} showError={showError} />}
         </div>
