@@ -12,24 +12,30 @@ export const useUser: any = (auto: boolean) => {
 
   const [retryCount, setRetryCount] = useState<number>(0);
 
-  const getUser = useCallback((): void => {
-    if (retryCount >= 3) return;
+  // Returns a Promise resolving to the /me payload (or undefined on a skipped /
+  // failed fetch) so callers that need the freshly-loaded entitlement can await
+  // it before routing (F-S24-4: Login/InviteAccept branch on has_tier2). The
+  // auto useEffect and existing void callers ignore the return value unchanged.
+  const getUser = useCallback((): Promise<any> => {
+    if (retryCount >= 3) return Promise.resolve(undefined);
 
     if (!getToken()) {
       dispatch(setInProgress(false));
-      return;
+      return Promise.resolve(undefined);
     }
 
     if (!inProgress) dispatch(setInProgress(true));
 
-    api
+    return api
       .get(`${API_DOMAIN}/api/user/me`)
       .then((response) => {
         dispatch(setUser(response.data));
         dispatch(setInProgress(false));
+        return response.data;
       })
       .catch(() => {
         setRetryCount((prevCount: number) => prevCount + 1);
+        return undefined;
       })
       .finally(() => {
         dispatch(setInProgress(false));

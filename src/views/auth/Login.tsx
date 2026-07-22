@@ -40,7 +40,7 @@ const PasswordInput: FC<React.InputHTMLAttributes<HTMLInputElement>> = ({ classN
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface Props {
-  getUser?: () => void;
+  getUser?: () => Promise<any> | void;
 }
 
 export const Login: FC<Props> = ({ getUser }) => {
@@ -48,12 +48,27 @@ export const Login: FC<Props> = ({ getUser }) => {
   const { login, success, error, errorCode, inProgress } = useLogin();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  // Kept true from login-success until /me resolves and we navigate, so the
+  // button stays in its "Signing in…" state across the await (F-S24-4).
+  const [signingIn, setSigningIn] = useState(false);
 
+  // AWAIT /api/user/me before routing so the Tier 2 entitlement is known: a
+  // Tier 2 account lands on /accounting/dashboard, everyone else keeps today's
+  // Tier 1 /dashboard landing (byte-preserved). Previously getUser() was fired
+  // async and navigate('/dashboard') ran on the same tick — has_tier2 was never
+  // consulted and every user hit the Tier 1 dashboard (F-S24-4).
   useEffect(() => {
-    if (success) {
-      getUser?.();
-      navigate('/dashboard');
-    }
+    if (!success) return;
+    let cancelled = false;
+    setSigningIn(true);
+    Promise.resolve(getUser?.()).then((data) => {
+      if (cancelled) return;
+      const hasTier2 = data?.user?.has_tier2 ?? data?.has_tier2 ?? false;
+      navigate(hasTier2 ? '/accounting/dashboard' : '/dashboard');
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [success, getUser, navigate]);
 
   const handleSubmit = (e: FormEvent) => {
@@ -147,10 +162,10 @@ export const Login: FC<Props> = ({ getUser }) => {
 
             <button
               type="submit"
-              disabled={inProgress}
+              disabled={inProgress || signingIn}
               className="w-full flex items-center justify-center gap-2 rounded-lg bg-[#0066FF] hover:bg-[#0052cc] disabled:opacity-60 px-4 py-2.5 text-sm font-semibold text-white transition-colors"
             >
-              {inProgress ? <><Loader /> Signing in…</> : 'Sign in'}
+              {inProgress || signingIn ? <><Loader /> Signing in…</> : 'Sign in'}
             </button>
           </form>
 

@@ -11,6 +11,7 @@ import { useSelector } from 'react-redux';
 import axios from 'axios';                      // BARE axios — public endpoint, no interceptor
 import { API_DOMAIN } from '@/utils';
 import { getToken } from '@/utils/auth';
+import { useUser } from '@/api/user/useUser';
 import { type RootState } from '@/store/store';
 import logoSvg from '@/assets/logo.svg';
 
@@ -91,6 +92,10 @@ export const InviteAccept: FC = () => {
   const authed = !!getToken();
   const { user } = useSelector((s: RootState) => s.auth);
   const myEmail = user?.user?.email ?? user?.email ?? '';
+  // Manual refresh only (auto=false) — used to reload the entitlement after an
+  // authed accept so the "Continue" link into the Tier 2 dashboard isn't bounced
+  // by RequireTier2 reading a stale has_tier2 (F-S24-4).
+  const { getUser } = useUser(false);
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName]   = useState('');
@@ -110,6 +115,10 @@ export const InviteAccept: FC = () => {
     setSubmit(true); setError('');
     try {
       const res = await axios.post(ACCEPT_URL, { token }, { headers: { Authorization: `Bearer ${getToken()}` } });
+      // Reload /me so redux has_tier2 reflects the just-activated accountant
+      // membership BEFORE the success screen's "Continue" routes into the Tier 2
+      // dashboard (RequireTier2 reads the entitlement from redux). (F-S24-4)
+      await getUser?.();
       setOrgName(res.data?.org_name ?? '');
     } catch (err: any) {
       setError(err.response?.data?.detail ?? 'This invite link is invalid or has expired.');
