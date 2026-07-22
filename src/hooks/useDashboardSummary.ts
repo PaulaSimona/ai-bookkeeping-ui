@@ -11,6 +11,27 @@ export interface FiscalYear {
   end: string;   // ISO date
 }
 
+// ── 14-C-4 analytics block (D-S23-1/2/4/6). All money figures stay two-decimal
+// STRINGS (format for display, never math in JS). Always present in the payload.
+export interface CashFlowMonth {
+  month: string;    // "YYYY-MM"
+  inflow: string;   // Dr sum on cash accounts
+  outflow: string;  // Cr sum on cash accounts
+}
+
+export interface DashboardAttention {
+  entries_needs_review: number;
+  documents_processing: number;
+  entries_unassigned: number;
+}
+
+export interface RecentActivityRow {
+  entry_number: number;
+  entry_date: string;    // ISO date
+  description: string;
+  amount: string;        // total debit of the entry
+}
+
 export interface DashboardSummary {
   cash_on_hand: string;
   receivables: string;
@@ -21,6 +42,12 @@ export interface DashboardSummary {
   currency: string | null;
   fiscal_year: FiscalYear | null;
   as_of: string; // ISO date
+  // 14-C-4 additive analytics fields.
+  monthly_cash_flow: CashFlowMonth[];
+  attention: DashboardAttention;
+  recent_activity: RecentActivityRow[];
+  connected_accounts: number;
+  filing_deadline: string | null; // ISO date | null
 }
 
 // ── useDashboardSummary ───────────────────────────────────────────────────────
