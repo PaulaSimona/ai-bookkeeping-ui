@@ -1,16 +1,19 @@
-// useCounterpartyBalances (§14 14-C-2b, D-14C2-5/-20) — reads
-// GET /api/accounting/counterparties/balances/?role=. The response is the
-// standard AccountingPagination envelope PLUS a top-level `summary`, so this
-// hook does NOT reuse usePaginatedList (which drops the summary). It fetches via
-// the same api util, following usePaginatedList's three-leg interceptor
-// contract, and surfaces {summary, items, count, page, setPage, isLoading,
-// error, refetch}. It pulls a full page (server max) so pages can join balances
-// to the counterparty list by id.
+// useCounterpartyBalances (§14 14-C-2b, D-14C2-5/-20; rewired 14-C-4 U3) — reads
+// GET /api/accounting/counterparties/balances/ with EXPLICIT params per tab
+// (role, archived, search, page, page_size) and surfaces the standard
+// AccountingPagination envelope PLUS the top-level `summary`, so it does NOT
+// reuse usePaginatedList (which drops the summary). Post-C4 every row carries the
+// counterparty's identity/display fields (contact_name/email/city/payment_terms)
+// alongside balance + aging, so this hook is now the SOLE data source for the
+// Clients/Suppliers table — the old CRUD-list + balMap id-join is retired.
+// Follows usePaginatedList's three-leg interceptor contract (null = cancelled,
+// 200 = trust, else a resolved error body). The caller resets page to 1 on tab
+// change and on the (debounced) search settling.
 import { useCallback, useEffect, useState } from 'react';
 import api from '@/utils/api';
 import type { CounterpartyRole } from '@/hooks/useCounterparties';
 
-const FULL_PAGE = 200; // AccountingPagination.max_page_size — one page covers all
+const DEFAULT_PAGE_SIZE = 50; // the table pages at 50; the C4 server clamps at 200.
 
 export interface AgingBuckets {
   current: string;
@@ -23,6 +26,11 @@ export interface CounterpartyBalanceRow {
   id: string;
   name: string;
   archived: boolean;
+  // Identity/display fields (C4) — the table's sole source, no CRUD join.
+  contact_name: string;
+  email: string;
+  city: string;
+  payment_terms: string;
   balance: string;
   aging: AgingBuckets;
   entry_count: number;
@@ -39,11 +47,18 @@ const EMPTY_AGING: AgingBuckets = {
 };
 const EMPTY_SUMMARY: BalancesSummary = { balance: '0.00', aging: EMPTY_AGING };
 
-export const useCounterpartyBalances = (role: CounterpartyRole) => {
+interface Params {
+  role: CounterpartyRole;
+  archived: boolean;
+  search: string;
+}
+
+export const useCounterpartyBalances = ({ role, archived, search }: Params) => {
   const [items, setItems] = useState<CounterpartyBalanceRow[]>([]);
   const [summary, setSummary] = useState<BalancesSummary>(EMPTY_SUMMARY);
   const [count, setCount] = useState(0);
   const [page, setPage] = useState(1);
+  const pageSize = DEFAULT_PAGE_SIZE;
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
@@ -55,13 +70,15 @@ export const useCounterpartyBalances = (role: CounterpartyRole) => {
     setIsLoading(true);
     setError(null);
 
-    api.get('/api/accounting/counterparties/balances/', {
-      params: { role, page, page_size: FULL_PAGE },
-    })
+    // Explicit per-tab params; ?search omitted when empty.
+    const params: Record<string, string | number | boolean> = {
+      role, archived, page, page_size: pageSize,
+    };
+    if (search) params.search = search;
+
+    api.get('/api/accounting/counterparties/balances/', { params })
       .then((res) => {
         if (cancelled) return;
-        // Same interceptor contract as usePaginatedList: null = cancelled;
-        // status 200 = trust; else a resolved error response.
         if (res == null) return;
         if (res.status === 200) {
           const data = res.data as {
@@ -85,7 +102,7 @@ export const useCounterpartyBalances = (role: CounterpartyRole) => {
       .finally(() => { if (!cancelled) setIsLoading(false); });
 
     return () => { cancelled = true; };
-  }, [role, page, revision]);
+  }, [role, archived, search, page, revision]);
 
-  return { summary, items, count, page, setPage, isLoading, error, refetch };
+  return { summary, items, count, page, setPage, pageSize, isLoading, error, refetch };
 };
