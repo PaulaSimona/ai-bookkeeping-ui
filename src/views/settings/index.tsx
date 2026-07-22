@@ -1,93 +1,33 @@
-import { type FC, type FormEvent, useEffect, useRef, useState } from 'react';
+// Settings (s24 U1 restyle — O-S24-1am, ADDENDUM_12 Part A). The single scrolling
+// page becomes a tabbed shell (Business profile · Bank & integrations ·
+// Subscription · Security); the tier-2 tabs (Tax profile, Chart of accounts,
+// Team & access) arrive in U2/U3 and are not shown yet. This is a VISUAL restyle
+// only: every request/response shape below is byte-preserved against the s24 trace
+// (item 14). Own data layer (wrapped api client) — no Tier 1 hook edits. Brand
+// tokens + Tailwind neutrals only; ZERO raw hex.
+import { type FC, type FormEvent, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useSelector } from 'react-redux';
+import { type RootState } from '@/store/store';
 import api from '@/utils/api';
-
-// ─── Toast ────────────────────────────────────────────────────────────────────
-
-interface Toast { message: string; type: 'success' | 'error' }
-
-function useToast() {
-  const [toast, setToast] = useState<Toast | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const show = (message: string, type: Toast['type']) => {
-    if (timer.current) clearTimeout(timer.current);
-    setToast({ message, type });
-    timer.current = setTimeout(() => setToast(null), 3500);
-  };
-
-  return { toast, showSuccess: (m: string) => show(m, 'success'), showError: (m: string) => show(m, 'error') };
-}
-
-const ToastBanner: FC<{ toast: Toast | null }> = ({ toast }) => {
-  if (!toast) return null;
-  return (
-    <div className={`fixed top-5 right-5 z-50 flex items-center gap-3 rounded-xl px-5 py-3.5 shadow-lg text-sm font-medium transition-all ${
-      toast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
-    }`}>
-      {toast.type === 'success'
-        ? <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
-        : <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-      }
-      {toast.message}
-    </div>
-  );
-};
-
-// ─── Section card ─────────────────────────────────────────────────────────────
-
-const Section: FC<{ title: string; description?: string; children: React.ReactNode }> = ({
-  title, description, children,
-}) => (
-  <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
-    <div className="px-6 py-5 border-b border-gray-100">
-      <h2 className="text-base font-semibold text-gray-900">{title}</h2>
-      {description && <p className="mt-1 text-sm text-gray-500">{description}</p>}
-    </div>
-    <div className="px-6 py-6">{children}</div>
-  </div>
-);
-
-const Field: FC<{ label: string; children: React.ReactNode; required?: boolean }> = ({
-  label, children, required,
-}) => (
-  <div>
-    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-      {label}{required && <span className="text-red-500 ml-0.5">*</span>}
-    </label>
-    {children}
-  </div>
-);
-
-const Input: FC<React.InputHTMLAttributes<HTMLInputElement>> = (props) => (
-  <input
-    {...props}
-    className="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0066FF] focus:border-transparent transition disabled:bg-gray-50 disabled:text-gray-400"
-  />
-);
-
-const Select: FC<React.SelectHTMLAttributes<HTMLSelectElement>> = ({ children, ...props }) => (
-  <select
-    {...props}
-    className="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0066FF] focus:border-transparent transition bg-white disabled:bg-gray-50"
-  >
-    {children}
-  </select>
-);
-
-const SaveButton: FC<{ saving: boolean; label?: string }> = ({ saving, label = 'Save changes' }) => (
-  <button
-    type="submit"
-    disabled={saving}
-    className="flex items-center gap-2 rounded-lg bg-[#0066FF] hover:bg-[#0052cc] disabled:opacity-60 px-5 py-2.5 text-sm font-semibold text-white transition-colors"
-  >
-    {saving && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-    {saving ? 'Saving…' : label}
-  </button>
-);
+import { PageHeader } from '@/components/t2/PageHeader';
+import {
+  Field,
+  Input,
+  SaveButton,
+  Section,
+  Select,
+  Spinner,
+  TabBar,
+  ToastBanner,
+  useToast,
+} from './ui';
+import { TaxProfileTab } from './TaxProfileTab';
+import { PlaidConnectionsCard } from './PlaidConnectionsCard';
+import { ChartOfAccountsPanel } from './ChartOfAccountsPanel';
+import { TeamAccessTab } from './TeamAccessTab';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
 const CA_PROVINCES = [
   { code: 'AB', name: 'Alberta' },
   { code: 'BC', name: 'British Columbia' },
@@ -101,14 +41,15 @@ const CA_PROVINCES = [
   { code: 'SK', name: 'Saskatchewan' },
 ];
 
-// ─── Section 1 — Business Profile ─────────────────────────────────────────────
+type ToastFns = { showSuccess: (m: string) => void; showError: (m: string) => void };
 
-const BusinessProfileSection: FC<{ showSuccess: (m: string) => void; showError: (m: string) => void }> = ({
-  showSuccess, showError,
-}) => {
+// ─── Business profile ─────────────────────────────────────────────────────────
+// GET  /api/user/profile  → {..., phone_number, company:{7 keys}}   (byte-preserved)
+// PUT  /api/user/profile  ← {phone_number, company:{ALL 7 keys}}    (byte-preserved)
+const BusinessProfileSection: FC<ToastFns> = ({ showSuccess, showError }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
-  const [country, setCountry] = useState('CA');
+  const [country, setCountry] = useState('CA'); // LOCAL only — never persisted
   const [form, setForm] = useState({
     phone_number:    '',
     company_name:    '',
@@ -146,6 +87,7 @@ const BusinessProfileSection: FC<{ showSuccess: (m: string) => void; showError: 
     e.preventDefault();
     setSaving(true);
     try {
+      // All 7 company keys ALWAYS sent — a partial block 500s server-side (KeyError).
       const { phone_number, ...companyFields } = form;
       const res = await api.put('/api/user/profile', { phone_number, company: companyFields });
       if (res?.status === 200) {
@@ -162,9 +104,7 @@ const BusinessProfileSection: FC<{ showSuccess: (m: string) => void; showError: 
 
   if (loading) return (
     <Section title="Business Profile">
-      <div className="h-48 flex items-center justify-center">
-        <div className="w-6 h-6 border-2 border-[#0066FF] border-t-transparent rounded-full animate-spin" />
-      </div>
+      <div className="flex h-48 items-center justify-center"><Spinner /></div>
     </Section>
   );
 
@@ -179,7 +119,7 @@ const BusinessProfileSection: FC<{ showSuccess: (m: string) => void; showError: 
           <Input type="tel" value={form.phone_number} onChange={set('phone_number')} placeholder="+1 604 555 1234" />
         </Field>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Street address">
             <Input value={form.address} onChange={set('address')} placeholder="123 Main St" />
           </Field>
@@ -188,7 +128,7 @@ const BusinessProfileSection: FC<{ showSuccess: (m: string) => void; showError: 
           </Field>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Field label="City">
             <Input value={form.city} onChange={set('city')} placeholder="Toronto" />
           </Field>
@@ -212,7 +152,7 @@ const BusinessProfileSection: FC<{ showSuccess: (m: string) => void; showError: 
           </Field>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Postal / ZIP code">
             <Input value={form.postal_code} onChange={set('postal_code')} placeholder={country === 'CA' ? 'M5H 1A1' : '10001'} />
           </Field>
@@ -231,15 +171,15 @@ const BusinessProfileSection: FC<{ showSuccess: (m: string) => void; showError: 
   );
 };
 
-// ─── Section 2 — Telegram ─────────────────────────────────────────────────────
-
-const TelegramSection: FC<{ showSuccess: (m: string) => void; showError: (m: string) => void }> = ({
-  showSuccess, showError,
-}) => {
-  const [loading, setLoading]     = useState(true);
-  const [linked, setLinked]       = useState(false);
-  const [chatId, setChatId]       = useState<number | null>(null);
-  const [token, setToken]         = useState<string | null>(null);
+// ─── Bank & integrations (U1 = Telegram card only; Plaid list arrives U2) ──────
+// GET    /api/telegram/status/     → {linked, chat_id}          (byte-preserved)
+// POST   /api/telegram/link-token/ → {token, expires_in_seconds}(byte-preserved)
+// DELETE /api/telegram/unlink/     → {unlinked:true}            (byte-preserved)
+const BankIntegrationsSection: FC<ToastFns> = ({ showSuccess, showError }) => {
+  const [loading, setLoading]       = useState(true);
+  const [linked, setLinked]         = useState(false);
+  const [chatId, setChatId]         = useState<number | null>(null);
+  const [token, setToken]           = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [unlinking, setUnlinking]   = useState(false);
 
@@ -281,18 +221,22 @@ const TelegramSection: FC<{ showSuccess: (m: string) => void; showError: (m: str
     }
   };
 
+  const StepDot: FC<{ n: number }> = ({ n }) => (
+    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary-light)] text-[10px] font-bold text-[var(--color-primary)]">
+      {n}
+    </span>
+  );
+
   return (
     <Section title="Telegram" description="Link your Telegram account to upload documents directly from the bot.">
       {loading ? (
-        <div className="h-20 flex items-center">
-          <div className="w-5 h-5 border-2 border-[#0066FF] border-t-transparent rounded-full animate-spin" />
-        </div>
+        <div className="flex h-20 items-center"><Spinner /></div>
       ) : linked ? (
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center">
-              <svg className="w-5 h-5 text-[#0066FF]" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/>
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--color-primary-light)]">
+              <svg className="h-5 w-5 text-[var(--color-primary)]" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z" />
               </svg>
             </div>
             <div>
@@ -303,78 +247,70 @@ const TelegramSection: FC<{ showSuccess: (m: string) => void; showError: (m: str
           <button
             onClick={handleUnlink}
             disabled={unlinking}
-            className="text-sm font-medium text-red-600 hover:text-red-700 disabled:opacity-50 transition-colors"
+            className="text-sm font-medium text-red-600 transition-colors hover:text-red-700 disabled:opacity-50"
           >
             {unlinking ? 'Unlinking…' : 'Unlink'}
           </button>
         </div>
       ) : (
-        <div className="rounded-xl bg-[#EFF8FF] border border-[#BFDBFE] p-5 space-y-5">
-          {/* Header */}
+        <div className="space-y-5 rounded-xl border border-[var(--color-primary-light)] bg-[var(--color-primary-light)]/40 p-5">
           <div className="flex items-start gap-3">
-            <div className="w-9 h-9 rounded-full bg-white flex items-center justify-center shrink-0 shadow-sm">
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" style={{ color: '#0088CC' }}>
-                <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white shadow-sm">
+              <svg className="h-4 w-4 text-[var(--color-primary)]" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z" />
               </svg>
             </div>
             <div>
               <p className="text-sm font-semibold text-gray-900">Connect Telegram Bot</p>
-              <p className="text-xs text-gray-500 mt-0.5">Upload receipts directly from your phone</p>
+              <p className="mt-0.5 text-xs text-gray-500">Upload receipts directly from your phone</p>
             </div>
           </div>
 
-          {/* Two-column layout */}
-          <div className="flex flex-col sm:flex-row gap-5">
-            {/* Steps */}
+          <div className="flex flex-col gap-5 sm:flex-row">
             <ol className="flex-1 space-y-3 text-sm text-gray-700">
+              <li className="flex items-start gap-2.5"><StepDot n={1} /><span>Download Telegram on your phone</span></li>
               <li className="flex items-start gap-2.5">
-                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#0088CC] text-[10px] font-bold text-white">1</span>
-                <span>Download Telegram on your phone</span>
-              </li>
-              <li className="flex items-start gap-2.5">
-                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#0088CC] text-[10px] font-bold text-white">2</span>
+                <StepDot n={2} />
                 <span>
                   Scan the QR code or tap{' '}
-                  <a href="https://t.me/Accuratebooks_bot" target="_blank" rel="noreferrer" className="font-medium text-[#0088CC] hover:underline">
+                  <a href="https://t.me/Accuratebooks_bot" target="_blank" rel="noreferrer" className="font-medium text-[var(--color-primary)] hover:underline">
                     @Accuratebooks_bot
                   </a>
                 </span>
               </li>
               <li className="flex items-start gap-2.5">
-                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#0088CC] text-[10px] font-bold text-white">3</span>
+                <StepDot n={3} />
                 <span>
-                  Send <code className="rounded bg-white border border-[#BFDBFE] px-1.5 py-0.5 font-mono text-xs">/start</code> to the bot
+                  Send <code className="rounded border border-[var(--color-primary-light)] bg-white px-1.5 py-0.5 font-[var(--font-family-mono)] text-xs">/start</code> to the bot
                 </span>
               </li>
               <li className="flex items-start gap-2.5">
-                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#0088CC] text-[10px] font-bold text-white">4</span>
+                <StepDot n={4} />
                 <span>
                   Generate your link token below and send{' '}
-                  <code className="rounded bg-white border border-[#BFDBFE] px-1.5 py-0.5 font-mono text-xs">/link &lt;token&gt;</code> to the bot
+                  <code className="rounded border border-[var(--color-primary-light)] bg-white px-1.5 py-0.5 font-[var(--font-family-mono)] text-xs">/link &lt;token&gt;</code> to the bot
                 </span>
               </li>
             </ol>
 
-            {/* QR code */}
-            <div className="sm:shrink-0 flex justify-center">
+            <div className="flex justify-center sm:shrink-0">
               <img
                 src="/t_me-Accuratebooks_bot.jpg"
                 alt="Scan to open @Accuratebooks_bot on Telegram"
-                className="rounded-lg border border-[#BFDBFE] object-contain"
+                className="rounded-lg border border-[var(--color-primary-light)] object-contain"
                 style={{ width: 180, height: 180 }}
               />
             </div>
           </div>
 
-          {/* Token display */}
           {token && (
-            <div className="rounded-lg border border-blue-100 bg-white px-4 py-3">
-              <p className="text-xs font-medium text-blue-700 mb-1.5">Your link token (valid 15 minutes)</p>
+            <div className="rounded-lg border border-[var(--color-primary-light)] bg-white px-4 py-3">
+              <p className="mb-1.5 text-xs font-medium text-[var(--color-primary)]">Your link token (valid 15 minutes)</p>
               <div className="flex items-center gap-2">
-                <code className="flex-1 font-mono text-sm text-blue-900 break-all">/link {token}</code>
+                <code className="flex-1 break-all font-[var(--font-family-mono)] text-sm text-gray-900">/link {token}</code>
                 <button
                   onClick={() => navigator.clipboard.writeText(`/link ${token}`)}
-                  className="text-xs text-blue-600 hover:text-blue-800 shrink-0 font-medium"
+                  className="shrink-0 text-xs font-medium text-[var(--color-primary)] hover:underline"
                 >
                   Copy
                 </button>
@@ -382,13 +318,12 @@ const TelegramSection: FC<{ showSuccess: (m: string) => void; showError: (m: str
             </div>
           )}
 
-          {/* Generate button */}
           <button
             onClick={handleGenerateToken}
             disabled={generating}
-            className="flex items-center gap-2 rounded-lg bg-[#0088CC] hover:bg-[#0077b3] disabled:opacity-60 px-5 py-2.5 text-sm font-semibold text-white transition-colors"
+            className="inline-flex h-[42px] items-center gap-2 rounded-lg bg-[var(--color-primary)] px-5 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-primary-hover)] disabled:opacity-60"
           >
-            {generating && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+            {generating && <Spinner light />}
             {generating ? 'Generating…' : 'Generate link token'}
           </button>
         </div>
@@ -397,17 +332,101 @@ const TelegramSection: FC<{ showSuccess: (m: string) => void; showError: (m: str
   );
 };
 
-// ─── Section 3 — Security ─────────────────────────────────────────────────────
+// ─── Subscription ─────────────────────────────────────────────────────────────
+// GET  /api/packages/user_package         → plan_name, ...to_upload_total, ...uploaded
+// POST /api/stripe/create-portal-session/  → {url}   (both byte-preserved)
+interface PkgStatus {
+  number_of_documents_to_upload_total: number;
+  number_of_documents_uploaded: number;
+  plan_name: string;
+}
 
-const SecuritySection: FC<{ showSuccess: (m: string) => void; showError: (m: string) => void }> = ({
-  showSuccess, showError,
-}) => {
+const SubscriptionSection: FC<{ showError: (m: string) => void }> = ({ showError }) => {
+  const [status, setStatus]     = useState<PkgStatus | null>(null);
+  const [loading, setLoading]   = useState(true);
+  const [managing, setManaging] = useState(false);
+
+  useEffect(() => {
+    api.get('/api/packages/user_package').then((res) => {
+      if (res?.data) setStatus(res.data);
+    }).finally(() => setLoading(false));
+  }, []);
+
+  const handleManageBilling = async () => {
+    setManaging(true);
+    try {
+      const res = await api.post('/api/stripe/create-portal-session/');
+      if (res?.data?.url) {
+        window.location.href = res.data.url;
+      } else {
+        showError(res?.data?.error ?? 'Could not open billing portal. Please try again.');
+      }
+    } catch {
+      showError('Could not open billing portal. Please try again.');
+    } finally {
+      setManaging(false);
+    }
+  };
+
+  // Presentation-only ratio for the usage bar (never money math). used / (used + remaining).
+  const used = status?.number_of_documents_uploaded ?? 0;
+  const remaining = status?.number_of_documents_to_upload_total ?? 0;
+  const denom = used + remaining;
+  const pct = denom > 0 ? Math.min(100, Math.round((used / denom) * 100)) : 0;
+
+  return (
+    <Section title="Subscription" description="Your current plan and document quota.">
+      {loading ? (
+        <div className="flex h-16 items-center"><Spinner /></div>
+      ) : status ? (
+        <div className="space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-gray-900">{status.plan_name}</p>
+              <p className="mt-1 text-xs text-gray-400">
+                {remaining} document{remaining !== 1 ? 's' : ''} remaining{' · '}{used} used
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleManageBilling}
+                disabled={managing}
+                className="text-sm font-medium text-gray-600 transition-colors hover:text-gray-900 disabled:opacity-50"
+              >
+                {managing ? 'Opening…' : 'Manage billing'}
+              </button>
+              <Link
+                to="/subscription"
+                className="rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-primary-hover)]"
+              >
+                Upgrade plan
+              </Link>
+            </div>
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100">
+            <div className="h-full rounded-full bg-[var(--color-primary)] transition-all" style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <p className="text-sm text-gray-500">No active plan.</p>
+          <Link
+            to="/subscription"
+            className="rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-primary-hover)]"
+          >
+            View plans
+          </Link>
+        </div>
+      )}
+    </Section>
+  );
+};
+
+// ─── Security ─────────────────────────────────────────────────────────────────
+// PUT /api/user/password  ← {old_password, new_password, new_password2}  (byte-preserved)
+const SecuritySection: FC<ToastFns> = ({ showSuccess, showError }) => {
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
-    old_password:  '',
-    new_password:  '',
-    new_password2: '',
-  });
+  const [form, setForm] = useState({ old_password: '', new_password: '', new_password2: '' });
 
   const set = (field: keyof typeof form) =>
     (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -441,7 +460,7 @@ const SecuritySection: FC<{ showSuccess: (m: string) => void; showError: (m: str
 
   return (
     <Section title="Security" description="Change your account password.">
-      <form onSubmit={handleSubmit} className="space-y-5 max-w-sm">
+      <form onSubmit={handleSubmit} className="max-w-sm space-y-5">
         <Field label="Current password" required>
           <Input type="password" value={form.old_password} onChange={set('old_password')} autoComplete="current-password" placeholder="••••••••" required />
         </Field>
@@ -459,106 +478,61 @@ const SecuritySection: FC<{ showSuccess: (m: string) => void; showError: (m: str
   );
 };
 
-// ─── Section 3 — Subscription ─────────────────────────────────────────────────
-
-interface PkgStatus {
-  number_of_documents_to_upload_total: number;
-  number_of_documents_uploaded: number;
-  storage_space_total: number;
-  storage_space_used: number;
-  plan_name: string;
-}
-
-const SubscriptionSection: FC<{ showError: (m: string) => void }> = ({ showError }) => {
-  const [status, setStatus]     = useState<PkgStatus | null>(null);
-  const [loading, setLoading]   = useState(true);
-  const [managing, setManaging] = useState(false);
-
-  useEffect(() => {
-    api.get('/api/packages/user_package').then((res) => {
-      if (res?.data) setStatus(res.data);
-    }).finally(() => setLoading(false));
-  }, []);
-
-  const handleManageBilling = async () => {
-    setManaging(true);
-    try {
-      const res = await api.post('/api/stripe/create-portal-session/');
-      if (res?.data?.url) {
-        window.location.href = res.data.url;
-      } else {
-        showError(res?.data?.error ?? 'Could not open billing portal. Please try again.');
-      }
-    } catch {
-      showError('Could not open billing portal. Please try again.');
-    } finally {
-      setManaging(false);
-    }
-  };
-
-  return (
-    <Section title="Subscription" description="Your current plan and document quota.">
-      {loading ? (
-        <div className="h-16 flex items-center">
-          <div className="w-5 h-5 border-2 border-[#0066FF] border-t-transparent rounded-full animate-spin" />
-        </div>
-      ) : status ? (
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <p className="text-sm font-semibold text-gray-900">{status.plan_name}</p>
-            <p className="mt-1 text-xs text-gray-400">
-              {status.number_of_documents_to_upload_total} document{status.number_of_documents_to_upload_total !== 1 ? 's' : ''} remaining
-              {' · '}{status.number_of_documents_uploaded} used
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleManageBilling}
-              disabled={managing}
-              className="text-sm font-medium text-gray-600 hover:text-gray-900 disabled:opacity-50 transition-colors"
-            >
-              {managing ? 'Opening…' : 'Manage billing'}
-            </button>
-            <Link
-              to="/subscription"
-              className="rounded-lg bg-[#0066FF] hover:bg-[#0052cc] px-4 py-2 text-sm font-semibold text-white transition-colors"
-            >
-              Upgrade plan
-            </Link>
-          </div>
-        </div>
-      ) : (
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <p className="text-sm text-gray-500">No active plan.</p>
-          <Link
-            to="/subscription"
-            className="rounded-lg bg-[#0066FF] hover:bg-[#0052cc] px-4 py-2 text-sm font-semibold text-white transition-colors"
-          >
-            View plans
-          </Link>
-        </div>
-      )}
-    </Section>
-  );
+// ─── Tabbed shell ─────────────────────────────────────────────────────────────
+// The three Tier-2 tabs (Tax profile, Chart of accounts) are shown ONLY to
+// entitled orgs, resolved via the same convention the s23 accounting surfaces use
+// (App.tsx RequireTier2): redux auth `has_tier2`. Non-entitled users see the U1
+// four-tab set unchanged. Team & access is U3.
+const BASE_TABS = {
+  business:     { id: 'business',     label: 'Business profile' },
+  tax:          { id: 'tax',          label: 'Tax profile' },
+  integrations: { id: 'integrations', label: 'Bank & integrations' },
+  chart:        { id: 'chart',        label: 'Chart of accounts' },
+  subscription: { id: 'subscription', label: 'Subscription' },
+  security:     { id: 'security',     label: 'Security' },
+  team:         { id: 'team',         label: 'Team & access' },
 };
-
-// ─── Settings page ────────────────────────────────────────────────────────────
 
 export const Settings: FC = () => {
   const { toast, showSuccess, showError } = useToast();
+  const [active, setActive] = useState('business'); // default: Business profile
+
+  // Entitlement — identical expression to App.tsx RequireTier2 (do not invent a
+  // new check). Non-entitled → the U1 four-tab set only.
+  const { user } = useSelector((s: RootState) => s.auth);
+  const hasTier2 = user?.user?.has_tier2 ?? user?.has_tier2 ?? false;
+
+  // Team & access is LAST in the tab bar (ruled order).
+  const tabs = hasTier2
+    ? [BASE_TABS.business, BASE_TABS.tax, BASE_TABS.integrations, BASE_TABS.chart, BASE_TABS.subscription, BASE_TABS.security, BASE_TABS.team]
+    : [BASE_TABS.business, BASE_TABS.integrations, BASE_TABS.subscription, BASE_TABS.security];
 
   return (
-    <div className="flex flex-col h-full bg-gray-50">
-      <div className="flex-1 overflow-y-auto px-8 py-8 max-w-3xl space-y-6">
-        <div className="mb-2">
-          <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-          <p className="mt-1 text-sm text-gray-500">Manage your business profile, integrations, and account security.</p>
+    <div className="min-h-screen bg-gray-50 text-gray-900">
+      <div className="mx-auto max-w-3xl px-6 py-8">
+        <PageHeader
+          title="Settings"
+          subtitle="Manage your business profile, integrations, and account security."
+        />
+
+        <div className="mt-6">
+          <TabBar tabs={tabs} active={active} onChange={setActive} />
         </div>
 
-        <BusinessProfileSection showSuccess={showSuccess} showError={showError} />
-        <TelegramSection        showSuccess={showSuccess} showError={showError} />
-        <SubscriptionSection    showError={showError} />
-        <SecuritySection        showSuccess={showSuccess} showError={showError} />
+        <div className="mt-6">
+          {active === 'business'     && <BusinessProfileSection showSuccess={showSuccess} showError={showError} />}
+          {active === 'tax'          && hasTier2 && <TaxProfileTab onSaved={showSuccess} />}
+          {active === 'integrations' && (
+            <div className="space-y-6">
+              {hasTier2 && <PlaidConnectionsCard />}
+              <BankIntegrationsSection showSuccess={showSuccess} showError={showError} />
+            </div>
+          )}
+          {active === 'chart'        && hasTier2 && <ChartOfAccountsPanel />}
+          {active === 'subscription' && <SubscriptionSection showError={showError} />}
+          {active === 'security'     && <SecuritySection showSuccess={showSuccess} showError={showError} />}
+          {active === 'team'         && hasTier2 && <TeamAccessTab showSuccess={showSuccess} showError={showError} />}
+        </div>
       </div>
 
       <ToastBanner toast={toast} />
