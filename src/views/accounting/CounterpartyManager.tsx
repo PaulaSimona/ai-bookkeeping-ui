@@ -3,7 +3,7 @@
 // differ only in role + copy (RoleConfig). Own data hooks / page logic (Tier 2
 // owner surface); presentational bits come from src/components/t2 only. No
 // New-invoice button (D-14C2-18e).
-import { type FC, type ReactNode, useEffect, useMemo, useState } from 'react';
+import { type FC, type ReactNode, useEffect, useState } from 'react';
 
 import { Card } from '@/components/t2/Card';
 import { PageHeader } from '@/components/t2/PageHeader';
@@ -11,17 +11,19 @@ import { StatCard } from '@/components/t2/StatCard';
 import { FilterChip } from '@/components/t2/FilterChip';
 import { AvatarChip } from '@/components/t2/AvatarChip';
 import { TableShell, TableRow, type T2Column } from '@/components/t2/TableShell';
+// CRUD action functions + the role type stay (add/archive are unchanged); the
+// useCounterparties LIST hook and its CounterpartyRow type are retired here —
+// the balances endpoint is now the table's sole source (14-C-4 U3).
 import {
-  useCounterparties,
   createCounterparty,
   archiveCounterparty,
   unarchiveCounterparty,
   type CounterpartyRole,
-  type CounterpartyRow,
 } from '@/hooks/useCounterparties';
 import {
   useCounterpartyBalances,
   type AgingBuckets,
+  type CounterpartyBalanceRow,
 } from '@/hooks/useCounterpartyBalances';
 
 export interface RoleConfig {
@@ -47,10 +49,6 @@ const TERMS: { value: string; label: string }[] = [
 const TERMS_LABEL: Record<string, string> = Object.fromEntries(
   TERMS.map((t) => [t.value, t.label]),
 );
-
-const ZERO_AGING: AgingBuckets = {
-  current: '0.00', d31_60: '0.00', d61_90: '0.00', d90_plus: '0.00',
-};
 
 const num = (s: string) => {
   const n = Number(s);
@@ -112,41 +110,36 @@ export const CounterpartyManager: FC<{ config: RoleConfig }> = ({ config }) => {
   const [errors, setErrors] = useState<Record<string, string[]> | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Two list queries so both filter chips can show a live count; the selected
-  // tab drives the table. Both honour the (debounced) search.
-  const activeQuery = useCounterparties({ role: config.role, archived: false, search });
-  const archivedQuery = useCounterparties({ role: config.role, archived: true, search });
-  const balances = useCounterpartyBalances(config.role);
+  // Two balances queries (active + archived) so both filter chips show a live,
+  // C4-semantic count (all role-enabled counterparties, incl. zero-activity);
+  // the selected tab drives the table. Both carry the (debounced) search and
+  // paginate independently. This is now the SOLE source — rows carry identity +
+  // balance + aging together, so the CRUD-list + balMap id-join is retired.
+  const activeBalances = useCounterpartyBalances({ role: config.role, archived: false, search });
+  const archivedBalances = useCounterpartyBalances({ role: config.role, archived: true, search });
 
-  const current = archivedTab ? archivedQuery : activeQuery;
+  const current = archivedTab ? archivedBalances : activeBalances;
   const { items, count, page, setPage, pageSize, isLoading, error } = current;
 
   const refetchAll = () => {
-    activeQuery.refetch();
-    archivedQuery.refetch();
-    balances.refetch();
+    activeBalances.refetch();
+    archivedBalances.refetch();
   };
 
   // Debounce search; reset both lists to page 1 when it settles.
   useEffect(() => {
     const t = setTimeout(() => {
       setSearch(searchInput);
-      activeQuery.setPage(1);
-      archivedQuery.setPage(1);
+      activeBalances.setPage(1);
+      archivedBalances.setPage(1);
     }, 300);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchInput]);
 
-  const balMap = useMemo(() => {
-    const m = new Map<string, { balance: string; aging: AgingBuckets }>();
-    balances.items.forEach((b) => m.set(b.id, { balance: b.balance, aging: b.aging }));
-    return m;
-  }, [balances.items]);
-
   const selectTab = (archived: boolean) => {
     setArchivedTab(archived);
-    (archived ? archivedQuery : activeQuery).setPage(1);
+    (archived ? archivedBalances : activeBalances).setPage(1);
   };
 
   const submit = async () => {
@@ -189,7 +182,8 @@ export const CounterpartyManager: FC<{ config: RoleConfig }> = ({ config }) => {
   const to = Math.min(page * pageSize, count);
   const showPager = count > pageSize;
 
-  const s = balances.summary;
+  // Full-set, filter-independent summary (identical on both queries per C4).
+  const s = current.summary;
 
   return (
     <PageShell>
@@ -209,10 +203,10 @@ export const CounterpartyManager: FC<{ config: RoleConfig }> = ({ config }) => {
         <Card>
           <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-gray-100">
             <FilterChip active={!archivedTab} onClick={() => selectTab(false)}>
-              Active · {activeQuery.count}
+              Active · {activeBalances.count}
             </FilterChip>
             <FilterChip active={archivedTab} onClick={() => selectTab(true)}>
-              Archived · {archivedQuery.count}
+              Archived · {archivedBalances.count}
             </FilterChip>
             <input
               type="text"
@@ -324,36 +318,33 @@ export const CounterpartyManager: FC<{ config: RoleConfig }> = ({ config }) => {
               {isLoading && items.length === 0 ? (
                 <div className="px-4 py-10 text-center text-[13.5px] text-gray-400">Loading…</div>
               ) : (
-                items.map((row: CounterpartyRow) => {
-                  const bal = balMap.get(row.id) ?? { balance: '0.00', aging: ZERO_AGING };
-                  return (
-                    <TableRow
-                      key={row.id}
-                      columns={columns}
-                      cells={[
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <AvatarChip initials={initials(row.name)} tint={config.avatarTint} />
-                          <div className="min-w-0">
-                            <div className={`truncate font-medium ${row.archived ? 'text-gray-400' : 'text-gray-900'}`}>{row.name}</div>
-                            {row.city && <div className="truncate text-[12px] text-gray-400">{row.city}</div>}
-                          </div>
-                        </div>,
+                items.map((row: CounterpartyBalanceRow) => (
+                  <TableRow
+                    key={row.id}
+                    columns={columns}
+                    cells={[
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <AvatarChip initials={initials(row.name)} tint={config.avatarTint} />
                         <div className="min-w-0">
-                          <div className="truncate text-gray-700">{row.contact_name || '—'}</div>
-                          {row.email && <div className="truncate text-[12px] text-gray-400">{row.email}</div>}
-                        </div>,
-                        <span className="text-gray-600">{TERMS_LABEL[row.payment_terms] ?? '—'}</span>,
-                        <span className="font-[var(--font-family-mono)] text-gray-900">{fmtMoney(bal.balance)}</span>,
-                        <AgingBar aging={bal.aging} />,
-                        row.archived ? (
-                          <button type="button" onClick={() => doUnarchive(row.id)} className="text-[13px] font-medium text-[var(--color-primary)] hover:underline">Unarchive</button>
-                        ) : (
-                          <button type="button" onClick={() => doArchive(row.id)} className="text-[13px] font-medium text-gray-500 hover:text-gray-800 hover:underline">Archive</button>
-                        ),
-                      ]}
-                    />
-                  );
-                })
+                          <div className={`truncate font-medium ${row.archived ? 'text-gray-400' : 'text-gray-900'}`}>{row.name}</div>
+                          {row.city && <div className="truncate text-[12px] text-gray-400">{row.city}</div>}
+                        </div>
+                      </div>,
+                      <div className="min-w-0">
+                        <div className="truncate text-gray-700">{row.contact_name || '—'}</div>
+                        {row.email && <div className="truncate text-[12px] text-gray-400">{row.email}</div>}
+                      </div>,
+                      <span className="text-gray-600">{TERMS_LABEL[row.payment_terms] ?? '—'}</span>,
+                      <span className="font-[var(--font-family-mono)] text-gray-900">{fmtMoney(row.balance)}</span>,
+                      <AgingBar aging={row.aging} />,
+                      row.archived ? (
+                        <button type="button" onClick={() => doUnarchive(row.id)} className="text-[13px] font-medium text-[var(--color-primary)] hover:underline">Unarchive</button>
+                      ) : (
+                        <button type="button" onClick={() => doArchive(row.id)} className="text-[13px] font-medium text-gray-500 hover:text-gray-800 hover:underline">Archive</button>
+                      ),
+                    ]}
+                  />
+                ))
               )}
             </TableShell>
           )}

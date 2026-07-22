@@ -4,13 +4,20 @@ import { type RootState } from '@/store/store';
 import { useDashboardSummary, DashboardSummary } from '@/hooks/useDashboardSummary';
 import { Card } from '@/components/t2/Card';
 import { PageHeader } from '@/components/t2/PageHeader';
-import { HeroStatCard } from '@/components/t2/HeroStatCard';
+import {
+  HeroCashCard,
+  CashFlowChartCard,
+  NeedsAttentionCard,
+  RecentActivityCard,
+} from './analytics';
 
 // §14 14-B Tier 2 client dashboard (D-14B-5/6), restyled onto the t2/ visual
-// language (s22 B1). Own data layer (useDashboardSummary) — no Tier 1 hook. Only
-// data-backed cards render; the sparkline / cash-flow chart / needs-attention /
-// activity feed / Export of the prototype are OMITTED (no data — 14-C-4), never
-// mocked. Tokens + Tailwind neutrals only; zero hex.
+// language (s22 B1) and extended with the 14-C-4 analytics widgets (U1): the
+// hero sparkline + connected-accounts line, the 6-month cash-flow chart, the
+// needs-attention card, the recent-activity card, and the tax filing-deadline
+// chip. All backed by real payload fields (useDashboardSummary) — never mocked;
+// empty states are calm. Own data layer — no Tier 1 hook. Brand tokens + Tailwind
+// neutrals/palette utilities only; zero hex. No red/green coloring tied to sign.
 
 // Display-only money formatting. The backend two-decimal STRINGS are the source
 // of truth; we never do arithmetic in JS floats — Number() is used solely to
@@ -34,11 +41,18 @@ const MONO = 'font-[var(--font-family-mono)]';
 // White metric card (label · mono figure · optional sub) on the t2/Card surface.
 // Page-local: the shipped t2/StatCard has no sub slot and must not be edited
 // (D-S22-4), so the sub-carrying variant lives here.
-const MetricCard: FC<{ label: string; value: string; sub?: string }> = ({ label, value, sub }) => (
+const MetricCard: FC<{ label: string; value: string; sub?: string; chip?: string }> = ({
+  label, value, sub, chip,
+}) => (
   <Card padding>
     <div className="text-[11.5px] font-semibold uppercase tracking-wider text-gray-500">{label}</div>
     <div className={`mt-2 text-[22px] font-semibold text-gray-900 ${MONO}`}>{value}</div>
     {sub && <div className="mt-1 text-[13px] text-gray-500">{sub}</div>}
+    {chip && (
+      <div className="mt-2 inline-flex items-center rounded-md bg-[var(--color-primary-light)] px-2 py-1 text-[11.5px] font-medium text-[var(--color-primary)]">
+        {chip}
+      </div>
+    )}
   </Card>
 );
 
@@ -95,7 +109,12 @@ const DashboardContent: FC<{ data: DashboardSummary; name: string }> = ({ data, 
           has a tax position — the tax card. Tax card is ABSENT when tax_net is
           null (D-14B-3): never a permanent $0.00. */}
       <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <HeroStatCard label="Cash on hand" value={fmtMoney(data.cash_on_hand, currency)} />
+        <HeroCashCard
+          label="Cash on hand"
+          value={fmtMoney(data.cash_on_hand, currency)}
+          months={data.monthly_cash_flow}
+          connectedAccounts={data.connected_accounts}
+        />
         <MetricCard
           label="Profit · YTD"
           value={fmtMoney(data.profit_to_date, currency)}
@@ -106,6 +125,10 @@ const DashboardContent: FC<{ data: DashboardSummary; name: string }> = ({ data, 
             label="Tax set aside"
             value={fmtMoney(data.tax_net, currency)}
             sub={data.tax_mode ? TAX_SUBLINE[data.tax_mode] : undefined}
+            // Filing-deadline chip: only when the tax card renders AND a deadline
+            // exists. The ISO date is printed as-is — no client-side date math /
+            // day-counting (D-S23-6, O-S23-1).
+            chip={data.filing_deadline ? `GST/HST filing due ${data.filing_deadline}` : undefined}
           />
         )}
       </div>
@@ -123,6 +146,21 @@ const DashboardContent: FC<{ data: DashboardSummary; name: string }> = ({ data, 
           value={fmtMoney(data.payables, currency)}
           sub="Accounts payable"
           dot="bg-amber-500"
+        />
+      </div>
+
+      {/* Cash-flow chart (6 months, In/Out pairs; all-zero → calm caption). */}
+      <div className="mt-4">
+        <CashFlowChartCard months={data.monthly_cash_flow} />
+      </div>
+
+      {/* Needs-attention + recent-activity (both calm when empty). */}
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <NeedsAttentionCard attention={data.attention} />
+        <RecentActivityCard
+          rows={data.recent_activity}
+          fmtAmount={(v) => fmtMoney(v, currency)}
+          fmtDate={fmtDate}
         />
       </div>
     </>
