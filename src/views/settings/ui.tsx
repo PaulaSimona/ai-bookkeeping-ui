@@ -8,6 +8,7 @@ import {
   type ReactNode,
   type InputHTMLAttributes,
   type SelectHTMLAttributes,
+  useEffect,
   useRef,
   useState,
 } from 'react';
@@ -69,26 +70,38 @@ export interface TabDef { id: string; label: string }
 
 export const TabBar: FC<{ tabs: TabDef[]; active: string; onChange: (id: string) => void }> = ({
   tabs, active, onChange,
-}) => (
-  <div className="border-b border-gray-200">
-    <nav className="-mb-px flex gap-6 overflow-x-auto">
-      {tabs.map((t) => (
-        <button
-          key={t.id}
-          type="button"
-          onClick={() => onChange(t.id)}
-          className={`whitespace-nowrap border-b-2 px-1 pb-3 pt-1 text-sm font-medium transition-colors ${
-            active === t.id
-              ? 'border-[var(--color-primary)] text-[var(--color-primary)]'
-              : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-800'
-          }`}
-        >
-          {t.label}
-        </button>
-      ))}
-    </nav>
-  </div>
-);
+}) => {
+  // When the row can't fit every tab (narrow viewport → overflow-x-auto), keep
+  // the active tab in view instead of silently clipping it (F-S24-2). block:
+  // 'nearest' prevents any vertical page jog; at desktop widths where all tabs
+  // fit, there is nothing to scroll and this is a no-op.
+  const activeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    activeRef.current?.scrollIntoView({ inline: 'center', block: 'nearest' });
+  }, [active]);
+
+  return (
+    <div className="border-b border-gray-200">
+      <nav className="-mb-px flex gap-5 overflow-x-auto">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            ref={active === t.id ? activeRef : undefined}
+            type="button"
+            onClick={() => onChange(t.id)}
+            className={`whitespace-nowrap border-b-2 px-1 pb-3 pt-1 text-sm font-medium transition-colors ${
+              active === t.id
+                ? 'border-[var(--color-primary)] text-[var(--color-primary)]'
+                : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-800'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </nav>
+    </div>
+  );
+};
 
 // ─── Section card (t2/Card surface + header) ──────────────────────────────────
 export const Section: FC<{ title: string; description?: string; children: ReactNode }> = ({
