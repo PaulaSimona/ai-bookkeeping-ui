@@ -13,19 +13,23 @@
 // <RequireStaffOrSuperuser> (interim), and this page redirects on the real
 // org-role check — same structural pattern as AccountingReview.
 // TODO: swap to Tier 2 subscription check when Advanced plan is live
-import { type FC, useEffect } from 'react';
+import { type FC, useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOrgMe } from '@/hooks/useAccounts';
 import { usePaginatedList } from '@/hooks/usePaginatedList';
 import { PageLoader } from '@/components/Loader';
 import { PageHeader } from '@/components/t2/PageHeader';
 import { Card } from '@/components/t2/Card';
+import { StatCard } from '@/components/t2/StatCard';
+import { FilterChip } from '@/components/t2/FilterChip';
 import { Tier2UploadZone } from './documents/Tier2UploadZone';
 import { DocumentStatusList, type DocumentStatusRow } from './documents/DocumentStatusList';
+import {
+  useDocumentStatusCounts,
+  type DocumentStatusCounts,
+} from './documents/useDocumentStatusCounts';
 
-// Static "how it works" copy for the right column — guidance, not data. The
-// prototype's stat tiles / filter chips / Telegram promo are OMITTED (no data /
-// out of scope — s22 B2), never mocked.
+// Static "how it works" copy for the right column — guidance, not data.
 const STEPS: string[] = [
   'Drop in a receipt or invoice.',
   'The accounting agent reads and books it.',
@@ -34,17 +38,92 @@ const STEPS: string[] = [
 
 const FRESHNESS_MS = 30_000;
 
+// The six DocumentAccountingState statuses — chip set + tile order (14-C-4 U2,
+// C2 contract). "All" is the no-chip / no-param state (tap an active chip to
+// clear), never a seventh status value.
+const STATUS_CHIPS: { value: string; label: string }[] = [
+  { value: 'pending', label: 'Pending' },
+  { value: 'processing', label: 'Processing' },
+  { value: 'posted', label: 'Posted' },
+  { value: 'needs_review', label: 'Needs review' },
+  { value: 'failed', label: 'Failed' },
+  { value: 'rejected', label: 'Rejected' },
+];
+
+const ZERO_COUNTS: DocumentStatusCounts = {
+  pending: 0, processing: 0, posted: 0,
+  needs_review: 0, failed: 0, rejected: 0, total: 0,
+};
+
+// Stat tiles: Total + the six statuses, zero-filled. Filter-independent
+// (server-guaranteed) — never re-renders on a chip toggle. Neutral tone only.
+const StatTiles: FC<{ counts: DocumentStatusCounts }> = ({ counts }) => (
+  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+    <StatCard label="Total" value={String(counts.total)} />
+    {STATUS_CHIPS.map((s) => (
+      <StatCard
+        key={s.value}
+        label={s.label}
+        value={String(counts[s.value as keyof DocumentStatusCounts])}
+      />
+    ))}
+  </div>
+);
+
+// Single-select status chips; tapping the active chip clears to All (no param).
+const StatusChips: FC<{ active: string | null; onToggle: (v: string) => void }> = ({
+  active, onToggle,
+}) => (
+  <div className="flex flex-wrap items-center gap-2">
+    {STATUS_CHIPS.map((s) => (
+      <FilterChip key={s.value} active={active === s.value} onClick={() => onToggle(s.value)}>
+        {s.label}
+      </FilterChip>
+    ))}
+  </div>
+);
+
 export const DocumentsPage: FC = () => {
   const navigate = useNavigate();
   const { role, isLoading: orgLoading } = useOrgMe();
   const canView = role === 'owner' || role === 'accountant';
+
+  // Active status chip (null = All). Threaded into the SHARED usePaginatedList
+  // via its existing optional `params` arg — no hook edit, so other callers are
+  // untouched. Changing it re-fetches (the hook keys the effect on the params),
+  // and refetch() below always carries the current status.
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
 
   // Lifted list state (see header). Hooks run unconditionally, before the
   // early returns below — the route gate already restricts this page to
   // staff/superuser, so the extra GET during org-load is benign.
   const {
     items, count, page, setPage, pageSize, isLoading, error, refetch,
-  } = usePaginatedList<DocumentStatusRow>('/api/accounting/documents/status/');
+  } = usePaginatedList<DocumentStatusRow>(
+    '/api/accounting/documents/status/',
+    statusFilter ? { status: statusFilter } : undefined,
+  );
+
+  // Filter-independent status counts for the stat tiles — page-local (the shared
+  // hook drops the response's `counts`); refreshed on the same triggers as the
+  // list, so tiles stay live but never move when a chip toggles.
+  const { counts, refetch: refetchCounts } = useDocumentStatusCounts();
+
+  // ONE lifted refresh drives both the list and the counts — preserves the
+  // lifted-refetch structure (shared by the 30s interval and the upload zone).
+  const refresh = useCallback(() => {
+    refetch();
+    refetchCounts();
+  }, [refetch, refetchCounts]);
+
+  // Single-select toggle: tap the active chip to clear to All. Reset to page 1.
+  const toggleStatus = useCallback((value: string) => {
+    setStatusFilter((cur) => (cur === value ? null : value));
+    setPage(1);
+  }, [setPage]);
+
+  // Human label of the active chip (drives the filtered empty-state copy).
+  const activeChipLabel = STATUS_CHIPS.find((c) => c.value === statusFilter)?.label ?? null;
 
   // Redirect members without accounting access — same structural pattern as
   // AccountingReview, gated on org role (the backend enforces org membership
@@ -58,9 +137,9 @@ export const DocumentsPage: FC = () => {
   // Freshness (D-14A3-6): agent processing is asynchronous, so poll the status
   // list every 30s; cleared on unmount.
   useEffect(() => {
-    const t = setInterval(refetch, FRESHNESS_MS);
+    const t = setInterval(refresh, FRESHNESS_MS);
     return () => clearInterval(t);
-  }, [refetch]);
+  }, [refresh]);
 
   if (orgLoading) return <PageLoader />;
   if (!canView) return null; // redirect in flight — don't flash the page
@@ -78,7 +157,7 @@ export const DocumentsPage: FC = () => {
             no data tiles). */}
         <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
           <div className="lg:col-span-2">
-            <Tier2UploadZone onUploaded={refetch} />
+            <Tier2UploadZone onUploaded={refresh} />
           </div>
           <Card padding className="lg:col-span-1">
             <div className="text-[11.5px] font-semibold uppercase tracking-wider text-gray-500">
@@ -97,11 +176,19 @@ export const DocumentsPage: FC = () => {
           </Card>
         </div>
 
-        {/* Status list */}
+        {/* Stat tiles (Total + six statuses) — filter-independent counts. */}
+        <div className="mt-6">
+          <StatTiles counts={counts ?? ZERO_COUNTS} />
+        </div>
+
+        {/* Status list + single-select filter chips. */}
         <section className="mt-8">
-          <h2 className="mb-3 text-[13px] font-semibold uppercase tracking-wider text-gray-500">
-            Document status
-          </h2>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-[13px] font-semibold uppercase tracking-wider text-gray-500">
+              Document status
+            </h2>
+            <StatusChips active={statusFilter} onToggle={toggleStatus} />
+          </div>
           <DocumentStatusList
             items={items}
             count={count}
@@ -110,6 +197,9 @@ export const DocumentsPage: FC = () => {
             pageSize={pageSize}
             isLoading={isLoading}
             error={error}
+            emptyMessage={
+              activeChipLabel ? `No ${activeChipLabel.toLowerCase()} documents.` : undefined
+            }
           />
         </section>
 

@@ -31,6 +31,10 @@ interface Props {
   pageSize: number;
   isLoading: boolean;
   error: string | null;
+  // Optional override for the empty-rows message (14-C-4 U2: a filtered chip
+  // shows "No <status> documents." instead of the first-upload prompt). Absent
+  // → the original unfiltered copy, byte-preserved.
+  emptyMessage?: string;
 }
 
 // D-14A3-5 badge precedence — routing_reason wins, then accounting_status;
@@ -82,7 +86,7 @@ const SkeletonRow: FC = () => (
 const HEADERS = ['Document', 'Uploaded', 'Status'];
 
 export const DocumentStatusList: FC<Props> = ({
-  items, count, page, setPage, pageSize, isLoading, error,
+  items, count, page, setPage, pageSize, isLoading, error, emptyMessage,
 }) => {
   const showPager = count > pageSize;
   const from = count === 0 ? 0 : (page - 1) * pageSize + 1;
@@ -116,7 +120,7 @@ export const DocumentStatusList: FC<Props> = ({
             ) : items.length === 0 ? (
               <tr>
                 <td colSpan={3} className="px-6 py-12 text-center text-sm text-gray-500">
-                  No documents yet — upload your first receipt above.
+                  {emptyMessage ?? 'No documents yet — upload your first receipt above.'}
                 </td>
               </tr>
             ) : (
