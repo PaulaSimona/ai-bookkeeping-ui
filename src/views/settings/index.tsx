@@ -509,7 +509,11 @@ export const Settings: FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
-      <div className="mx-auto max-w-3xl px-6 py-8">
+      {/* max-w-5xl (F-S24-2): matches the sibling accounting pages and fits all
+          seven tabs on one row at desktop widths; cards inherit this width for a
+          consistent, un-lopsided page. Narrow viewports fall back to the TabBar's
+          visible horizontal scroll. */}
+      <div className="mx-auto max-w-5xl px-6 py-8">
         <PageHeader
           title="Settings"
           subtitle="Manage your business profile, integrations, and account security."
