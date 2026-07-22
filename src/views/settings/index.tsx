@@ -25,6 +25,7 @@ import {
 import { TaxProfileTab } from './TaxProfileTab';
 import { PlaidConnectionsCard } from './PlaidConnectionsCard';
 import { ChartOfAccountsPanel } from './ChartOfAccountsPanel';
+import { TeamAccessTab } from './TeamAccessTab';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const CA_PROVINCES = [
@@ -489,6 +490,7 @@ const BASE_TABS = {
   chart:        { id: 'chart',        label: 'Chart of accounts' },
   subscription: { id: 'subscription', label: 'Subscription' },
   security:     { id: 'security',     label: 'Security' },
+  team:         { id: 'team',         label: 'Team & access' },
 };
 
 export const Settings: FC = () => {
@@ -500,8 +502,9 @@ export const Settings: FC = () => {
   const { user } = useSelector((s: RootState) => s.auth);
   const hasTier2 = user?.user?.has_tier2 ?? user?.has_tier2 ?? false;
 
+  // Team & access is LAST in the tab bar (ruled order).
   const tabs = hasTier2
-    ? [BASE_TABS.business, BASE_TABS.tax, BASE_TABS.integrations, BASE_TABS.chart, BASE_TABS.subscription, BASE_TABS.security]
+    ? [BASE_TABS.business, BASE_TABS.tax, BASE_TABS.integrations, BASE_TABS.chart, BASE_TABS.subscription, BASE_TABS.security, BASE_TABS.team]
     : [BASE_TABS.business, BASE_TABS.integrations, BASE_TABS.subscription, BASE_TABS.security];
 
   return (
@@ -528,6 +531,7 @@ export const Settings: FC = () => {
           {active === 'chart'        && hasTier2 && <ChartOfAccountsPanel />}
           {active === 'subscription' && <SubscriptionSection showError={showError} />}
           {active === 'security'     && <SecuritySection showSuccess={showSuccess} showError={showError} />}
+          {active === 'team'         && hasTier2 && <TeamAccessTab showSuccess={showSuccess} showError={showError} />}
         </div>
       </div>
 

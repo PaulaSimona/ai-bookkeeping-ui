@@ -14,6 +14,7 @@ import { VerifyEmail } from '@/views/auth/VerifyEmail';
 import { ForgotPassword } from '@/views/auth/ForgotPassword';
 import { ResetPassword } from '@/views/auth/ResetPassword';
 import { StaffInviteAccept } from '@/views/auth/StaffInviteAccept';
+import { InviteAccept } from '@/views/auth/InviteAccept';
 import { Dashboard } from '@/views/dashboard';
 import { Documents } from '@/views/documents';
 import { Workbook } from '@/views/workbook';
@@ -128,6 +129,9 @@ const App: FC = () => {
       <Route path="/forgot-password"   element={<ForgotPassword />} />
       <Route path="/reset-password"    element={<ResetPassword />} />
       <Route path="/staff-invite/accept" element={<StaffInviteAccept />} />
+      {/* Public client-invite accept (§14 14-D). Bare axios inside; an authed
+          visitor is a legal caller, so NOT wrapped in RedirectPage. */}
+      <Route path="/invite/accept" element={<InviteAccept />} />
       <Route path="/privacy-policy"    element={<PrivacyPolicy />} />
       <Route path="/terms-of-service"  element={<TermsOfService />} />
       <Route path="/blog"              element={<BlogList />} />
