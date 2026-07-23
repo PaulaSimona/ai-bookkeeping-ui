@@ -12,6 +12,7 @@ import axios from 'axios';                      // BARE axios — public endpoin
 import { API_DOMAIN } from '@/utils';
 import { getToken } from '@/utils/auth';
 import { useUser } from '@/api/user/useUser';
+import { useOrgContext } from '@/context/OrgContext';
 import { type RootState } from '@/store/store';
 import logoSvg from '@/assets/logo.svg';
 
@@ -96,6 +97,11 @@ export const InviteAccept: FC = () => {
   // authed accept so the "Continue" link into the Tier 2 dashboard isn't bounced
   // by RequireTier2 reading a stale has_tier2 (F-S24-4).
   const { getUser } = useUser(false);
+  // W-S25-3: after accept, land on the surface for the accepted membership's role
+  // (accountant → /accountant/ledger, else /accounting/dashboard). Default holds
+  // today's target until the refreshed /me resolves the role.
+  const { setActiveOrgId } = useOrgContext();
+  const [landing, setLanding] = useState('/accounting/dashboard');
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName]   = useState('');
@@ -118,7 +124,20 @@ export const InviteAccept: FC = () => {
       // Reload /me so redux has_tier2 reflects the just-activated accountant
       // membership BEFORE the success screen's "Continue" routes into the Tier 2
       // dashboard (RequireTier2 reads the entitlement from redux). (F-S24-4)
-      await getUser?.();
+      const data = await getUser?.();
+      // W-S25-3: resolve the accepted membership — match the accept response's
+      // org_id when present, else the newest membership (memberships are in
+      // joined_at-ascending order, so the just-accepted one is last). Set it as
+      // the active org (coherent landing) and route by its role.
+      const memberships: any[] = data?.user?.memberships ?? data?.memberships ?? [];
+      const acceptedOrgId = res.data?.org_id ?? null;
+      const m =
+        (acceptedOrgId && memberships.find((x) => x.org_id === acceptedOrgId)) ||
+        (memberships.length ? memberships[memberships.length - 1] : null);
+      if (m) {
+        setActiveOrgId(m.org_id);
+        setLanding(m.role === 'accountant' ? '/accountant/ledger' : '/accounting/dashboard');
+      }
       setOrgName(res.data?.org_name ?? '');
     } catch (err: any) {
       setError(err.response?.data?.detail ?? 'This invite link is invalid or has expired.');
@@ -162,7 +181,7 @@ export const InviteAccept: FC = () => {
           </h2>
           <p className="mb-6 text-sm text-gray-500">Your access is ready.</p>
           <NavLink
-            to={authed ? '/accounting/dashboard' : '/login'}
+            to={authed ? landing : '/login'}
             className="inline-flex rounded-lg bg-[var(--color-primary)] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-primary-hover)]"
           >
             Continue →
