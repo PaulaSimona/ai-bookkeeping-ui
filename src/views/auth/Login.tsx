@@ -1,5 +1,5 @@
 import { type FC, type FormEvent, useEffect, useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import { useLogin } from '@/api/auth/useLogin';
 import { Loader } from '@/components/Loader';
 import logoSvg from '@/assets/logo.svg';
@@ -45,12 +45,26 @@ interface Props {
 
 export const Login: FC<Props> = ({ getUser }) => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { login, success, error, errorCode, inProgress } = useLogin();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   // Kept true from login-success until /me resolves and we navigate, so the
   // button stays in its "Signing in…" state across the await (F-S24-4).
   const [signingIn, setSigningIn] = useState(false);
+
+  // W-S24-1 (O-S25-1): honor a ?next= redirect after login. D-S25-1 open-redirect
+  // guard — accept ONLY a same-origin RELATIVE path: leading '/', not '//'
+  // (protocol-relative), and no URL scheme (e.g. "javascript:"/"https:"). Anything
+  // else is discarded → safeNext = null → the tier default applies.
+  const nextParam = searchParams.get('next');
+  const safeNext =
+    nextParam &&
+    nextParam.startsWith('/') &&
+    !nextParam.startsWith('//') &&
+    !/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(nextParam)
+      ? nextParam
+      : null;
 
   // AWAIT /api/user/me before routing so the Tier 2 entitlement is known: a
   // Tier 2 account lands on /accounting/dashboard, everyone else keeps today's
@@ -64,12 +78,12 @@ export const Login: FC<Props> = ({ getUser }) => {
     Promise.resolve(getUser?.()).then((data) => {
       if (cancelled) return;
       const hasTier2 = data?.user?.has_tier2 ?? data?.has_tier2 ?? false;
-      navigate(hasTier2 ? '/accounting/dashboard' : '/dashboard');
+      navigate(safeNext ?? (hasTier2 ? '/accounting/dashboard' : '/dashboard'));
     });
     return () => {
       cancelled = true;
     };
-  }, [success, getUser, navigate]);
+  }, [success, getUser, navigate, safeNext]);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
