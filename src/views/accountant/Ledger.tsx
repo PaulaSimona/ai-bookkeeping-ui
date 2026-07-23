@@ -213,6 +213,7 @@ const LedgerInner: FC = () => {
                         adjustOpen={adjustOpen}
                         onToggleAdjust={() => setAdjustOpen((v) => !v)}
                         onPosted={onPosted}
+                        onVoided={refetch}
                       />
                     )}
                   </Fragment>

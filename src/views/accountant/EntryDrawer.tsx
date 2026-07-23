@@ -5,16 +5,23 @@
 // (original lines stay visible above the form). Posting is immutable-safe — an
 // adjustment is a new balanced entry, never an edit. Tokens only, no hex.
 import { type FC, useState } from 'react';
+import { useSelector } from 'react-redux';
+import { type RootState } from '@/store/store';
 import { useToast } from '@/hooks/useToast';
 import { StatusBadge } from '@/components/t2/StatusBadge';
 import api from '@/utils/api';
 import { AdjustmentForm, today } from './AdjustmentForm';
+import { voidAdjustment } from './hooks/adjustmentApi';
 import { type AccountantLedgerRow } from './hooks/useAccountantLedger';
 
 const CAD = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' });
 const fmtMoney = (v: string | null): string => (v == null || v === '' ? '' : CAD.format(Number(v)));
 const fmtDate = (iso: string): string =>
   new Date(iso).toLocaleDateString('en-CA', { year: 'numeric', month: 'short', day: 'numeric' });
+const fmtDateTime = (iso: string): string =>
+  new Date(iso).toLocaleString('en-CA', {
+    year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
 
 const MONO = 'font-[var(--font-family-mono)] tabular-nums';
 
@@ -34,12 +41,70 @@ interface EntryDrawerProps {
   row: AccountantLedgerRow;
   adjustOpen: boolean;
   onToggleAdjust: () => void;
-  onPosted: () => void; // refresh the list + collapse the drawer
+  onPosted: () => void; // adjust posted → refresh the list + collapse the drawer
+  onVoided?: () => void; // void succeeded → refetch the list (drawer stays, shows voided)
 }
 
-export const EntryDrawer: FC<EntryDrawerProps> = ({ row, adjustOpen, onToggleAdjust, onPosted }) => {
+export const EntryDrawer: FC<EntryDrawerProps> = ({ row, adjustOpen, onToggleAdjust, onPosted, onVoided }) => {
   const { showToast } = useToast();
+  // Current user id from the /me-backed store (O-S26-2 exposes user.id). The store
+  // already retains the whole /me payload, so no store change is needed.
+  const currentUserId = useSelector(
+    (s: RootState) => s.auth.user?.user?.id ?? s.auth.user?.id ?? null,
+  );
   const orderedLines = [...row.lines].sort((a, b) => a.line_order - b.line_order);
+
+  // Void state. voidedInfo is set locally on a successful void so the drawer shows
+  // the voided state immediately (the list also refetches via onVoided). A row that
+  // is ALREADY voided (viewed under Show voided) is voided from the start.
+  const [voidedInfo, setVoidedInfo] = useState<{ voided_at: string | null; void_reason: string } | null>(null);
+  const isVoided = row.status === 'voided' || voidedInfo !== null;
+  const voidedAt = voidedInfo?.voided_at ?? row.voided_at ?? null;
+  const voidReason = voidedInfo?.void_reason ?? row.void_reason ?? '';
+
+  // Author-gated Void affordance (O-S26-2) — mirrors, never replaces, the backend
+  // author-equality fence. Shown ONLY when the entry is a posted accountant
+  // adjustment authored by the current user; absent otherwise (never disabled).
+  const canVoid =
+    !isVoided &&
+    row.status === 'posted' &&
+    row.source === 'accountant_adjustment' &&
+    currentUserId != null &&
+    row.created_by === currentUserId;
+
+  const [confirmingVoid, setConfirmingVoid] = useState(false);
+  const [reason, setReason] = useState('');
+  const [voiding, setVoiding] = useState(false);
+  const [voidError, setVoidError] = useState<string | null>(null);
+
+  const submitVoid = async () => {
+    if (!reason.trim() || voiding) return;
+    setVoiding(true);
+    setVoidError(null);
+    try {
+      const res = await voidAdjustment(row.id, reason.trim());
+      if (res?.status === 200) {
+        setVoidedInfo({
+          voided_at: res.data?.voided_at ?? null,
+          void_reason: res.data?.void_reason ?? reason.trim(),
+        });
+        setConfirmingVoid(false);
+        showToast({
+          title: 'Entry voided',
+          message: 'It no longer affects balances or reports.',
+          variant: 'success',
+        });
+        onVoided?.();
+      } else {
+        // Backend's stable message (incl. the 403 author-equality text) verbatim.
+        setVoidError(res?.data?.detail ?? 'The entry could not be voided.');
+      }
+    } catch (e: any) {
+      setVoidError(e?.response?.data?.detail ?? 'The entry could not be voided.');
+    } finally {
+      setVoiding(false);
+    }
+  };
 
   // View document (O-S25-5): fetch the short-lived signed URL ON CLICK — never
   // prefetched — then open it in a detached new tab. Mirrors the owner
@@ -77,19 +142,30 @@ export const EntryDrawer: FC<EntryDrawerProps> = ({ row, adjustOpen, onToggleAdj
 
   return (
     <div className="border-b border-gray-100 bg-gray-50 px-5 py-4">
-      {/* Header */}
+      {/* Header — the entry number is struck through once voided. */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <span className={`text-[13px] font-semibold text-gray-900 ${MONO}`}>
+        <span className={`text-[13px] font-semibold text-gray-900 ${MONO} ${isVoided ? 'line-through text-gray-400' : ''}`}>
           {row.entry_number_display ?? '—'}
         </span>
         <span className="text-gray-300">·</span>
         <span className="text-[13px] text-gray-600">{fmtDate(row.entry_date)}</span>
         <span className="text-gray-300">·</span>
         <StatusBadge variant="neutral">{humanizeSource(row.source)}</StatusBadge>
-        <StatusBadge variant={statusVariant(row.status)}>
-          {humanizeSource(row.status)}
+        <StatusBadge variant={statusVariant(isVoided ? 'voided' : row.status)}>
+          {humanizeSource(isVoided ? 'voided' : row.status)}
         </StatusBadge>
       </div>
+
+      {/* Voided metadata — shown for an already-voided row or right after voiding. */}
+      {isVoided && (
+        <div className="mt-3 rounded-xl bg-gray-100 px-4 py-3 text-[12.5px] text-gray-500">
+          Voided{voidedAt ? ` on ${fmtDateTime(voidedAt)}` : ''}. Removed from balances
+          and reports; retained in the audit trail and under Show voided.
+          {voidReason ? (
+            <span className="mt-1 block text-gray-600">Reason: {voidReason}</span>
+          ) : null}
+        </div>
+      )}
 
       {/* Lines table (read-only) */}
       <div className="mt-3 overflow-hidden rounded-xl border border-gray-100 bg-white">
@@ -127,7 +203,8 @@ export const EntryDrawer: FC<EntryDrawerProps> = ({ row, adjustOpen, onToggleAdj
         <p className="mt-2 text-[13px] text-gray-600">{row.description}</p>
       ) : null}
 
-      {/* Actions */}
+      {/* Actions — View document is always available; Adjust/Void only on a
+          non-voided entry (Void only for the author of a posted adjustment). */}
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {row.source_document_id != null && (
           <button
@@ -142,18 +219,72 @@ export const EntryDrawer: FC<EntryDrawerProps> = ({ row, adjustOpen, onToggleAdj
             View document
           </button>
         )}
-        <button
-          type="button"
-          onClick={onToggleAdjust}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-navy)] px-3 py-1.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
-        >
-          {adjustOpen ? 'Hide adjustment' : 'Adjust this entry'}
-        </button>
+        {!isVoided && (
+          <button
+            type="button"
+            onClick={onToggleAdjust}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-navy)] px-3 py-1.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
+          >
+            {adjustOpen ? 'Hide adjustment' : 'Adjust this entry'}
+          </button>
+        )}
+        {canVoid && !confirmingVoid && (
+          <button
+            type="button"
+            onClick={() => { setConfirmingVoid(true); setVoidError(null); }}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[13px] font-semibold text-red-600 transition-colors hover:bg-red-50"
+          >
+            Void entry
+          </button>
+        )}
       </div>
 
+      {/* Void confirm panel (house pattern — no browser confirm()). */}
+      {confirmingVoid && (
+        <div className="mt-3 rounded-xl border border-red-200 bg-red-50/60 p-4">
+          <div className="text-[13px] font-semibold text-gray-900">
+            Void {row.entry_number_display ?? 'this entry'}
+          </div>
+          <p className="mt-1 text-[12.5px] leading-relaxed text-gray-600">
+            Voiding removes this entry from balances and reports. It stays in the audit
+            trail and under Show voided. This cannot be undone.
+          </p>
+          <label className="mt-3 block text-[12px] font-medium text-gray-700">Reason</label>
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            maxLength={500}
+            rows={3}
+            placeholder="Why is this entry being voided?"
+            className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent transition"
+          />
+          <div className="mt-1 text-right text-[11px] text-gray-400">{reason.length}/500</div>
+
+          {voidError && <p className="mt-1 text-sm text-red-600">{voidError}</p>}
+
+          <div className="mt-3 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => { setConfirmingVoid(false); setVoidError(null); }}
+              className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-[13px] font-medium text-gray-600 transition-colors hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={submitVoid}
+              disabled={!reason.trim() || voiding}
+              className="rounded-lg bg-red-600 px-5 py-2 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+            >
+              {voiding ? 'Voiding…' : 'Void entry'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* In-context adjust — the shared form, seeded from this entry's accounts
-          (amounts blank). The original lines remain visible above. */}
-      {adjustOpen && (
+          (amounts blank). Absent once the entry is voided. */}
+      {adjustOpen && !isVoided && (
         <div className="mt-4">
           <div className="mb-2 text-[11.5px] font-semibold uppercase tracking-wider text-gray-500">
             New adjusting entry

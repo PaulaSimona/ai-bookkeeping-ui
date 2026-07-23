@@ -29,6 +29,16 @@ export interface AccountantLedgerRow {
   description: string;
   source: string;
   status: string;
+  // Author UUID (the drafting/posting user). Backend already serializes
+  // created_by on the entry field set — TS-only addition (O-S26-2). Drives the
+  // drawer's author-gated Void affordance (mirrors the backend author-equality
+  // fence; the backend remains authoritative).
+  created_by: string;
+  // Void provenance (W-S25-6) — null/empty on non-voided rows; the backend
+  // serializes these on the entry field set. Shown in the drawer's voided state.
+  voided_at: string | null;
+  voided_by: string | null;
+  void_reason: string;
   // The real originating Tier-1 Document pk (O-S25-5) — integer, nullable.
   // Present only for document-derived entries; drives the drawer's "View
   // document" action. The list already embeds this (no extra fetch).
