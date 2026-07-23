@@ -1,6 +1,7 @@
 import { type FC, type FormEvent, useEffect, useState } from 'react';
 import { NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import { useLogin } from '@/api/auth/useLogin';
+import { authedHomePath } from '@/utils/activeOrg';
 import { Loader } from '@/components/Loader';
 import logoSvg from '@/assets/logo.svg';
 
@@ -66,19 +67,19 @@ export const Login: FC<Props> = ({ getUser }) => {
       ? nextParam
       : null;
 
-  // AWAIT /api/user/me before routing so the Tier 2 entitlement is known: a
-  // Tier 2 account lands on /accounting/dashboard, everyone else keeps today's
-  // Tier 1 /dashboard landing (byte-preserved). Previously getUser() was fired
-  // async and navigate('/dashboard') ran on the same tick — has_tier2 was never
-  // consulted and every user hit the Tier 1 dashboard (F-S24-4).
+  // AWAIT /api/user/me before routing so the Tier 2 entitlement AND active-org
+  // role are known: a Tier 2 owner lands on /accounting/dashboard, a Tier 2
+  // accountant on /accountant/ledger, everyone else keeps today's Tier 1
+  // /dashboard landing (byte-preserved). safeNext still wins when present.
+  // Previously getUser() was fired async and navigate('/dashboard') ran on the
+  // same tick — has_tier2 was never consulted (F-S24-4; Session-25 Phase E).
   useEffect(() => {
     if (!success) return;
     let cancelled = false;
     setSigningIn(true);
     Promise.resolve(getUser?.()).then((data) => {
       if (cancelled) return;
-      const hasTier2 = data?.user?.has_tier2 ?? data?.has_tier2 ?? false;
-      navigate(safeNext ?? (hasTier2 ? '/accounting/dashboard' : '/dashboard'));
+      navigate(safeNext ?? authedHomePath(data, '/dashboard'));
     });
     return () => {
       cancelled = true;

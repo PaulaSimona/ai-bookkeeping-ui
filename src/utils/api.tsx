@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { API_DOMAIN } from './index';
 import { getToken, getRefresh, setToken, setRefresh, removeAuth } from './auth';
+import { getActiveOrgId } from './activeOrg';
 
 let isRefreshing = false;
 let failedQueue: any[] = [];
@@ -27,6 +28,16 @@ const processQueue = (error: any, token = null): void => {
 api.interceptors.request.use((config: any) => {
   const newConfig = { ...config };
   newConfig.headers.Authorization = `Bearer ${getToken()}`;
+  // Tier 2 org scoping (Session-25 Phase E): attach the active org to every
+  // accounting call so a multi-membership user's requests resolve to the right
+  // org. Single seam — no per-call header code. The backend re-validates the id
+  // against the caller's own memberships (permissions.resolve_membership), so
+  // this header is a hint, never a trust boundary. Never sent on Tier 1 / auth
+  // routes (guarded on the accounting path), and omitted when no org is active.
+  const orgId = getActiveOrgId();
+  if (orgId && typeof newConfig.url === 'string' && newConfig.url.includes('/api/accounting/')) {
+    newConfig.headers['X-Org-Id'] = orgId;
+  }
   return newConfig;
 });
 

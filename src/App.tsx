@@ -4,6 +4,8 @@ import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { type RootState } from '@/store/store';
 import { useUser } from '@/api/user/useUser';
+import { OrgProvider } from '@/context/OrgContext';
+import { authedHomePath } from '@/utils/activeOrg';
 import { RedirectPage } from '@/components/Redirect';
 import { PageLoader } from '@/components/Loader';
 import { AppShell } from '@/components/Layout/AppShell';
@@ -37,6 +39,10 @@ import { Clients } from '@/views/accounting/Clients';
 import { Suppliers } from '@/views/accounting/Suppliers';
 import { Reports as AccountingReports } from '@/views/accounting/Reports';
 import { Taxes as AccountingTaxes } from '@/views/accounting/Taxes';
+import { AccountantLedger } from '@/views/accountant/Ledger';
+import { NewAdjustment } from '@/views/accountant/NewAdjustment';
+import { AccountantReports } from '@/views/accountant/Reports';
+import { PeriodClose } from '@/views/accountant/PeriodClose';
 import { PlaidOauthCallback } from '@/views/accounting/PlaidOauthCallback';
 import { AccountingReview } from '@/pages/accounting/AccountingReview';
 import { TaxProfile } from '@/pages/accounting/TaxProfile';
@@ -60,13 +66,13 @@ const PrivateLayout: FC = () => (
   </RedirectPage>
 );
 
-// Unauthenticated → landing page; authenticated → Tier 2 users land on the
-// Tier 2 dashboard, everyone else keeps today's /documents landing (D-14B-7).
+// Unauthenticated → landing page; authenticated → Tier 2 owner lands on the
+// Tier 2 dashboard, a Tier 2 accountant on the accountant Ledger, everyone else
+// keeps today's /documents landing (D-14B-7; Session-25 Phase E accountant case).
 const HomeRedirect: FC = () => {
   const { user, inProgress } = useSelector((s: RootState) => s.auth);
-  const hasTier2 = user?.user?.has_tier2 ?? user?.has_tier2 ?? false;
   if (inProgress) return <PageLoader />;
-  if (user) return <Navigate to={hasTier2 ? '/accounting/dashboard' : '/documents'} replace />;
+  if (user) return <Navigate to={authedHomePath(user, '/documents')} replace />;
   return <LandingPage />;
 };
 
@@ -118,6 +124,7 @@ const App: FC = () => {
   }, [location]);
 
   return (
+    <OrgProvider>
     <Routes>
       <Route path="/" element={<HomeRedirect />} />
 
@@ -156,6 +163,14 @@ const App: FC = () => {
         <Route path="/accounting/tax-profile" element={<RequireTier2><TaxProfile /></RequireTier2>} />
         <Route path="/accounting/bank-connections" element={<RequireTier2><BankConnections /></RequireTier2>} />
         <Route path="/accounting/documents" element={<RequireTier2><DocumentsPage /></RequireTier2>} />
+        {/* Accountant surfaces (§14, Session-25 Phase E) — Tier 2 entitlement
+            gated at the route; the accountant persona (active membership role)
+            drives the sidebar + landing. Owner reaches these URLs only if
+            entitled, but the pages read the active org's role server-side. */}
+        <Route path="/accountant/ledger" element={<RequireTier2><AccountantLedger /></RequireTier2>} />
+        <Route path="/accountant/adjustments/new" element={<RequireTier2><NewAdjustment /></RequireTier2>} />
+        <Route path="/accountant/reports" element={<RequireTier2><AccountantReports /></RequireTier2>} />
+        <Route path="/accountant/close" element={<RequireTier2><PeriodClose /></RequireTier2>} />
         {/* Onboarding wizard (§14 14A-2) — §21 gate swap DONE (D-21-4, 2026-07-18). */}
         <Route path="/onboarding" element={<RequireTier2><Onboarding /></RequireTier2>} />
         {/* MUST match the Plaid-registered redirect URI verbatim
@@ -174,6 +189,7 @@ const App: FC = () => {
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </OrgProvider>
   );
 };
 
