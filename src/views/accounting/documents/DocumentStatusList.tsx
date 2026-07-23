@@ -13,6 +13,8 @@
 // preserved exactly.
 import { type FC } from 'react';
 import { Card } from '@/components/t2/Card';
+import api from '@/utils/api';
+import { useToast } from '@/hooks/useToast';
 
 export interface DocumentStatusRow {
   document_id: number;
@@ -75,7 +77,7 @@ const Badge: FC<{ row: DocumentStatusRow }> = ({ row }) => {
 
 const SkeletonRow: FC = () => (
   <tr>
-    {[160, 90, 70].map((w, i) => (
+    {[160, 90, 70, 40].map((w, i) => (
       <td key={i} className="px-6 py-4">
         <div className="h-3.5 animate-pulse rounded bg-gray-100" style={{ width: w }} />
       </td>
@@ -83,14 +85,46 @@ const SkeletonRow: FC = () => (
   </tr>
 );
 
-const HEADERS = ['Document', 'Uploaded', 'Status'];
+const HEADERS = ['Document', 'Uploaded', 'Status', ''];
 
 export const DocumentStatusList: FC<Props> = ({
   items, count, page, setPage, pageSize, isLoading, error, emptyMessage,
 }) => {
+  const { showToast } = useToast();
   const showPager = count > pageSize;
   const from = count === 0 ? 0 : (page - 1) * pageSize + 1;
   const to = Math.min(page * pageSize, count);
+
+  // View action (Session-25 Phase E, O-S25-3): fetch a short-lived signed URL on
+  // click — NEVER prefetched for the whole list — then open it in a new tab. The
+  // tab is opened synchronously (before the await) so the popup blocker allows
+  // it, and detached (opener = null) so the signed URL can't reach this window.
+  const viewDocument = async (documentId: number) => {
+    const tab = window.open('about:blank', '_blank');
+    if (tab) tab.opener = null;
+    try {
+      const res = await api.get(`/api/accounting/documents/${documentId}/file-url/`);
+      const url = res?.status === 200 ? res.data?.url : null;
+      if (url) {
+        if (tab) tab.location.href = url;
+        else window.open(url, '_blank', 'noopener,noreferrer');
+      } else {
+        if (tab) tab.close();
+        showToast({
+          title: 'Could not open document',
+          message: res?.data?.detail ?? 'Please try again in a moment.',
+          variant: 'danger',
+        });
+      }
+    } catch (e: any) {
+      if (tab) tab.close();
+      showToast({
+        title: 'Could not open document',
+        message: e?.response?.data?.detail ?? 'Please try again in a moment.',
+        variant: 'danger',
+      });
+    }
+  };
 
   return (
     <Card>
@@ -113,13 +147,13 @@ export const DocumentStatusList: FC<Props> = ({
               Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} />)
             ) : error ? (
               <tr>
-                <td colSpan={3} className="px-6 py-12 text-center text-sm text-gray-500">
+                <td colSpan={4} className="px-6 py-12 text-center text-sm text-gray-500">
                   Couldn't load document status — retrying shortly.
                 </td>
               </tr>
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={3} className="px-6 py-12 text-center text-sm text-gray-500">
+                <td colSpan={4} className="px-6 py-12 text-center text-sm text-gray-500">
                   {emptyMessage ?? 'No documents yet — upload your first receipt above.'}
                 </td>
               </tr>
@@ -129,6 +163,15 @@ export const DocumentStatusList: FC<Props> = ({
                   <td className="max-w-[320px] truncate px-6 py-4 font-medium text-gray-900">{row.name}</td>
                   <td className="whitespace-nowrap px-6 py-4 text-gray-500">{fmtDate(row.created_at)}</td>
                   <td className="px-6 py-4"><Badge row={row} /></td>
+                  <td className="px-6 py-4 text-right">
+                    <button
+                      type="button"
+                      onClick={() => viewDocument(row.document_id)}
+                      className="text-[13px] font-medium text-[var(--color-primary)] hover:underline"
+                    >
+                      View
+                    </button>
+                  </td>
                 </tr>
               ))
             )}
