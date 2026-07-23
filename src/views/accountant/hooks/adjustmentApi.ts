@@ -24,3 +24,10 @@ export interface AdjustmentPayload {
 // so the caller status-checks: 201 = posted; any other status → res.data.detail.
 export const postAdjustment = (payload: AdjustmentPayload) =>
   api.post('/api/accounting/adjustments/', payload);
+
+// Void a posted accountant adjustment (W-S25-6 / O-S26-1). Author-only, enforced
+// server-side; the UI only shows the affordance to the author (defence in depth).
+// Resolved response: 200 = voided ({entry_id, status, voided_at, void_reason});
+// any other status → res.data.detail (stable backend message surfaced verbatim).
+export const voidAdjustment = (entryId: string, reason: string) =>
+  api.post(`/api/accounting/adjustments/${entryId}/void/`, { reason });

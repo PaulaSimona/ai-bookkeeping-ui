@@ -29,6 +29,16 @@ export interface AccountantLedgerRow {
   description: string;
   source: string;
   status: string;
+  // Author UUID (the drafting/posting user). Backend already serializes
+  // created_by on the entry field set — TS-only addition (O-S26-2). Drives the
+  // drawer's author-gated Void affordance (mirrors the backend author-equality
+  // fence; the backend remains authoritative).
+  created_by: string;
+  // Void provenance (W-S25-6) — null/empty on non-voided rows; the backend
+  // serializes these on the entry field set. Shown in the drawer's voided state.
+  voided_at: string | null;
+  voided_by: string | null;
+  void_reason: string;
   // The real originating Tier-1 Document pk (O-S25-5) — integer, nullable.
   // Present only for document-derived entries; drives the drawer's "View
   // document" action. The list already embeds this (no extra fetch).
@@ -47,7 +57,7 @@ interface Envelope {
 
 const PAGE_SIZE = 50;
 
-export const useAccountantLedger = () => {
+export const useAccountantLedger = (includeVoided = false) => {
   const [items, setItems] = useState<AccountantLedgerRow[]>([]);
   const [count, setCount] = useState(0);
   const [page, setPage] = useState(1);
@@ -62,9 +72,15 @@ export const useAccountantLedger = () => {
     setIsLoading(true);
     setError(null);
 
-    api.get('/api/accounting/entries/', {
-      params: { status: 'posted', page, page_size: PAGE_SIZE },
-    })
+    // includeVoided=true → ask for show_voided=true AND DROP status:'posted'.
+    // The backend applies show_voided FIRST then intersects ?status=; keeping
+    // status:'posted' alongside show_voided would hide the voided rows (semantics
+    // (a) on record). includeVoided=false → params byte-identical to before.
+    const params = includeVoided
+      ? { show_voided: 'true', page, page_size: PAGE_SIZE }
+      : { status: 'posted', page, page_size: PAGE_SIZE };
+
+    api.get('/api/accounting/entries/', { params })
       .then((res) => {
         if (cancelled || res == null) return;
         if (res.status === 200) {
@@ -83,7 +99,7 @@ export const useAccountantLedger = () => {
       .finally(() => { if (!cancelled) setIsLoading(false); });
 
     return () => { cancelled = true; };
-  }, [page, revision]);
+  }, [page, revision, includeVoided]);
 
   return { items, count, page, setPage, pageSize: PAGE_SIZE, isLoading, error, refetch };
 };

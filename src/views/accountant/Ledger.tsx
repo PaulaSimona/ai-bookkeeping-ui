@@ -10,6 +10,7 @@ import { useOrgContext } from '@/context/OrgContext';
 import { Card } from '@/components/t2/Card';
 import { PageHeader } from '@/components/t2/PageHeader';
 import { StatusBadge } from '@/components/t2/StatusBadge';
+import { FilterChip } from '@/components/t2/FilterChip';
 import {
   useAccountantLedger,
   type AccountantLedgerRow,
@@ -72,7 +73,10 @@ const Skeleton: FC = () => (
 
 const LedgerInner: FC = () => {
   const { activeOrg } = useOrgContext();
-  const { items, count, page, setPage, pageSize, isLoading, error, refetch } = useAccountantLedger();
+  // Show-voided filter (W-S25-6): default off (voided hidden). When on, the hook
+  // requests show_voided=true and drops status:'posted' so voided rows return.
+  const [showVoided, setShowVoided] = useState(false);
+  const { items, count, page, setPage, pageSize, isLoading, error, refetch } = useAccountantLedger(showVoided);
   const { revenueExpenseIds } = useAccountantChart();
 
   const clientName = activeOrg?.org_name ?? 'This client';
@@ -115,7 +119,17 @@ const LedgerInner: FC = () => {
       <PageHeader
         title="Ledger"
         subtitle={`${clientName} · already posted & clean. Post adjustments where needed.`}
-        right={<NewAdjustmentButton />}
+        right={
+          <div className="flex items-center gap-2">
+            <FilterChip
+              active={showVoided}
+              onClick={() => { setShowVoided((v) => !v); setPage(1); setExpandedId(null); }}
+            >
+              Show voided
+            </FilterChip>
+            <NewAdjustmentButton />
+          </div>
+        }
       />
 
       <div className="mt-6">
@@ -149,51 +163,62 @@ const LedgerInner: FC = () => {
             </div>
 
             <div className="divide-y divide-gray-50">
-              {items.map((row) => (
-                <Fragment key={row.id}>
-                  <div
-                    onClick={() => toggleRow(row.id)}
-                    className={`${GRID} cursor-pointer px-5 py-3.5 transition-colors hover:bg-gray-50 ${
-                      expandedId === row.id ? 'bg-gray-50' : ''
-                    }`}
-                  >
-                    <span className="whitespace-nowrap text-[13.5px] text-gray-700">{fmtDate(row.entry_date)}</span>
-                    <span className={`whitespace-nowrap text-[12.5px] text-gray-500 ${MONO}`}>
-                      {row.entry_number_display ?? ''}
-                    </span>
-                    <span className="truncate text-[13.5px] text-gray-900" title={row.description}>
-                      {row.description}
-                    </span>
-                    <span className={`justify-self-end whitespace-nowrap text-[13.5px] text-gray-900 ${MONO}`}>
-                      {fmtMoney(row.total_debits)}
-                    </span>
-                    <span>
-                      <StatusBadge variant="neutral">{humanizeSource(row.source)}</StatusBadge>
-                    </span>
-                    <span className="justify-self-end">
-                      {isRevenueExpense(row) ? (
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); openAdjust(row.id); }}
-                          className="text-[13px] font-medium text-[var(--color-primary)] hover:underline"
-                        >
-                          Adjust
-                        </button>
-                      ) : (
-                        <span className="text-[13px] text-gray-300">—</span>
-                      )}
-                    </span>
-                  </div>
-                  {expandedId === row.id && (
-                    <EntryDrawer
-                      row={row}
-                      adjustOpen={adjustOpen}
-                      onToggleAdjust={() => setAdjustOpen((v) => !v)}
-                      onPosted={onPosted}
-                    />
-                  )}
-                </Fragment>
-              ))}
+              {items.map((row) => {
+                // Voided rows render muted + struck-through; the Source cell shows
+                // a "Voided" badge and no Adjust affordance (W-S25-6).
+                const voided = row.status === 'voided';
+                const strike = voided ? 'line-through' : '';
+                return (
+                  <Fragment key={row.id}>
+                    <div
+                      onClick={() => toggleRow(row.id)}
+                      className={`${GRID} cursor-pointer px-5 py-3.5 transition-colors hover:bg-gray-50 ${
+                        expandedId === row.id ? 'bg-gray-50' : ''
+                      } ${voided ? 'opacity-60' : ''}`}
+                    >
+                      <span className={`whitespace-nowrap text-[13.5px] text-gray-700 ${strike}`}>{fmtDate(row.entry_date)}</span>
+                      <span className={`whitespace-nowrap text-[12.5px] text-gray-500 ${MONO} ${strike}`}>
+                        {row.entry_number_display ?? ''}
+                      </span>
+                      <span className={`truncate text-[13.5px] text-gray-900 ${strike}`} title={row.description}>
+                        {row.description}
+                      </span>
+                      <span className={`justify-self-end whitespace-nowrap text-[13.5px] text-gray-900 ${MONO} ${strike}`}>
+                        {fmtMoney(row.total_debits)}
+                      </span>
+                      <span>
+                        {voided ? (
+                          <StatusBadge variant="voided">Voided</StatusBadge>
+                        ) : (
+                          <StatusBadge variant="neutral">{humanizeSource(row.source)}</StatusBadge>
+                        )}
+                      </span>
+                      <span className="justify-self-end">
+                        {!voided && isRevenueExpense(row) ? (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); openAdjust(row.id); }}
+                            className="text-[13px] font-medium text-[var(--color-primary)] hover:underline"
+                          >
+                            Adjust
+                          </button>
+                        ) : (
+                          <span className="text-[13px] text-gray-300">—</span>
+                        )}
+                      </span>
+                    </div>
+                    {expandedId === row.id && (
+                      <EntryDrawer
+                        row={row}
+                        adjustOpen={adjustOpen}
+                        onToggleAdjust={() => setAdjustOpen((v) => !v)}
+                        onPosted={onPosted}
+                        onVoided={refetch}
+                      />
+                    )}
+                  </Fragment>
+                );
+              })}
             </div>
 
             {showPager && (

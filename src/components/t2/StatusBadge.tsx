@@ -3,7 +3,7 @@
 // token-tinted bg+text pairs from Tailwind's palette. Presentational only.
 import { type FC, type ReactNode } from 'react';
 
-type BadgeVariant = 'neutral' | 'info' | 'success' | 'warning' | 'danger';
+type BadgeVariant = 'neutral' | 'info' | 'success' | 'warning' | 'danger' | 'voided';
 
 const VARIANT: Record<BadgeVariant, string> = {
   neutral: 'bg-gray-100 text-gray-600',
@@ -11,6 +11,10 @@ const VARIANT: Record<BadgeVariant, string> = {
   success: 'bg-emerald-50 text-emerald-700',
   warning: 'bg-amber-50 text-amber-700',
   danger: 'bg-red-50 text-red-700',
+  // W-S25-6: a voided entry is a removed, inactive fact — a faded muted gray
+  // (lighter text than neutral) that reads as struck/retired, distinct from the
+  // neutral/danger states.
+  voided: 'bg-gray-100 text-gray-400',
 };
 
 interface StatusBadgeProps {
