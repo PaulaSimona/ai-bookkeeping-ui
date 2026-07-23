@@ -6,6 +6,7 @@ import logoSvg from '@/assets/logo.svg';
 import { removeAuth } from '@/utils/auth';
 import { revokeRefreshToken } from '@/utils/api';
 import { setUser, setInProgress } from '@/store/features/authSlice';
+import { useOrgContext } from '@/context/OrgContext';
 
 // Heroicons outline paths (24×24 viewBox, stroke)
 const Icon: FC<{ path: string }> = ({ path }) => (
@@ -126,10 +127,169 @@ const LogoutDialog: FC<{ onConfirm: () => void; onCancel: () => void }> = ({ onC
   </>
 );
 
+// ── Accountant persona sidebar (§14, Session-25 Phase E) ──────────────────────
+// Rendered INSTEAD of the owner/Tier-1 nav when the active membership role is
+// accountant. Shares the design system + primitives (Icon / NavItem /
+// LogoutDialog) but is a distinct surface: a CLIENT switcher card above the four
+// accountant nav items. The owner/Tier-1 <Sidebar> return below is untouched.
+
+const ACCOUNTANT_ADJUST_ICON = 'M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z';
+const ACCOUNTANT_CLOSE_ICON =
+  'M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z';
+
+const ACCOUNTANT_NAV = [
+  { to: '/accountant/ledger',          label: 'Ledger',         icon: ICONS.ledger },
+  { to: '/accountant/adjustments/new', label: 'New adjustment', icon: ACCOUNTANT_ADJUST_ICON },
+  { to: '/accountant/reports',         label: 'Reports',        icon: ICONS.reports },
+  { to: '/accountant/close',           label: 'Period close',   icon: ACCOUNTANT_CLOSE_ICON },
+];
+
+// Client switcher card: shows the active client's display name and, when the
+// accountant serves more than one, a "+ N other clients" line + a dropdown to
+// switch. Switching persists per-user and re-scopes every /api/accounting/* call.
+const ClientSwitcher: FC = () => {
+  const { memberships, activeOrg, setActiveOrgId } = useOrgContext();
+  const [open, setOpen] = useState(false);
+  const others = memberships.length - 1;
+  const canSwitch = memberships.length > 1;
+
+  return (
+    <div className="px-3 pt-4">
+      <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-widest text-white/30">
+        Client
+      </p>
+      <button
+        type="button"
+        onClick={() => canSwitch && setOpen((v) => !v)}
+        className={`w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-left transition-colors ${
+          canSwitch ? 'hover:bg-white/10 cursor-pointer' : 'cursor-default'
+        }`}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span className="truncate text-sm font-semibold text-white">
+            {activeOrg?.org_name ?? 'Select a client'}
+          </span>
+          {canSwitch && (
+            <svg
+              xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+              strokeWidth={1.8} stroke="currentColor"
+              className={`h-4 w-4 shrink-0 text-white/50 transition-transform ${open ? 'rotate-180' : ''}`}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+            </svg>
+          )}
+        </div>
+        {others > 0 && (
+          <span className="mt-0.5 block text-[11px] text-white/40">
+            +{others} other client{others === 1 ? '' : 's'}
+          </span>
+        )}
+      </button>
+
+      {open && canSwitch && (
+        <div className="mt-1 space-y-0.5 rounded-lg border border-white/10 bg-[#0A1628] p-1">
+          {memberships.map((m) => (
+            <button
+              key={m.org_id}
+              type="button"
+              onClick={() => { setActiveOrgId(m.org_id); setOpen(false); }}
+              className={`flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors ${
+                m.org_id === activeOrg?.org_id
+                  ? 'bg-white/10 text-white'
+                  : 'text-white/60 hover:bg-white/8 hover:text-white'
+              }`}
+            >
+              <span className="truncate">{m.org_name}</span>
+              {m.org_id === activeOrg?.org_id && (
+                <svg
+                  xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                  strokeWidth={2} stroke="currentColor" className="h-4 w-4 shrink-0"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                </svg>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const AccountantSidebar: FC = () => {
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+
+  const confirmLogout = async () => {
+    try {
+      await revokeRefreshToken();
+    } finally {
+      removeAuth();
+      dispatch(setUser(null));
+      dispatch(setInProgress(false));
+      navigate('/login', { replace: true });
+    }
+  };
+
+  return (
+    <>
+      <aside className="flex flex-col w-60 h-screen bg-[#0A1628] shrink-0">
+        {/* Logo — shared with the owner sidebar. */}
+        <div className="flex flex-col gap-1.5 px-5 py-4 border-b border-white/10">
+          <img src={logoSvg} alt="AI Bookkeeping" className="h-[30px] w-auto" />
+          <span className="self-start bg-amber-500 text-white text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded">
+            Beta
+          </span>
+        </div>
+
+        {/* Client switcher (accountant-only). */}
+        <ClientSwitcher />
+
+        {/* Accountant nav */}
+        <nav className="flex-1 px-3 py-4 space-y-0.5">
+          {ACCOUNTANT_NAV.map(({ to, label, icon }) => (
+            <NavItem key={to} to={to} label={label} icon={icon} />
+          ))}
+        </nav>
+
+        {/* Bottom nav — shared with the owner sidebar (Feedback / Support / Log out). */}
+        <div className="px-3 pb-4 border-t border-white/10 pt-3 space-y-0.5">
+          {NAV_BOTTOM.map(({ to, label, icon }) => (
+            <NavItem key={to} to={to} label={label} icon={icon} />
+          ))}
+          <button
+            onClick={() => setShowLogoutDialog(true)}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-white/60 hover:text-white hover:bg-white/8 transition-colors"
+          >
+            <Icon path={ICONS.logout} />
+            Log out
+          </button>
+        </div>
+      </aside>
+
+      {showLogoutDialog && (
+        <LogoutDialog
+          onConfirm={confirmLogout}
+          onCancel={() => setShowLogoutDialog(false)}
+        />
+      )}
+    </>
+  );
+};
+
 export const Sidebar: FC = () => {
   const navigate  = useNavigate();
   const dispatch  = useDispatch();
   const auth      = useSelector((s: RootState) => s.auth);
+  const { activeRole, memberships } = useOrgContext();
+  // Accountant persona: the active membership is an accountant, OR (multi-client
+  // accountant with no selection yet) every membership is accountant — so the
+  // switcher shows before an org is picked. A pure owner is never the accountant
+  // persona and keeps the owner/Tier-1 sidebar below byte-for-byte.
+  const isAccountantPersona =
+    activeRole === 'accountant' ||
+    (memberships.length > 0 && memberships.every((m) => m.role === 'accountant'));
   const isStaff   = auth.user?.user?.is_staff ?? auth.user?.is_staff ?? false;
   const isSuperuser = auth.user?.user?.is_superuser ?? auth.user?.is_superuser ?? false;
   // §21 entitlement flag (D-21-3) — same derivation shape as the staff flags;
@@ -149,6 +309,10 @@ export const Sidebar: FC = () => {
       navigate('/login', { replace: true });
     }
   };
+
+  // Accountant persona swaps in a wholly separate sidebar; the owner/Tier-1
+  // return below is byte-preserved.
+  if (isAccountantPersona) return <AccountantSidebar />;
 
   return (
     <>
