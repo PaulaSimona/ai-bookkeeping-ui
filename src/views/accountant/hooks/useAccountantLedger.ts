@@ -47,7 +47,7 @@ interface Envelope {
 
 const PAGE_SIZE = 50;
 
-export const useAccountantLedger = () => {
+export const useAccountantLedger = (includeVoided = false) => {
   const [items, setItems] = useState<AccountantLedgerRow[]>([]);
   const [count, setCount] = useState(0);
   const [page, setPage] = useState(1);
@@ -62,9 +62,15 @@ export const useAccountantLedger = () => {
     setIsLoading(true);
     setError(null);
 
-    api.get('/api/accounting/entries/', {
-      params: { status: 'posted', page, page_size: PAGE_SIZE },
-    })
+    // includeVoided=true → ask for show_voided=true AND DROP status:'posted'.
+    // The backend applies show_voided FIRST then intersects ?status=; keeping
+    // status:'posted' alongside show_voided would hide the voided rows (semantics
+    // (a) on record). includeVoided=false → params byte-identical to before.
+    const params = includeVoided
+      ? { show_voided: 'true', page, page_size: PAGE_SIZE }
+      : { status: 'posted', page, page_size: PAGE_SIZE };
+
+    api.get('/api/accounting/entries/', { params })
       .then((res) => {
         if (cancelled || res == null) return;
         if (res.status === 200) {
@@ -83,7 +89,7 @@ export const useAccountantLedger = () => {
       .finally(() => { if (!cancelled) setIsLoading(false); });
 
     return () => { cancelled = true; };
-  }, [page, revision]);
+  }, [page, revision, includeVoided]);
 
   return { items, count, page, setPage, pageSize: PAGE_SIZE, isLoading, error, refetch };
 };

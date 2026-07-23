@@ -23,9 +23,10 @@ const humanizeSource = (s: string): string => {
   return t.length === 0 ? '—' : t.charAt(0).toUpperCase() + t.slice(1);
 };
 
-const statusVariant = (status: string): 'neutral' | 'info' | 'success' => {
+const statusVariant = (status: string): 'neutral' | 'info' | 'success' | 'voided' => {
   if (status === 'posted') return 'success';
   if (status === 'reversed') return 'info';
+  if (status === 'voided') return 'voided';
   return 'neutral';
 };
 
