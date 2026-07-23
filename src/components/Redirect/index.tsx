@@ -1,8 +1,9 @@
 import { useMemo, type FC, type ReactNode } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { type RootState } from '@/store/store';
 import { authedHomePath } from '@/utils/activeOrg';
+import { getSafeNext } from '@/utils/safeNext';
 import { PageLoader } from '@/components/Loader';
 
 interface Props {
@@ -12,6 +13,7 @@ interface Props {
 
 export const RedirectPage: FC<Props> = ({ children, privatePath = false }) => {
   const { user, inProgress } = useSelector((s: RootState) => s.auth);
+  const location = useLocation();
 
   const shouldShow = useMemo(() => {
     if (privatePath) return !!user;
@@ -25,5 +27,11 @@ export const RedirectPage: FC<Props> = ({ children, privatePath = false }) => {
   // /accountant/ledger, everyone else → today's /dashboard (byte-preserved for
   // Tier 1). Mirrors Login's post-auth branch (F-S24-4; Session-25 Phase E).
   const authedHome = authedHomePath(user, '/dashboard');
-  return <Navigate to={privatePath ? '/login' : authedHome} replace />;
+  // F-S25-4 (D-S25-8): on the PUBLIC-path branch, honor ?next= FIRST — the auth
+  // flip during login can redirect here before Login's own safeNext navigate
+  // runs (unmounting Login and cancelling it), which silently dropped ?next=
+  // live. Same single-source guard as Login. The privatePath branch (→ /login)
+  // is untouched — a private page never carries a trusted post-auth target here.
+  const publicTarget = getSafeNext(location.search) ?? authedHome;
+  return <Navigate to={privatePath ? '/login' : publicTarget} replace />;
 };

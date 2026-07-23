@@ -2,6 +2,7 @@ import { type FC, type FormEvent, useEffect, useState } from 'react';
 import { NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import { useLogin } from '@/api/auth/useLogin';
 import { authedHomePath } from '@/utils/activeOrg';
+import { getSafeNext } from '@/utils/safeNext';
 import { Loader } from '@/components/Loader';
 import logoSvg from '@/assets/logo.svg';
 
@@ -54,18 +55,10 @@ export const Login: FC<Props> = ({ getUser }) => {
   // button stays in its "Signing in…" state across the await (F-S24-4).
   const [signingIn, setSigningIn] = useState(false);
 
-  // W-S24-1 (O-S25-1): honor a ?next= redirect after login. D-S25-1 open-redirect
-  // guard — accept ONLY a same-origin RELATIVE path: leading '/', not '//'
-  // (protocol-relative), and no URL scheme (e.g. "javascript:"/"https:"). Anything
-  // else is discarded → safeNext = null → the tier default applies.
-  const nextParam = searchParams.get('next');
-  const safeNext =
-    nextParam &&
-    nextParam.startsWith('/') &&
-    !nextParam.startsWith('//') &&
-    !/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(nextParam)
-      ? nextParam
-      : null;
+  // W-S24-1 (O-S25-1): honor a ?next= redirect after login. Single-source
+  // open-redirect guard (D-S25-1, now shared with RedirectPage via getSafeNext —
+  // D-S25-8/F-S25-4). Behavior byte-identical to the prior inline guard.
+  const safeNext = getSafeNext(searchParams.toString());
 
   // AWAIT /api/user/me before routing so the Tier 2 entitlement AND active-org
   // role are known: a Tier 2 owner lands on /accounting/dashboard, a Tier 2
