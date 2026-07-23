@@ -4,7 +4,7 @@
 // (posted entries are immutable — corrections post as new adjusting entries).
 // Own data layer (useAccountantLedger / useAccountantChart); t2 primitives +
 // design tokens only, no hex literals.
-import { type FC, type ReactNode } from 'react';
+import { type FC, type ReactNode, Fragment, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useOrgContext } from '@/context/OrgContext';
 import { Card } from '@/components/t2/Card';
@@ -15,6 +15,7 @@ import {
   type AccountantLedgerRow,
 } from './hooks/useAccountantLedger';
 import { useAccountantChart } from './hooks/useAccountantChart';
+import { EntryDrawer } from './EntryDrawer';
 
 const CAD = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' });
 const fmtMoney = (v: string | null): string => (v == null || v === '' ? '' : CAD.format(Number(v)));
@@ -82,6 +83,33 @@ const LedgerInner: FC = () => {
   const isRevenueExpense = (row: AccountantLedgerRow): boolean =>
     row.lines.some((l) => revenueExpenseIds.has(l.account_id));
 
+  // Drill-down drawer: one open at a time (expandedId), with an optional
+  // already-expanded adjust form (adjustOpen). Clicking a row toggles details;
+  // the row's "Adjust" action opens the drawer WITH the form expanded.
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [adjustOpen, setAdjustOpen] = useState(false);
+
+  const toggleRow = (id: string) => {
+    if (expandedId === id) {
+      setExpandedId(null);
+      setAdjustOpen(false);
+    } else {
+      setExpandedId(id);
+      setAdjustOpen(false);
+    }
+  };
+  const openAdjust = (id: string) => {
+    setExpandedId(id);
+    setAdjustOpen(true);
+  };
+  // After a successful in-context post: collapse the drawer and refresh the list
+  // so the new adjusting entry appears.
+  const onPosted = () => {
+    setExpandedId(null);
+    setAdjustOpen(false);
+    refetch();
+  };
+
   return (
     <PageShell>
       <PageHeader
@@ -122,33 +150,49 @@ const LedgerInner: FC = () => {
 
             <div className="divide-y divide-gray-50">
               {items.map((row) => (
-                <div key={row.id} className={`${GRID} px-5 py-3.5 transition-colors hover:bg-gray-50`}>
-                  <span className="whitespace-nowrap text-[13.5px] text-gray-700">{fmtDate(row.entry_date)}</span>
-                  <span className={`whitespace-nowrap text-[12.5px] text-gray-500 ${MONO}`}>
-                    {row.entry_number_display ?? ''}
-                  </span>
-                  <span className="truncate text-[13.5px] text-gray-900" title={row.description}>
-                    {row.description}
-                  </span>
-                  <span className={`justify-self-end whitespace-nowrap text-[13.5px] text-gray-900 ${MONO}`}>
-                    {fmtMoney(row.total_debits)}
-                  </span>
-                  <span>
-                    <StatusBadge variant="neutral">{humanizeSource(row.source)}</StatusBadge>
-                  </span>
-                  <span className="justify-self-end">
-                    {isRevenueExpense(row) ? (
-                      <Link
-                        to="/accountant/adjustments/new"
-                        className="text-[13px] font-medium text-[var(--color-primary)] hover:underline"
-                      >
-                        Adjust
-                      </Link>
-                    ) : (
-                      <span className="text-[13px] text-gray-300">—</span>
-                    )}
-                  </span>
-                </div>
+                <Fragment key={row.id}>
+                  <div
+                    onClick={() => toggleRow(row.id)}
+                    className={`${GRID} cursor-pointer px-5 py-3.5 transition-colors hover:bg-gray-50 ${
+                      expandedId === row.id ? 'bg-gray-50' : ''
+                    }`}
+                  >
+                    <span className="whitespace-nowrap text-[13.5px] text-gray-700">{fmtDate(row.entry_date)}</span>
+                    <span className={`whitespace-nowrap text-[12.5px] text-gray-500 ${MONO}`}>
+                      {row.entry_number_display ?? ''}
+                    </span>
+                    <span className="truncate text-[13.5px] text-gray-900" title={row.description}>
+                      {row.description}
+                    </span>
+                    <span className={`justify-self-end whitespace-nowrap text-[13.5px] text-gray-900 ${MONO}`}>
+                      {fmtMoney(row.total_debits)}
+                    </span>
+                    <span>
+                      <StatusBadge variant="neutral">{humanizeSource(row.source)}</StatusBadge>
+                    </span>
+                    <span className="justify-self-end">
+                      {isRevenueExpense(row) ? (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); openAdjust(row.id); }}
+                          className="text-[13px] font-medium text-[var(--color-primary)] hover:underline"
+                        >
+                          Adjust
+                        </button>
+                      ) : (
+                        <span className="text-[13px] text-gray-300">—</span>
+                      )}
+                    </span>
+                  </div>
+                  {expandedId === row.id && (
+                    <EntryDrawer
+                      row={row}
+                      adjustOpen={adjustOpen}
+                      onToggleAdjust={() => setAdjustOpen((v) => !v)}
+                      onPosted={onPosted}
+                    />
+                  )}
+                </Fragment>
               ))}
             </div>
 

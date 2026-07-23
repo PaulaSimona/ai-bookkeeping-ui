@@ -16,6 +16,9 @@ export interface AccountantLedgerLine {
   account_name: string | null;
   debit: string | null;
   credit: string | null;
+  // Per-line memo (backend JournalLineSerializer.description). Optional here —
+  // the drill-down shows it when present, but never depends on it.
+  description?: string;
   line_order: number;
 }
 
@@ -26,6 +29,10 @@ export interface AccountantLedgerRow {
   description: string;
   source: string;
   status: string;
+  // The real originating Tier-1 Document pk (O-S25-5) — integer, nullable.
+  // Present only for document-derived entries; drives the drawer's "View
+  // document" action. The list already embeds this (no extra fetch).
+  source_document_id: number | null;
   total_debits: string;
   total_credits: string;
   lines: AccountantLedgerLine[];
