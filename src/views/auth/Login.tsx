@@ -1,8 +1,7 @@
 import { type FC, type FormEvent, useEffect, useState } from 'react';
 import { NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import { useLogin } from '@/api/auth/useLogin';
-import { authedHomePath } from '@/utils/activeOrg';
-import { checkStaffMe } from '@/hooks/useStaffMe';
+import { staffAwareHomePath } from '@/utils/activeOrg';
 import { getSafeNext } from '@/utils/safeNext';
 import { Loader } from '@/components/Loader';
 import logoSvg from '@/assets/logo.svg';
@@ -71,18 +70,14 @@ export const Login: FC<Props> = ({ getUser }) => {
     if (!success) return;
     let cancelled = false;
     setSigningIn(true);
-    Promise.resolve(getUser?.()).then(async (data) => {
+    Promise.resolve(getUser?.()).then((data) => {
       if (cancelled) return;
-      // safeNext still wins for everyone (behavior untouched). Otherwise: R-S27-E
-      // — an active internal-staff member lands in the internal console; every
-      // non-staff login keeps its byte-identical authedHomePath destination.
-      if (safeNext) {
-        navigate(safeNext);
-        return;
-      }
-      const staff = await checkStaffMe();
-      if (cancelled) return;
-      navigate(staff ? '/internal/queue' : authedHomePath(data, '/dashboard'));
+      // F-S28-1: internal-staff status is now folded into the /me auth flip
+      // (useUser), so the single shared staffAwareHomePath resolves the landing —
+      // no per-effect checkStaffMe race (RedirectPage's authed branch, which
+      // usually wins this navigation, resolves via the SAME resolver). safeNext
+      // still wins for everyone (behavior untouched).
+      navigate(safeNext ?? staffAwareHomePath(data, '/dashboard'));
     });
     return () => {
       cancelled = true;
