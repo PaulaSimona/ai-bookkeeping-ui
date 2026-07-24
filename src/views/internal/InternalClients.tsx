@@ -1,4 +1,5 @@
 import { type FC, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '@/utils/api';
 import {
   PageContainer,
@@ -34,6 +35,7 @@ type State =
   | { kind: 'error'; message: string };
 
 export const InternalClients: FC = () => {
+  const navigate = useNavigate();
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [revision, setRevision] = useState(0);
   const refetch = () => setRevision((r) => r + 1);
@@ -95,14 +97,18 @@ export const InternalClients: FC = () => {
                 <thead>
                   <tr className="text-left text-[11px] uppercase tracking-wide text-white/30 border-b border-white/10">
                     <th className="py-2 px-5 font-medium">Organization</th>
-                    <th className="py-2 px-5 font-medium">ID</th>
+                    <th className="py-2 px-5 font-medium text-right">Entries</th>
                   </tr>
                 </thead>
                 <tbody>
                   {state.rows.map((o) => (
-                    <tr key={o.id} className="border-b border-white/5">
+                    <tr
+                      key={o.id}
+                      onClick={() => navigate(`/internal/clients/${o.id}/entries`)}
+                      className="border-b border-white/5 cursor-pointer hover:bg-white/5 transition-colors"
+                    >
                       <td className="py-2.5 px-5 text-white/90">{o.name}</td>
-                      <td className="py-2.5 px-5 font-mono text-xs text-white/40">{o.id}</td>
+                      <td className="py-2.5 px-5 text-right text-[#4DA6FF]">View entries →</td>
                     </tr>
                   ))}
                 </tbody>

@@ -75,7 +75,7 @@ const DetailPane: FC<{
   return (
     <SectionCard
       title={entryTitle(entry)}
-      description={`${entry.entry_number ?? '—'} · ${entry.entry_date ?? '—'}`}
+      description={`${entry.org_name ?? '—'} · ${entry.entry_number ?? '—'} · ${entry.entry_date ?? '—'}`}
       actions={
         <button onClick={onClose} className="text-white/40 hover:text-white text-sm" title="Close">
           ✕
@@ -233,7 +233,7 @@ export const InternalQueue: FC = () => {
       subtitle={
         isLoading
           ? 'Loading…'
-          : `${count} ${count === 1 ? 'entry' : 'entries'} awaiting review (newest first).`
+          : `${count} ${count === 1 ? 'entry' : 'entries'} awaiting review (oldest first).`
       }
     >
       <Toast toast={toast} />
@@ -261,6 +261,7 @@ export const InternalQueue: FC = () => {
                   <thead>
                     <tr className="text-left text-[11px] uppercase tracking-wide text-white/30 border-b border-white/10">
                       <th className="py-2 px-5 font-medium">Entry</th>
+                      <th className="py-2 px-3 font-medium">Client</th>
                       <th className="py-2 px-3 font-medium text-right">Amount</th>
                       <th className="py-2 px-3 font-medium">Reason</th>
                       <th className="py-2 px-3 font-medium text-right">Conf.</th>
@@ -282,6 +283,9 @@ export const InternalQueue: FC = () => {
                           </div>
                           <div className="text-[11px] text-white/40">{e.entry_number ?? '—'}</div>
                         </td>
+                        <td className="py-2.5 px-3 text-white/70 truncate max-w-[10rem]">
+                          {e.org_name ?? '—'}
+                        </td>
                         <td className="py-2.5 px-3 text-right text-white/80">
                           {formatMoney(e.total_debits)}
                         </td>
@@ -300,9 +304,6 @@ export const InternalQueue: FC = () => {
                 </table>
               </div>
             </SectionCard>
-            <p className="mt-2 text-[11px] text-white/30">
-              Client/org attribution is not exposed on the review payload, so it is omitted here.
-            </p>
           </div>
 
           {/* Detail pane */}

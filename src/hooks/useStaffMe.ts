@@ -12,6 +12,26 @@ export interface StaffMeState {
 }
 
 /**
+ * Imperative one-shot of GET /api/accounting/staff/me/ for callers outside the
+ * render cycle (e.g. post-login landing, R-S27-E). Resolves to the StaffMe for an
+ * active staff member (200) or null for everyone else (404/401/error) — never throws.
+ */
+export const checkStaffMe = async (): Promise<StaffMe | null> => {
+  try {
+    const res = await api.get('/api/accounting/staff/me/');
+    if (res && res.status === 200 && res.data?.is_staff_member) {
+      return {
+        isSuperUser: !!res.data.is_super_user,
+        roleType: String(res.data.role_type ?? ''),
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+/**
  * System B staff self-read — GET /api/accounting/staff/me/ (backend D-S27-12).
  *
  * The identity source for the internal console. Fetched once per mount with the

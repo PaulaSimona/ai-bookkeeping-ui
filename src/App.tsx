@@ -58,6 +58,7 @@ import { InternalLayout } from '@/components/internal/InternalLayout';
 import { RequireInternalStaff, RequireInternalSuper } from '@/components/internal/InternalGuards';
 import { InternalQueue } from '@/views/internal/InternalQueue';
 import { InternalClients } from '@/views/internal/InternalClients';
+import { InternalClientEntries } from '@/views/internal/InternalClientEntries';
 import { InternalStaff } from '@/views/internal/InternalStaff';
 import { InternalAssignments } from '@/views/internal/InternalAssignments';
 
@@ -205,6 +206,7 @@ const App: FC = () => {
       <Route element={<InternalLayout />}>
         <Route path="/internal/queue"       element={<RequireInternalStaff><InternalQueue /></RequireInternalStaff>} />
         <Route path="/internal/clients"     element={<RequireInternalStaff><InternalClients /></RequireInternalStaff>} />
+        <Route path="/internal/clients/:orgId/entries" element={<RequireInternalStaff><InternalClientEntries /></RequireInternalStaff>} />
         <Route path="/internal/staff"       element={<RequireInternalSuper><InternalStaff /></RequireInternalSuper>} />
         <Route path="/internal/assignments" element={<RequireInternalSuper><InternalAssignments /></RequireInternalSuper>} />
       </Route>
