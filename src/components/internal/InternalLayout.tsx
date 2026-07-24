@@ -70,6 +70,12 @@ const IconLogout = (
     />
   </svg>
 );
+const IconBack = (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
+  </svg>
+);
+
 const footerItemCls =
   'flex items-center gap-3 w-full rounded-lg px-3 py-2 text-sm font-medium text-white/60 hover:bg-white/5 hover:text-white transition-colors';
 
@@ -134,6 +140,11 @@ export const InternalLayout: FC = () => {
             the header. Change password routes to the existing /forgot-password
             flow (no new backend/form); Log out reuses the client mechanics. */}
         <div className="px-3 py-4 border-t border-white/10 space-y-1">
+          {/* Exit back to the client app (R-S27-E). */}
+          <Link to="/dashboard" className={footerItemCls}>
+            {IconBack}
+            <span>Back to client app</span>
+          </Link>
           <Link to="/forgot-password" className={footerItemCls}>
             {IconKey}
             <span>Change password</span>

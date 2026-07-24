@@ -7,6 +7,7 @@ import { removeAuth } from '@/utils/auth';
 import { revokeRefreshToken } from '@/utils/api';
 import { setUser, setInProgress } from '@/store/features/authSlice';
 import { useOrgContext } from '@/context/OrgContext';
+import { useStaffMe } from '@/hooks/useStaffMe';
 
 // Heroicons outline paths (24×24 viewBox, stroke)
 const Icon: FC<{ path: string }> = ({ path }) => (
@@ -52,6 +53,8 @@ const ICONS = {
     'M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z',
   logout:
     'M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9',
+  internalConsole:
+    'M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z',
 };
 
 const NAV_MAIN = [
@@ -85,6 +88,16 @@ const NavItem: FC<{ to: string; label: string; icon: string; end?: boolean }> = 
     {label}
   </NavLink>
 );
+
+// Discreet entry point into the internal staff console (R-S27-E). Fires
+// useStaffMe once on mount; renders the nav item ONLY for active staff (200) and
+// nothing for everyone else (404/401) — a non-staff client tree is unchanged.
+// Never reads User.is_staff / is_superuser; identity is the StaffProfile endpoint.
+const InternalConsoleLink: FC = () => {
+  const { staff } = useStaffMe();
+  if (!staff) return null;
+  return <NavItem to="/internal/queue" label="Internal console" icon={ICONS.internalConsole} />;
+};
 
 // Confirmation dialog — styled to match the dark navy sidebar
 const LogoutDialog: FC<{ onConfirm: () => void; onCancel: () => void }> = ({ onConfirm, onCancel }) => (
@@ -255,6 +268,8 @@ const AccountantSidebar: FC = () => {
 
         {/* Bottom nav — shared with the owner sidebar (Feedback / Support / Log out). */}
         <div className="px-3 pb-4 border-t border-white/10 pt-3 space-y-0.5">
+          {/* Staff-only entry point (R-S27-E) — renders null for non-staff. */}
+          <InternalConsoleLink />
           {NAV_BOTTOM.map(({ to, label, icon }) => (
             <NavItem key={to} to={to} label={label} icon={icon} />
           ))}
@@ -398,6 +413,8 @@ export const Sidebar: FC = () => {
 
         {/* Bottom nav */}
         <div className="px-3 pb-4 border-t border-white/10 pt-3 space-y-0.5">
+          {/* Staff-only entry point (R-S27-E) — renders null for non-staff. */}
+          <InternalConsoleLink />
           {NAV_BOTTOM.map(({ to, label, icon }) => (
             <NavItem key={to} to={to} label={label} icon={icon} />
           ))}
