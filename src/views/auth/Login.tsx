@@ -2,6 +2,7 @@ import { type FC, type FormEvent, useEffect, useState } from 'react';
 import { NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import { useLogin } from '@/api/auth/useLogin';
 import { authedHomePath } from '@/utils/activeOrg';
+import { checkStaffMe } from '@/hooks/useStaffMe';
 import { getSafeNext } from '@/utils/safeNext';
 import { Loader } from '@/components/Loader';
 import logoSvg from '@/assets/logo.svg';
@@ -70,9 +71,18 @@ export const Login: FC<Props> = ({ getUser }) => {
     if (!success) return;
     let cancelled = false;
     setSigningIn(true);
-    Promise.resolve(getUser?.()).then((data) => {
+    Promise.resolve(getUser?.()).then(async (data) => {
       if (cancelled) return;
-      navigate(safeNext ?? authedHomePath(data, '/dashboard'));
+      // safeNext still wins for everyone (behavior untouched). Otherwise: R-S27-E
+      // — an active internal-staff member lands in the internal console; every
+      // non-staff login keeps its byte-identical authedHomePath destination.
+      if (safeNext) {
+        navigate(safeNext);
+        return;
+      }
+      const staff = await checkStaffMe();
+      if (cancelled) return;
+      navigate(staff ? '/internal/queue' : authedHomePath(data, '/dashboard'));
     });
     return () => {
       cancelled = true;
