@@ -32,6 +32,9 @@ export interface ReviewEntry {
   description: string | null;
   status: string;
   source: string | null;
+  // R-S27-B: additive org attribution — which client this queued draft belongs to.
+  org_id: string | null;
+  org_name: string | null;
   confidence: string | number | null;
   agent_rationale: string | null;
   needs_review: boolean;
@@ -60,6 +63,10 @@ export interface RejectCorrectPayload {
   reason_code: string;
   note: string;
   lines: CorrectedLineInput[];
+  // Tri-state counterparty (§14 14-C-2b). OMIT the key → replacement inherits the
+  // original's counterparty; null → clear it; a UUID → set it. The editor only
+  // includes this key when the reviewer chooses clear/pick, so `keep` inherits.
+  counterparty_id?: string | null;
 }
 
 export interface ActionResult {
