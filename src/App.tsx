@@ -52,6 +52,14 @@ import { ReviewerManagement } from '@/pages/accounting/ReviewerManagement';
 import { BlogList } from '@/views/blog/BlogList';
 import { BlogPost } from '@/views/blog/BlogPost';
 import { FAQ } from '@/views/faq';
+// Internal staff console (§15) — own shell + System B guards
+// (GET /api/accounting/staff/me/), separate from the client surfaces.
+import { InternalLayout } from '@/components/internal/InternalLayout';
+import { RequireInternalStaff, RequireInternalSuper } from '@/components/internal/InternalGuards';
+import { InternalQueue } from '@/views/internal/InternalQueue';
+import { InternalClients } from '@/views/internal/InternalClients';
+import { InternalStaff } from '@/views/internal/InternalStaff';
+import { InternalAssignments } from '@/views/internal/InternalAssignments';
 
 const PrivateLayout: FC = () => (
   <RedirectPage privatePath>
@@ -185,6 +193,20 @@ const App: FC = () => {
         <Route path="/accounts"             element={<RequireSuperuser><ChartOfAccounts /></RequireSuperuser>} />
         <Route path="/reviewer-management"  element={<RequireSuperuser><ReviewerManagement /></RequireSuperuser>} />
         <Route path="/accounting-review"    element={<RequireStaffOrSuperuser><AccountingReview /></RequireStaffOrSuperuser>} />
+      </Route>
+
+      {/* Internal staff console (§15, s27/15-A) — sibling subtree with its own
+          dark shell + System B guards (GET /api/accounting/staff/me/). Kept OUT
+          of the client PrivateLayout on purpose; must precede the catch-all or
+          it would be swallowed. Legacy staff pages (/reviewer, /accounts,
+          /reviewer-management, /accounting-review) are untouched and retire in a
+          later owner-approved step. */}
+      <Route path="/internal" element={<Navigate to="/internal/queue" replace />} />
+      <Route element={<InternalLayout />}>
+        <Route path="/internal/queue"       element={<RequireInternalStaff><InternalQueue /></RequireInternalStaff>} />
+        <Route path="/internal/clients"     element={<RequireInternalStaff><InternalClients /></RequireInternalStaff>} />
+        <Route path="/internal/staff"       element={<RequireInternalSuper><InternalStaff /></RequireInternalSuper>} />
+        <Route path="/internal/assignments" element={<RequireInternalSuper><InternalAssignments /></RequireInternalSuper>} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
