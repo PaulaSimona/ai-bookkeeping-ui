@@ -1,4 +1,4 @@
-import { type FC, type ReactNode } from 'react';
+import { type FC, type ReactNode, useState } from 'react';
 import { NavLink, Link, Navigate, Outlet, useNavigate } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { PageLoader } from '@/components/Loader';
@@ -97,6 +97,8 @@ export const InternalLayout: FC = () => {
   const { loading, staff } = useStaffMe();
   const navigate = useNavigate();
   const dispatch = useDispatch();
+  // R-S27-I: Log out gets the same confirm step as the client Sidebar variant.
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false);
 
   // Reuses the client shell's logout mechanics VERBATIM (Sidebar.confirmLogout):
   // revoke the refresh token, drop local tokens, clear the auth slice, go to /login.
@@ -149,7 +151,7 @@ export const InternalLayout: FC = () => {
             {IconKey}
             <span>Change password</span>
           </Link>
-          <button type="button" onClick={confirmLogout} className={footerItemCls}>
+          <button type="button" onClick={() => setShowLogoutDialog(true)} className={footerItemCls}>
             {IconLogout}
             <span>Log out</span>
           </button>
@@ -158,6 +160,43 @@ export const InternalLayout: FC = () => {
       <main className="flex-1 min-w-0">
         <Outlet />
       </main>
+
+      {/* Confirm step — mirrors the client Sidebar's LogoutDialog (R-S27-I). */}
+      {showLogoutDialog && (
+        <>
+          <div className="fixed inset-0 bg-black/50 z-50" onClick={() => setShowLogoutDialog(false)} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div
+              className="bg-[#0A1628] border border-white/10 rounded-xl shadow-2xl w-full max-w-xs p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-9 h-9 rounded-lg bg-white/8 flex items-center justify-center shrink-0 text-white/70">
+                  {IconLogout}
+                </div>
+                <h3 className="text-sm font-semibold text-white">Log out</h3>
+              </div>
+              <p className="text-sm text-white/60 mb-6 leading-relaxed">
+                Are you sure you want to log out?
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowLogoutDialog(false)}
+                  className="flex-1 rounded-lg border border-white/15 px-4 py-2 text-sm font-medium text-white/70 hover:text-white hover:border-white/30 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmLogout}
+                  className="flex-1 rounded-lg bg-white/10 hover:bg-white/15 px-4 py-2 text-sm font-semibold text-white transition-colors"
+                >
+                  Log out
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };
