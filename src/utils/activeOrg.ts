@@ -101,4 +101,20 @@ export const authedHomePath = (payload: any, tier1Fallback: string): string => {
   if (hasTier2) return '/accounting/dashboard';
   return tier1Fallback;
 };
+
+// is_internal_staff is folded into the /me payload at the auth flip (useUser,
+// F-S28-1); tolerate the flat + nested shapes like the other readers.
+export const isInternalStaffOf = (payload: any): boolean =>
+  payload?.is_internal_staff ?? payload?.user?.is_internal_staff ?? false;
+
+// Staff-aware landing (F-S28-1, R-S27-E): an authenticated INTERNAL-STAFF member
+// lands in the internal console; everyone else resolves EXACTLY as authedHomePath
+// (same tier1Fallback semantics). Used ONLY by the authed-landing call sites
+// (Login, RedirectPage authed branch, HomeRedirect). getSafeNext still WINS over
+// this everywhere — an explicit ?next= is an explicit intent. authedHomePath
+// itself is unchanged, so the internal guards' deny-bounce (R-S27-D) is untouched.
+export const staffAwareHomePath = (payload: any, tier1Fallback: string): string => {
+  if (isInternalStaffOf(payload)) return '/internal/queue';
+  return authedHomePath(payload, tier1Fallback);
+};
 /* eslint-enable @typescript-eslint/no-explicit-any */

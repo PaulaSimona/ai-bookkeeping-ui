@@ -26,12 +26,31 @@ export const useUser: any = (auto: boolean) => {
 
     if (!inProgress) dispatch(setInProgress(true));
 
-    return api
-      .get(`${API_DOMAIN}/api/user/me`)
-      .then((response) => {
-        dispatch(setUser(response.data));
+    // F-S28-1: fold internal-staff status INTO the auth flip. /me and
+    // /api/accounting/staff/me/ are fetched in PARALLEL; staff/me is a silent
+    // probe — 404 (non-staff) / 401 / any error → not staff, no retries, no noise
+    // (the .catch swallows a terminal rejection; a resolved non-200 fails the
+    // status check). setUser is dispatched ONCE, after BOTH settle, with the user
+    // object carrying is_internal_staff (+ staff_role_type). Session-restore uses
+    // this same path, so restores get it too.
+    return Promise.all([
+      api.get(`${API_DOMAIN}/api/user/me`),
+      api.get(`${API_DOMAIN}/api/accounting/staff/me/`).catch(() => null),
+    ])
+      .then(([meResponse, staffResponse]) => {
+        const isStaff = !!(
+          staffResponse &&
+          staffResponse.status === 200 &&
+          staffResponse.data?.is_staff_member
+        );
+        const merged = {
+          ...meResponse.data,
+          is_internal_staff: isStaff,
+          staff_role_type: isStaff ? (staffResponse.data.role_type ?? null) : null,
+        };
+        dispatch(setUser(merged));
         dispatch(setInProgress(false));
-        return response.data;
+        return merged;
       })
       .catch(() => {
         setRetryCount((prevCount: number) => prevCount + 1);

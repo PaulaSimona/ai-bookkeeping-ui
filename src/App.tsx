@@ -5,7 +5,7 @@ import { useSelector } from 'react-redux';
 import { type RootState } from '@/store/store';
 import { useUser } from '@/api/user/useUser';
 import { OrgProvider } from '@/context/OrgContext';
-import { authedHomePath } from '@/utils/activeOrg';
+import { staffAwareHomePath } from '@/utils/activeOrg';
 import { RedirectPage } from '@/components/Redirect';
 import { PageLoader } from '@/components/Loader';
 import { AppShell } from '@/components/Layout/AppShell';
@@ -81,7 +81,7 @@ const PrivateLayout: FC = () => (
 const HomeRedirect: FC = () => {
   const { user, inProgress } = useSelector((s: RootState) => s.auth);
   if (inProgress) return <PageLoader />;
-  if (user) return <Navigate to={authedHomePath(user, '/documents')} replace />;
+  if (user) return <Navigate to={staffAwareHomePath(user, '/documents')} replace />;
   return <LandingPage />;
 };
 
