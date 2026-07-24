@@ -5,19 +5,19 @@ import {
   type CorrectedLineInput,
 } from '@/hooks/useInternalReview';
 import { PrimaryButton, SecondaryButton } from '@/components/internal/ui';
+import { useStaffOrgAccounts, createStaffOrgAccount } from '@/hooks/useStaffResolution';
+import { CounterpartyPicker } from '@/components/internal/CounterpartyPicker';
 
 /**
  * Reject & correct editor (MASTER_T2 §4.2). Editable lines PRE-FILLED from the
- * immutable AI draft, a mandatory reason_code (EXACT backend enum), and an
- * optional note. On submit, posts to /api/accounting/review/<id>/reject-correct/
- * via the parent. Field names match ReviewLineInputSerializer exactly
- * (account_id UUID, debit, credit, description, tax_code, line_order).
+ * immutable AI draft, a mandatory reason_code (EXACT backend enum), an optional
+ * note, and (new, s28) a counterparty tri-state. Field names match
+ * ReviewLineInputSerializer exactly.
  *
- * Account choices are limited to the accounts already present on the draft —
- * there is no staff-accessible chart-of-accounts endpoint (staff are not org
- * members), so we do not invent one. Rebalancing within the draft's accounts is
- * supported; the backend re-validates balance + accounts and any error surfaces
- * verbatim.
+ * Account options are the FULL chart for the entry's org (staff accounts endpoint,
+ * grouped by type); draft-line accounts stay valid even if inactive. A "+ New
+ * account" inline creates one and selects it in the line. The ledger engine
+ * re-validates balance + accounts on submit; backend 400s surface verbatim.
  */
 
 // Verbatim ReviewDecision.EntryRejectReason choices (accounting/models.py).
@@ -31,6 +31,24 @@ const REASON_CODES: { value: string; label: string }[] = [
   { value: 'other', label: 'Other' },
 ];
 
+const TYPE_GROUPS: { type: string; label: string }[] = [
+  { type: 'asset', label: 'Assets' },
+  { type: 'liability', label: 'Liabilities' },
+  { type: 'equity', label: 'Equity' },
+  { type: 'revenue', label: 'Revenue' },
+  { type: 'expense', label: 'Expenses' },
+];
+
+const NORMAL_BALANCE_DEFAULT: Record<string, string> = {
+  asset: 'debit',
+  liability: 'credit',
+  equity: 'credit',
+  revenue: 'credit',
+  expense: 'debit',
+};
+
+const DRAFT_GROUP = '__draft__';
+
 interface EditLine {
   key: string;
   account_id: string;
@@ -40,9 +58,111 @@ interface EditLine {
   tax_code: string;
 }
 
+type CpMode = 'keep' | 'clear' | 'set';
+
+interface AccountOption {
+  value: string;
+  label: string;
+  type: string;
+}
+
 const inputCls =
   'w-full rounded-md bg-[#0f172a] border border-white/15 px-2 py-1.5 text-sm text-white ' +
   'placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-[#0066FF]';
+
+// ─── Inline new-account form ───────────────────────────────────────────────────
+
+const NewAccountForm: FC<{
+  orgId: string;
+  parentOptions: AccountOption[];
+  onCreated: (accountId: string) => void;
+  onCancel: () => void;
+}> = ({ orgId, parentOptions, onCreated, onCancel }) => {
+  const [code, setCode] = useState('');
+  const [name, setName] = useState('');
+  const [type, setType] = useState('expense');
+  const [normalBalance, setNormalBalance] = useState(NORMAL_BALANCE_DEFAULT.expense);
+  const [parent, setParent] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const changeType = (t: string) => {
+    setType(t);
+    setNormalBalance(NORMAL_BALANCE_DEFAULT[t] ?? 'debit');
+  };
+
+  const create = async () => {
+    if (!code.trim() || !name.trim() || creating) return;
+    setCreating(true);
+    setErr(null);
+    const res = await createStaffOrgAccount(orgId, {
+      code: code.trim(),
+      name: name.trim(),
+      type,
+      normal_balance: normalBalance,
+      parent_account_id: parent || null,
+    });
+    setCreating(false);
+    if (res.ok && res.data) {
+      onCreated(res.data.id);
+    } else {
+      // Surface backend 400 verbatim (uniqueness etc.) — no client re-validation
+      // beyond the required code/name.
+      setErr(res.errorDetail ?? 'Failed to create account.');
+    }
+  };
+
+  return (
+    <div className="rounded-md border border-white/10 bg-white/5 p-3 space-y-2">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-white/40">New account</div>
+      <div className="grid grid-cols-2 gap-2">
+        <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Code" className={inputCls} />
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" className={inputCls} />
+        <select value={type} onChange={(e) => changeType(e.target.value)} className={inputCls}>
+          {TYPE_GROUPS.map((g) => (
+            <option key={g.type} value={g.type}>
+              {g.label}
+            </option>
+          ))}
+        </select>
+        <select value={normalBalance} onChange={(e) => setNormalBalance(e.target.value)} className={inputCls}>
+          <option value="debit">Debit</option>
+          <option value="credit">Credit</option>
+        </select>
+        <select value={parent} onChange={(e) => setParent(e.target.value)} className={`${inputCls} col-span-2`}>
+          <option value="">No parent (optional)</option>
+          {parentOptions
+            .filter((o) => o.type !== DRAFT_GROUP)
+            .map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+        </select>
+      </div>
+      {err && <p className="text-xs text-red-300">{err}</p>}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={create}
+          disabled={!code.trim() || !name.trim() || creating}
+          className="rounded-md bg-[#0066FF] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#0052cc] disabled:opacity-50"
+        >
+          {creating ? 'Creating…' : 'Create & select'}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-md border border-white/15 px-3 py-1.5 text-xs font-medium text-white/70 hover:text-white"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ─── Editor ────────────────────────────────────────────────────────────────────
 
 export const RejectCorrectEditor: FC<{
   entry: ReviewEntry;
@@ -51,16 +171,32 @@ export const RejectCorrectEditor: FC<{
   onSubmit: (payload: RejectCorrectPayload) => void;
   onCancel: () => void;
 }> = ({ entry, submitting, errorDetail, onSubmit, onCancel }) => {
-  // Accounts available for correction = distinct accounts present on the draft.
-  const accountOptions = useMemo(() => {
-    const seen = new Map<string, string>();
+  const orgId = entry.org_id ?? '';
+  const { accounts, refetch: refetchAccounts } = useStaffOrgAccounts(orgId);
+
+  // Full chart options grouped by type, unioned with any draft-line accounts not
+  // in the active chart (inactive accounts on the draft stay selectable).
+  const accountOptions = useMemo<AccountOption[]>(() => {
+    const opts: AccountOption[] = accounts.map((a) => ({
+      value: a.id,
+      label: a.full_name || `${a.code} — ${a.name}`,
+      type: a.type,
+    }));
+    const known = new Set(accounts.map((a) => a.id));
     for (const l of entry.lines) {
-      if (l.account_id && !seen.has(l.account_id)) {
-        seen.set(l.account_id, `${l.account_code ?? '—'} — ${l.account_name ?? ''}`.trim());
+      if (l.account_id && !known.has(l.account_id)) {
+        known.add(l.account_id);
+        opts.push({
+          value: l.account_id,
+          label: `${l.account_code ?? '—'} — ${l.account_name ?? ''}`.trim(),
+          type: DRAFT_GROUP,
+        });
       }
     }
-    return Array.from(seen, ([value, label]) => ({ value, label }));
-  }, [entry.lines]);
+    return opts;
+  }, [accounts, entry.lines]);
+
+  const draftOnly = accountOptions.filter((o) => o.type === DRAFT_GROUP);
 
   const [reasonCode, setReasonCode] = useState('');
   const [note, setNote] = useState('');
@@ -74,6 +210,12 @@ export const RejectCorrectEditor: FC<{
       tax_code: l.tax_code ?? '',
     })),
   );
+  const [newAcctForKey, setNewAcctForKey] = useState<string | null>(null);
+
+  // Counterparty tri-state (§14 14-C-2b). 'keep' = inherit the original's (payload
+  // omits counterparty_id); 'clear' = null; 'set' = a picked UUID.
+  const [cpMode, setCpMode] = useState<CpMode>('keep');
+  const [cpId, setCpId] = useState('');
 
   const updateLine = (key: string, patch: Partial<EditLine>) =>
     setLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)));
@@ -83,7 +225,7 @@ export const RejectCorrectEditor: FC<{
       ...prev,
       {
         key: `new-${prev.length}-${prev.reduce((a, l) => a + l.key.length, 0)}`,
-        account_id: accountOptions[0]?.value ?? '',
+        account_id: '',
         debit: '',
         credit: '',
         description: '',
@@ -93,14 +235,17 @@ export const RejectCorrectEditor: FC<{
 
   const removeLine = (key: string) => setLines((prev) => prev.filter((l) => l.key !== key));
 
-  // Client-side pre-checks (the backend is the authority and re-validates).
   const lineValid = (l: EditLine) => {
     const hasDebit = l.debit.trim() !== '';
     const hasCredit = l.credit.trim() !== '';
     return !!l.account_id && hasDebit !== hasCredit; // exactly one side
   };
   const canSubmit =
-    !!reasonCode && lines.length >= 2 && lines.every(lineValid) && !submitting;
+    !!reasonCode &&
+    lines.length >= 2 &&
+    lines.every(lineValid) &&
+    (cpMode !== 'set' || !!cpId) &&
+    !submitting;
 
   const submit = () => {
     if (!canSubmit) return;
@@ -112,8 +257,46 @@ export const RejectCorrectEditor: FC<{
       tax_code: l.tax_code,
       line_order: i,
     }));
-    onSubmit({ reason_code: reasonCode, note, lines: payloadLines });
+    const payload: RejectCorrectPayload = { reason_code: reasonCode, note, lines: payloadLines };
+    if (cpMode === 'clear') payload.counterparty_id = null;
+    else if (cpMode === 'set') payload.counterparty_id = cpId;
+    // 'keep' → omit counterparty_id so the backend inherits the original's.
+    onSubmit(payload);
   };
+
+  const renderAccountSelect = (l: EditLine) => (
+    <select
+      value={l.account_id}
+      onChange={(e) => updateLine(l.key, { account_id: e.target.value })}
+      className={inputCls}
+    >
+      <option value="" disabled>
+        Select…
+      </option>
+      {TYPE_GROUPS.map((g) => {
+        const groupOpts = accountOptions.filter((o) => o.type === g.type);
+        if (!groupOpts.length) return null;
+        return (
+          <optgroup key={g.type} label={g.label}>
+            {groupOpts.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </optgroup>
+        );
+      })}
+      {draftOnly.length > 0 && (
+        <optgroup label="On draft">
+          {draftOnly.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </optgroup>
+      )}
+    </select>
+  );
 
   return (
     <div className="space-y-4">
@@ -121,11 +304,7 @@ export const RejectCorrectEditor: FC<{
         <label className="block text-xs font-medium text-white/60 mb-1">
           Reason code <span className="text-red-400">*</span>
         </label>
-        <select
-          value={reasonCode}
-          onChange={(e) => setReasonCode(e.target.value)}
-          className={inputCls}
-        >
+        <select value={reasonCode} onChange={(e) => setReasonCode(e.target.value)} className={inputCls}>
           <option value="" disabled>
             Select a reason…
           </option>
@@ -154,8 +333,7 @@ export const RejectCorrectEditor: FC<{
           <button
             type="button"
             onClick={addLine}
-            disabled={accountOptions.length === 0}
-            className="text-xs font-medium text-[#4DA6FF] hover:text-white disabled:opacity-40"
+            className="text-xs font-medium text-[#4DA6FF] hover:text-white"
           >
             + Add line
           </button>
@@ -175,31 +353,22 @@ export const RejectCorrectEditor: FC<{
             <tbody>
               {lines.map((l) => (
                 <tr key={l.key} className="border-t border-white/5 align-top">
-                  <td className="py-1.5 pr-2 min-w-[10rem]">
-                    <select
-                      value={l.account_id}
-                      onChange={(e) => updateLine(l.key, { account_id: e.target.value })}
-                      className={inputCls}
+                  <td className="py-1.5 pr-2 min-w-[11rem]">
+                    {renderAccountSelect(l)}
+                    <button
+                      type="button"
+                      onClick={() => setNewAcctForKey(newAcctForKey === l.key ? null : l.key)}
+                      className="mt-1 text-[11px] font-medium text-[#4DA6FF] hover:text-white"
                     >
-                      <option value="" disabled>
-                        Select…
-                      </option>
-                      {accountOptions.map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </select>
+                      + New account
+                    </button>
                   </td>
                   <td className="py-1.5 px-2 w-28">
                     <input
                       inputMode="decimal"
                       value={l.debit}
                       onChange={(e) =>
-                        updateLine(l.key, {
-                          debit: e.target.value,
-                          credit: e.target.value ? '' : l.credit,
-                        })
+                        updateLine(l.key, { debit: e.target.value, credit: e.target.value ? '' : l.credit })
                       }
                       className={`${inputCls} text-right`}
                       placeholder="0.00"
@@ -210,10 +379,7 @@ export const RejectCorrectEditor: FC<{
                       inputMode="decimal"
                       value={l.credit}
                       onChange={(e) =>
-                        updateLine(l.key, {
-                          credit: e.target.value,
-                          debit: e.target.value ? '' : l.debit,
-                        })
+                        updateLine(l.key, { credit: e.target.value, debit: e.target.value ? '' : l.debit })
                       }
                       className={`${inputCls} text-right`}
                       placeholder="0.00"
@@ -249,10 +415,48 @@ export const RejectCorrectEditor: FC<{
             </tbody>
           </table>
         </div>
+
+        {newAcctForKey && (
+          <div className="mt-2">
+            <NewAccountForm
+              orgId={orgId}
+              parentOptions={accountOptions}
+              onCreated={(id) => {
+                updateLine(newAcctForKey, { account_id: id });
+                setNewAcctForKey(null);
+                refetchAccounts();
+              }}
+              onCancel={() => setNewAcctForKey(null)}
+            />
+          </div>
+        )}
+
         <p className="mt-2 text-[11px] text-white/30">
-          Each line takes exactly one of debit / credit. Accounts are limited to those on the
-          original draft. The ledger engine re-validates balance and accounts on submit.
+          Each line takes exactly one of debit / credit. The ledger engine validates the
+          accounts and balance on submit.
         </p>
+      </div>
+
+      {/* Counterparty (§14 14-C-2b) — tri-state */}
+      <div>
+        <label className="block text-xs font-medium text-white/60 mb-1">Counterparty</label>
+        <div className="flex flex-wrap items-center gap-4 text-sm text-white/70 mb-2">
+          <label className="flex items-center gap-1.5">
+            <input type="radio" checked={cpMode === 'keep'} onChange={() => setCpMode('keep')} />
+            Inherited from original
+          </label>
+          <label className="flex items-center gap-1.5">
+            <input type="radio" checked={cpMode === 'clear'} onChange={() => setCpMode('clear')} />
+            None
+          </label>
+          <label className="flex items-center gap-1.5">
+            <input type="radio" checked={cpMode === 'set'} onChange={() => setCpMode('set')} />
+            Set counterparty
+          </label>
+        </div>
+        {cpMode === 'set' && orgId && (
+          <CounterpartyPicker orgId={orgId} value={cpId} onChange={setCpId} />
+        )}
       </div>
 
       {errorDetail && (
