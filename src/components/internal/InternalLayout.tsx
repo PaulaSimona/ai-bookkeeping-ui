@@ -1,7 +1,11 @@
 import { type FC, type ReactNode } from 'react';
-import { NavLink, Navigate, Outlet } from 'react-router-dom';
+import { NavLink, Link, Navigate, Outlet, useNavigate } from 'react-router-dom';
+import { useDispatch } from 'react-redux';
 import { PageLoader } from '@/components/Loader';
 import { useStaffMe } from '@/hooks/useStaffMe';
+import { removeAuth } from '@/utils/auth';
+import { revokeRefreshToken } from '@/utils/api';
+import { setUser, setInProgress } from '@/store/features/authSlice';
 
 /**
  * Internal staff console shell (MASTER_T2 §15) — a dark sidebar on the shared
@@ -48,6 +52,27 @@ const IconAssignments = (
   </svg>
 );
 
+const IconKey = (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M15.75 5.25a3 3 0 0 1 3 3m3 0a6 6 0 0 1-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1 1 21.75 8.25Z"
+    />
+  </svg>
+);
+const IconLogout = (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9"
+    />
+  </svg>
+);
+const footerItemCls =
+  'flex items-center gap-3 w-full rounded-lg px-3 py-2 text-sm font-medium text-white/60 hover:bg-white/5 hover:text-white transition-colors';
+
 const NavItem: FC<{ to: string; icon: ReactNode; label: string }> = ({ to, icon, label }) => (
   <NavLink
     to={to}
@@ -64,6 +89,22 @@ const NavItem: FC<{ to: string; icon: ReactNode; label: string }> = ({ to, icon,
 
 export const InternalLayout: FC = () => {
   const { loading, staff } = useStaffMe();
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
+
+  // Reuses the client shell's logout mechanics VERBATIM (Sidebar.confirmLogout):
+  // revoke the refresh token, drop local tokens, clear the auth slice, go to /login.
+  const confirmLogout = async () => {
+    try {
+      await revokeRefreshToken();
+    } finally {
+      removeAuth();
+      dispatch(setUser(null));
+      dispatch(setInProgress(false));
+      navigate('/login', { replace: true });
+    }
+  };
+
   if (loading) return <PageLoader />;
   if (!staff) return <Navigate to="/dashboard" replace />;
 
@@ -89,6 +130,19 @@ export const InternalLayout: FC = () => {
             </div>
           )}
         </nav>
+        {/* Session controls (R-S27-F) — no PII beyond the role label already in
+            the header. Change password routes to the existing /forgot-password
+            flow (no new backend/form); Log out reuses the client mechanics. */}
+        <div className="px-3 py-4 border-t border-white/10 space-y-1">
+          <Link to="/forgot-password" className={footerItemCls}>
+            {IconKey}
+            <span>Change password</span>
+          </Link>
+          <button type="button" onClick={confirmLogout} className={footerItemCls}>
+            {IconLogout}
+            <span>Log out</span>
+          </button>
+        </div>
       </aside>
       <main className="flex-1 min-w-0">
         <Outlet />
