@@ -14,7 +14,7 @@
 // org-role check — same structural pattern as AccountingReview.
 // TODO: swap to Tier 2 subscription check when Advanced plan is live
 import { type FC, useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useOrgMe } from '@/hooks/useAccounts';
 import { usePaginatedList } from '@/hooks/usePaginatedList';
 import { PageLoader } from '@/components/Loader';
@@ -38,9 +38,11 @@ const STEPS: string[] = [
 
 const FRESHNESS_MS = 30_000;
 
-// The six DocumentAccountingState statuses — chip set + tile order (14-C-4 U2,
-// C2 contract). "All" is the no-chip / no-param state (tap an active chip to
-// clear), never a seventh status value.
+// The DocumentAccountingState statuses — chip set + tile order (14-C-4 U2, C2
+// contract). "All" is the no-chip / no-param state (tap an active chip to clear),
+// never a status value. O-S30-1/-2: not_source_document joins the set as the
+// seventh status (its own tile + filter chip; the backend ?status= allow-list
+// already accepts it post-0037).
 const STATUS_CHIPS: { value: string; label: string }[] = [
   { value: 'pending', label: 'Pending' },
   { value: 'processing', label: 'Processing' },
@@ -48,23 +50,59 @@ const STATUS_CHIPS: { value: string; label: string }[] = [
   { value: 'needs_review', label: 'Needs review' },
   { value: 'failed', label: 'Failed' },
   { value: 'rejected', label: 'Rejected' },
+  { value: 'not_source_document', label: 'Not source docs' },
 ];
 
 const ZERO_COUNTS: DocumentStatusCounts = {
   pending: 0, processing: 0, posted: 0,
-  needs_review: 0, failed: 0, rejected: 0, total: 0,
+  needs_review: 0, failed: 0, rejected: 0, not_source_document: 0, total: 0,
 };
 
-// Stat tiles: Total + the six statuses, zero-filled. Filter-independent
-// (server-guaranteed) — never re-renders on a chip toggle. Neutral tone only.
-const StatTiles: FC<{ counts: DocumentStatusCounts }> = ({ counts }) => (
-  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
-    <StatCard label="Total" value={String(counts.total)} />
+// O-S30-2: a stat tile that is ALSO a filter CTA. Wraps the presentational
+// StatCard (kept pure — no onClick on the shared t2 component) in a real button
+// so it is keyboard-focusable; aria-pressed reflects the active filter, and the
+// ring is the visible affordance (hover on inactive, solid on selected).
+const TileButton: FC<{
+  label: string; value: string; selected: boolean; onClick: () => void;
+}> = ({ label, value, selected, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-pressed={selected}
+    className={`block w-full rounded-2xl text-left transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] ${
+      selected ? 'ring-2 ring-[var(--color-primary)]' : 'hover:ring-1 hover:ring-gray-300'
+    }`}
+  >
+    <StatCard label={label} value={value} />
+  </button>
+);
+
+// Stat tiles as filter CTAs (O-S30-2). Tiles and chips share ONE filter state
+// (`active`): a status tile toggles its filter (tap the active one → All, same
+// as its chip); the Total tile clears to the unfiltered list. Counts are
+// filter-independent (server-guaranteed) — the tile VALUES never move on a
+// toggle. D2: lg:grid-cols-4 → two tidy rows of 4 on desktop (8 tiles never
+// overflow); sm:grid-cols-4 already matches that rhythm.
+const StatTiles: FC<{
+  counts: DocumentStatusCounts;
+  active: string | null;
+  onToggle: (v: string) => void;
+  onClear: () => void;
+}> = ({ counts, active, onToggle, onClear }) => (
+  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-4">
+    <TileButton
+      label="Total"
+      value={String(counts.total)}
+      selected={active === null}
+      onClick={onClear}
+    />
     {STATUS_CHIPS.map((s) => (
-      <StatCard
+      <TileButton
         key={s.value}
         label={s.label}
         value={String(counts[s.value as keyof DocumentStatusCounts])}
+        selected={active === s.value}
+        onClick={() => onToggle(s.value)}
       />
     ))}
   </div>
@@ -116,9 +154,15 @@ export const DocumentsPage: FC = () => {
     refetchCounts();
   }, [refetch, refetchCounts]);
 
-  // Single-select toggle: tap the active chip to clear to All. Reset to page 1.
+  // Single-select toggle: tap the active chip/tile to clear to All. Reset to page 1.
   const toggleStatus = useCallback((value: string) => {
     setStatusFilter((cur) => (cur === value ? null : value));
+    setPage(1);
+  }, [setPage]);
+
+  // O-S30-2: the Total tile clears the filter (unfiltered list). Reset to page 1.
+  const clearStatus = useCallback(() => {
+    setStatusFilter(null);
     setPage(1);
   }, [setPage]);
 
@@ -176,10 +220,34 @@ export const DocumentsPage: FC = () => {
           </Card>
         </div>
 
-        {/* Stat tiles (Total + six statuses) — filter-independent counts. */}
+        {/* Stat tiles (Total + statuses) — filter-independent counts. */}
         <div className="mt-6">
-          <StatTiles counts={counts ?? ZERO_COUNTS} />
+          <StatTiles
+            counts={counts ?? ZERO_COUNTS}
+            active={statusFilter}
+            onToggle={toggleStatus}
+            onClear={clearStatus}
+          />
         </div>
+
+        {/* O-S30-1 / F-S30-7: when any bank/credit-card statement was refused on
+            the document path, tell the owner where those transactions belong.
+            Trigger is the org-wide, filter-independent count (D1) — not the
+            current page's rows. OnboardingGate amber tokens. */}
+        {(counts?.not_source_document ?? 0) > 0 && (
+          <div className="mt-6 flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+            <span className="flex-1">
+              Bank statements aren't source documents — the agent doesn't book them.
+              Connect your bank or add these transactions in Bank Intake.
+            </span>
+            <Link
+              to="/accounting/bank-connections"
+              className="shrink-0 font-semibold text-amber-900 underline hover:text-amber-700"
+            >
+              Bank Intake
+            </Link>
+          </div>
+        )}
 
         {/* Status list + single-select filter chips. */}
         <section className="mt-8">
@@ -200,6 +268,7 @@ export const DocumentsPage: FC = () => {
             emptyMessage={
               activeChipLabel ? `No ${activeChipLabel.toLowerCase()} documents.` : undefined
             }
+            onDeleted={refresh}
           />
         </section>
 

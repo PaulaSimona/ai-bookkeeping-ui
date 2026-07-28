@@ -17,6 +17,11 @@ export interface DocumentStatusCounts {
   needs_review: number;
   failed: number;
   rejected: number;
+  // O-S30-1: the backend status-counts endpoint returns this key (Status enum
+  // grew post-migration 0037); previously dropped here, which is why Total read
+  // one higher than the six visible tiles summed. Consumed by the banner trigger
+  // (F-S30-7) and surfaced as its own tile (O-S30-2).
+  not_source_document: number;
   total: number;
 }
 
