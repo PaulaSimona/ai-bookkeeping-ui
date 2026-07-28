@@ -1,4 +1,4 @@
-import { FC, Fragment, ReactNode, useEffect, useState } from 'react';
+import { FC, Fragment, ReactNode, useEffect, useMemo, useState } from 'react';
 import {
   useLedgerEntries,
   attributeEntry,
@@ -244,6 +244,9 @@ export const LedgerRegister: FC = () => {
   const [dateTo, setDateTo] = useState<string | null>(null);
   const [unattributed, setUnattributed] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Column sort (O-S30-2). null = the server's default order (date-desc),
+  // rendered byte-unchanged from today.
+  const [sort, setSort] = useState<{ key: 'date' | 'entry_number'; dir: 'asc' | 'desc' } | null>(null);
 
   const { items, count, page, setPage, pageSize, isLoading, error, refetch } =
     useLedgerEntries({
@@ -268,6 +271,49 @@ export const LedgerRegister: FC = () => {
     setActiveTab(null); setStatusFilter(null); setDateFrom(null); setDateTo(null);
     setUnattributed(false); setPage(1); setExpandedId(null);
   };
+
+  // Sortable Date / Entry # (O-S30-2). The header caret reflects this even when
+  // no explicit sort is set — the default view IS date-desc.
+  const effectiveSort = sort ?? { key: 'date' as const, dir: 'desc' as const };
+
+  // R-S30-B: CLIENT-SIDE sort of the FETCHED PAGE ONLY. For a multi-page org
+  // this reorders just the current page, not the whole ledger — the future
+  // backend `ordering` query param (R-S30-B) will make it whole-dataset. Until
+  // then, `sort === null` renders the server order (date-desc) unchanged; the
+  // sort runs only once the user picks a column. Entry # sorts NUMERICALLY;
+  // null entry numbers sort last in both directions.
+  const rows = useMemo(() => {
+    if (sort === null) return items;
+    const dir = sort.dir === 'asc' ? 1 : -1;
+    return [...items].sort((a, b) => {
+      if (sort.key === 'entry_number') {
+        const na = a.entry_number;
+        const nb = b.entry_number;
+        if (na === null && nb === null) return 0;
+        if (na === null) return 1;
+        if (nb === null) return -1;
+        return (na - nb) * dir;
+      }
+      const cmp = a.entry_date < b.entry_date ? -1 : a.entry_date > b.entry_date ? 1 : 0;
+      return cmp * dir;
+    });
+  }, [items, sort]);
+
+  const toggleSort = (key: 'date' | 'entry_number') => {
+    setExpandedId(null);
+    setSort((cur) => {
+      const base = cur ?? { key: 'date' as const, dir: 'desc' as const };
+      if (base.key === key) {
+        return { key, dir: base.dir === 'asc' ? 'desc' : 'asc' };
+      }
+      // First explicit click on a column: date defaults desc (matches today),
+      // entry # defaults ascending (natural numeric order).
+      return { key, dir: key === 'date' ? 'desc' : 'asc' };
+    });
+  };
+
+  const ariaSort = (key: 'date' | 'entry_number'): 'ascending' | 'descending' | 'none' =>
+    effectiveSort.key === key ? (effectiveSort.dir === 'asc' ? 'ascending' : 'descending') : 'none';
 
   const showPager = count > pageSize;
   const from = count === 0 ? 0 : (page - 1) * pageSize + 1;
@@ -341,8 +387,30 @@ export const LedgerRegister: FC = () => {
                 <thead>
                   <tr className="border-b border-gray-100 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500">
                     <th className="w-6 px-4 py-3" />
-                    <th className="px-4 py-3">Date</th>
-                    <th className="px-4 py-3">Entry #</th>
+                    <th className="px-4 py-3" aria-sort={ariaSort('date')}>
+                      <button
+                        type="button"
+                        onClick={() => toggleSort('date')}
+                        className="inline-flex items-center gap-1 uppercase tracking-wider transition-colors hover:text-gray-700"
+                      >
+                        Date
+                        {effectiveSort.key === 'date' && (
+                          <span aria-hidden="true">{effectiveSort.dir === 'asc' ? '▲' : '▼'}</span>
+                        )}
+                      </button>
+                    </th>
+                    <th className="px-4 py-3" aria-sort={ariaSort('entry_number')}>
+                      <button
+                        type="button"
+                        onClick={() => toggleSort('entry_number')}
+                        className="inline-flex items-center gap-1 uppercase tracking-wider transition-colors hover:text-gray-700"
+                      >
+                        Entry #
+                        {effectiveSort.key === 'entry_number' && (
+                          <span aria-hidden="true">{effectiveSort.dir === 'asc' ? '▲' : '▼'}</span>
+                        )}
+                      </button>
+                    </th>
                     <th className="px-4 py-3">Description</th>
                     <th className="px-4 py-3 text-right">Debits</th>
                     <th className="px-4 py-3 text-right">Credits</th>
@@ -350,7 +418,7 @@ export const LedgerRegister: FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((row) => {
+                  {rows.map((row) => {
                     const open = expandedId === row.id;
                     return (
                       <Fragment key={row.id}>
