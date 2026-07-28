@@ -11,10 +11,16 @@
 // headers, StatusBadge-style pills built locally — t2/StatusBadge is not edited).
 // The prop shape, pagination behavior, and every loading/error/empty branch are
 // preserved exactly.
-import { type FC } from 'react';
+import { type FC, useState } from 'react';
 import { Card } from '@/components/t2/Card';
 import api from '@/utils/api';
 import { useToast } from '@/hooks/useToast';
+
+// O-S30-3: the terminal, entry-unlinked statuses a client may dispose of. Must
+// mirror the backend eligibility ({not_source_document, rejected, failed}); the
+// backend is the authority — the button just avoids offering an action that
+// would 400. (Entry-linked terminal docs still 400 server-side.)
+const DELETABLE_STATUSES = new Set(['not_source_document', 'rejected', 'failed']);
 
 export interface DocumentStatusRow {
   document_id: number;
@@ -37,6 +43,9 @@ interface Props {
   // shows "No <status> documents." instead of the first-upload prompt). Absent
   // → the original unfiltered copy, byte-preserved.
   emptyMessage?: string;
+  // O-S30-3: called after a successful (204) delete so the parent refreshes the
+  // list AND the status-count tiles (the tile drops with the row).
+  onDeleted?: () => void;
 }
 
 // D-14A3-5 badge precedence — routing_reason wins, then accounting_status;
@@ -44,6 +53,15 @@ interface Props {
 const badgeFor = (row: DocumentStatusRow): { label: string; cls: string } => {
   if (row.routing_reason === 'no_tax_profile') {
     return { label: 'Waiting for setup', cls: 'bg-amber-50 text-amber-700' };
+  }
+  // O-S30-1 / F-S30-7: a bank/credit-card statement is STRUCTURALLY refused on
+  // the document path (accounting_status=not_source_document, routing_reason=
+  // bank_statement) — it is not an error and not "processing". Amber, matching
+  // the no_tax_profile "needs your attention" pill. Either signal alone
+  // qualifies (the backend sets both, but be robust to either).
+  if (row.routing_reason === 'bank_statement'
+      || row.accounting_status === 'not_source_document') {
+    return { label: 'Not a source document', cls: 'bg-amber-50 text-amber-700' };
   }
   switch (row.accounting_status) {
     case 'pending':
@@ -89,11 +107,53 @@ const HEADERS = ['Document', 'Uploaded', 'Status', ''];
 
 export const DocumentStatusList: FC<Props> = ({
   items, count, page, setPage, pageSize, isLoading, error, emptyMessage,
+  onDeleted,
 }) => {
   const { showToast } = useToast();
+  // Optimistic removal: hide a just-deleted row immediately (before the parent's
+  // refetch lands). The subsequent refresh reconciles list + counts from the
+  // server; a stale id lingering here is harmless (the row is already gone).
+  const [deletedIds, setDeletedIds] = useState<Set<number>>(new Set());
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  const visibleItems = items.filter((r) => !deletedIds.has(r.document_id));
   const showPager = count > pageSize;
   const from = count === 0 ? 0 : (page - 1) * pageSize + 1;
   const to = Math.min(page * pageSize, count);
+
+  // O-S30-3: dispose of a terminal, entry-unlinked document. window.confirm
+  // (D3) carries the name + "This cannot be undone."; on 204 the row is removed
+  // optimistically and the parent refreshes counts so the tile drops with it; a
+  // 400 is toasted with a message keyed by the backend's returned code.
+  const deleteDocument = async (row: DocumentStatusRow) => {
+    if (deletingId !== null) return;
+    if (!window.confirm(`Delete "${row.name}"? This cannot be undone.`)) return;
+    setDeletingId(row.document_id);
+    try {
+      const res = await api.delete(`/api/accounting/documents/${row.document_id}/`);
+      if (res?.status === 204) {
+        setDeletedIds((prev) => new Set(prev).add(row.document_id));
+        onDeleted?.();
+      } else {
+        const code = res?.data?.code;
+        const message =
+          code === 'document_has_entry'
+            ? 'This document has a linked journal entry and can’t be deleted.'
+            : code === 'document_not_terminal'
+              ? 'This document can’t be deleted in its current status.'
+              : res?.data?.detail ?? 'Please try again in a moment.';
+        showToast({ title: 'Could not delete document', message, variant: 'danger' });
+      }
+    } catch (e: any) {
+      showToast({
+        title: 'Could not delete document',
+        message: e?.response?.data?.detail ?? 'Please try again in a moment.',
+        variant: 'danger',
+      });
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   // View action (Session-25 Phase E, O-S25-3): fetch a short-lived signed URL on
   // click — NEVER prefetched for the whole list — then open it in a new tab. The
@@ -151,26 +211,40 @@ export const DocumentStatusList: FC<Props> = ({
                   Couldn't load document status — retrying shortly.
                 </td>
               </tr>
-            ) : items.length === 0 ? (
+            ) : visibleItems.length === 0 ? (
               <tr>
                 <td colSpan={4} className="px-6 py-12 text-center text-sm text-gray-500">
                   {emptyMessage ?? 'No documents yet — upload your first receipt above.'}
                 </td>
               </tr>
             ) : (
-              items.map((row) => (
+              visibleItems.map((row) => (
                 <tr key={row.document_id} className="transition-colors hover:bg-gray-50">
                   <td className="max-w-[320px] truncate px-6 py-4 font-medium text-gray-900">{row.name}</td>
                   <td className="whitespace-nowrap px-6 py-4 text-gray-500">{fmtDate(row.created_at)}</td>
                   <td className="px-6 py-4"><Badge row={row} /></td>
                   <td className="px-6 py-4 text-right">
-                    <button
-                      type="button"
-                      onClick={() => viewDocument(row.document_id)}
-                      className="text-[13px] font-medium text-[var(--color-primary)] hover:underline"
-                    >
-                      View
-                    </button>
+                    <div className="flex items-center justify-end gap-4">
+                      <button
+                        type="button"
+                        onClick={() => viewDocument(row.document_id)}
+                        className="text-[13px] font-medium text-[var(--color-primary)] hover:underline"
+                      >
+                        View
+                      </button>
+                      {/* O-S30-3: Delete only on terminal, disposable statuses —
+                          never rendered on any other status. */}
+                      {DELETABLE_STATUSES.has(row.accounting_status) && (
+                        <button
+                          type="button"
+                          onClick={() => deleteDocument(row)}
+                          disabled={deletingId === row.document_id}
+                          className="text-[13px] font-medium text-red-600 hover:underline disabled:opacity-50"
+                        >
+                          {deletingId === row.document_id ? 'Deleting…' : 'Delete'}
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))
