@@ -60,6 +60,7 @@ import { RequireInternalStaff, RequireInternalSuper } from '@/components/interna
 import { InternalQueue } from '@/views/internal/InternalQueue';
 import { InternalClients } from '@/views/internal/InternalClients';
 import { InternalClientEntries } from '@/views/internal/InternalClientEntries';
+import { InternalClientCards } from '@/views/internal/InternalClientCards';
 import { InternalStaff } from '@/views/internal/InternalStaff';
 import { InternalAssignments } from '@/views/internal/InternalAssignments';
 
@@ -213,6 +214,10 @@ const App: FC = () => {
         <Route path="/internal/queue"       element={<RequireInternalStaff><InternalQueue /></RequireInternalStaff>} />
         <Route path="/internal/clients"     element={<RequireInternalStaff><InternalClients /></RequireInternalStaff>} />
         <Route path="/internal/clients/:orgId/entries" element={<RequireInternalStaff><InternalClientEntries /></RequireInternalStaff>} />
+        {/* O-S31-1 C4: per-org drill-in, same shape as the s28 entries surface
+            above — cards are org-scoped data, so they live in the org context
+            rather than the cross-org global nav. */}
+        <Route path="/internal/clients/:orgId/cards" element={<RequireInternalStaff><InternalClientCards /></RequireInternalStaff>} />
         <Route path="/internal/staff"       element={<RequireInternalSuper><InternalStaff /></RequireInternalSuper>} />
         <Route path="/internal/assignments" element={<RequireInternalSuper><InternalAssignments /></RequireInternalSuper>} />
       </Route>
