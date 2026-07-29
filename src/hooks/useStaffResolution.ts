@@ -10,6 +10,9 @@ import { type LedgerEntryRow } from '@/hooks/useLedgerEntries';
  *   GET/POST /api/accounting/staff/orgs/<org_id>/counterparties/
  *   POST     /api/accounting/staff/entries/<id>/attribute/
  *   GET      /api/accounting/staff/orgs/<org_id>/entries/  (paginated)
+ *   GET/POST /api/accounting/staff/orgs/<org_id>/cards/    (paginated; s29)
+ *   PATCH    /api/accounting/staff/cards/<pk>/             (s29)
+ *   POST     /api/accounting/staff/cards/<pk>/resend-notification/  (s31 C2)
  * Same error/auth handling as useInternalReview: the api interceptor RESOLVES
  * non-401 errors, so every call status-checks the resolved response and surfaces
  * the backend `detail` verbatim.
@@ -206,4 +209,96 @@ export const useStaffOrgEntries = (orgId: string, filters: StaffEntriesFilters) 
   if (filters.status) params.status = filters.status;
   if (filters.unattributed) params.unattributed = 'true';
   return usePaginatedList<StaffLedgerEntry>(`/api/accounting/staff/orgs/${orgId}/entries/`, params);
+};
+
+// ─── Card registry (s29 staff lane + s31 C2 resend) ───────────────────────────
+
+// Mirrors accounting/card_serializers.py OrgCardSerializer (the staff shape —
+// wider than the client's: last4 / network / source / is_active are writable
+// here). v1 of this surface writes only classification, mapped_account, label,
+// plus is_active for retirement.
+export interface StaffCard {
+  id: string;
+  last4: string;
+  network: 'visa' | 'mastercard' | 'amex' | 'other';
+  label: string;
+  classification: 'unidentified' | 'business' | 'personal';
+  mapped_account: string | null;
+  mapped_account_code: string | null;
+  mapped_account_name: string | null;
+  source: 'plaid' | 'detected' | 'manual';
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export const useStaffOrgCards = (orgId: string) =>
+  usePaginatedList<StaffCard>(`/api/accounting/staff/orgs/${orgId}/cards/`);
+
+export const createStaffCard = async (
+  orgId: string,
+  payload: {
+    last4: string;
+    network: string;
+    classification?: string;
+    mapped_account?: string | null;
+    label?: string;
+  },
+): Promise<WriteResult<StaffCard>> => {
+  try {
+    const res = await api.post(`/api/accounting/staff/orgs/${orgId}/cards/`, payload);
+    if (res && res.status === 201) return { ok: true, status: 201, data: res.data as StaffCard };
+    return { ok: false, status: res?.status, errorDetail: extractDetail(res, 'Failed to add card.') };
+  } catch {
+    return { ok: false, errorDetail: 'Failed to add card.' };
+  }
+};
+
+export const patchStaffCard = async (
+  cardId: string,
+  payload: Partial<Pick<StaffCard, 'classification' | 'mapped_account' | 'label' | 'is_active'>>,
+): Promise<WriteResult<StaffCard>> => {
+  try {
+    const res = await api.patch(`/api/accounting/staff/cards/${cardId}/`, payload);
+    if (res && res.status === 200) return { ok: true, status: 200, data: res.data as StaffCard };
+    // The model invariant (OrgCard.clean) surfaces as a 400 whose message is
+    // user-actionable — extractDetail keeps the server's own wording.
+    return { ok: false, status: res?.status, errorDetail: extractDetail(res, 'Failed to save card.') };
+  } catch {
+    return { ok: false, errorDetail: 'Failed to save card.' };
+  }
+};
+
+// C2 resend. The three outcomes are distinct and the caller renders each
+// differently, so the backend `code` is returned alongside the status rather
+// than being flattened into one error string:
+//   200 -> {sent_to_count}
+//   429 -> code 'notification_rate_limited'  (calm inline, not an error toast)
+//   502 -> code 'notification_send_failed'   (retryable error)
+//   400 -> code 'card_not_notifiable'        (unreachable from this UI; surfaced anyway)
+export interface ResendResult {
+  ok: boolean;
+  status?: number;
+  code?: string;
+  sentToCount?: number;
+  errorDetail?: string;
+}
+
+export const resendCardNotification = async (cardId: string): Promise<ResendResult> => {
+  try {
+    const res = await api.post(`/api/accounting/staff/cards/${cardId}/resend-notification/`);
+    if (res && res.status === 200) {
+      const count = (res.data as { sent_to_count?: number } | null)?.sent_to_count;
+      return { ok: true, status: 200, sentToCount: typeof count === 'number' ? count : 0 };
+    }
+    const code = (res?.data as { code?: string } | null | undefined)?.code;
+    return {
+      ok: false,
+      status: res?.status,
+      code,
+      errorDetail: extractDetail(res, 'Could not re-send the notification.'),
+    };
+  } catch {
+    return { ok: false, errorDetail: 'Could not re-send the notification.' };
+  }
 };

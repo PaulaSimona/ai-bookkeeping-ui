@@ -365,6 +365,11 @@ export const Sidebar: FC = () => {
               <NavItem to="/accounting/taxes" label="Taxes" icon="M9 14.25l6-6m4.5-3.493V21.75l-3.75-1.5-3.75 1.5-3.75-1.5-3.75 1.5V4.757c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0c1.1.128 1.907 1.077 1.907 2.185zM9.75 9h.008v.008H9.75V9zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 4.5h.008v.008h-.008V13.5zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
               <NavItem to="/accounting/tax-profile" label="Tax Profile" icon={ICONS.taxProfile} />
               <NavItem to="/accounting/bank-connections" label="Bank connections" icon={ICONS.bank} />
+              {/* O-S31-1 C3: Cards sits beside Bank connections — both are
+                  "where money moves through" surfaces. Glyph path inlined
+                  (credit-card) to match the Clients/Suppliers precedent above,
+                  keeping the addition inside this same hasTier2 guard. */}
+              <NavItem to="/accounting/cards" label="Cards" icon="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
             </>
           )}
           {/* One "Documents" + one "Dashboard" per user (§21 D-21-5, §14 D-14B-6):

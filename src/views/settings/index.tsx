@@ -175,6 +175,57 @@ const BusinessProfileSection: FC<ToastFns> = ({ showSuccess, showError }) => {
 // GET    /api/telegram/status/     → {linked, chat_id}          (byte-preserved)
 // POST   /api/telegram/link-token/ → {token, expires_in_seconds}(byte-preserved)
 // DELETE /api/telegram/unlink/     → {unlinked:true}            (byte-preserved)
+// ─── Cards summary (O-S31-1 C3) ───────────────────────────────────────────────
+// Read-only pointer to the Cards page. Counts UNIDENTIFIED cards, which is the
+// only number that asks anything of the owner.
+//
+// page_size=200 deliberately (the useAccounts chart precedent): the server
+// orders cards by classification ASC, so 'unidentified' sorts LAST — reading
+// only the default first page could miss every card that needs action and
+// report a truthful-looking zero.
+const CardsSummarySection: FC = () => {
+  const [pending, setPending] = useState<number | null>(null);
+  const [total, setTotal] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.get('/api/accounting/cards/', { params: { page_size: 200 } })
+      .then((res) => {
+        if (cancelled || res == null || res.status !== 200) return;
+        const rows = Array.isArray(res.data?.results) ? res.data.results : [];
+        setPending(rows.filter((c: { classification?: string }) => c.classification === 'unidentified').length);
+        setTotal(typeof res.data?.count === 'number' ? res.data.count : rows.length);
+      })
+      .catch(() => { /* leave null — the section degrades to its calm copy */ });
+    return () => { cancelled = true; };
+  }, []);
+
+  return (
+    <Section
+      title="Cards"
+      description="Cards detected in your bank activity, and who they belong to."
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-[13.5px] text-gray-600">
+          {pending === null
+            ? 'Cards appear here automatically when card payments show up in your bank activity.'
+            : pending > 0
+              ? `${pending} card${pending === 1 ? '' : 's'} still ${pending === 1 ? 'needs' : 'need'} identifying — payments to ${pending === 1 ? 'it' : 'them'} wait for review until then.`
+              : total > 0
+                ? `All ${total} card${total === 1 ? '' : 's'} identified — payments to them file automatically.`
+                : 'No cards detected yet.'}
+        </p>
+        <Link
+          to="/accounting/cards"
+          className="shrink-0 text-[13px] font-semibold text-[var(--color-primary)] hover:underline"
+        >
+          Manage cards
+        </Link>
+      </div>
+    </Section>
+  );
+};
+
 const BankIntegrationsSection: FC<ToastFns> = ({ showSuccess, showError }) => {
   const [loading, setLoading]       = useState(true);
   const [linked, setLinked]         = useState(false);
@@ -529,6 +580,7 @@ export const Settings: FC = () => {
           {active === 'integrations' && (
             <div className="space-y-6">
               {hasTier2 && <PlaidConnectionsCard />}
+              {hasTier2 && <CardsSummarySection />}
               <BankIntegrationsSection showSuccess={showSuccess} showError={showError} />
             </div>
           )}

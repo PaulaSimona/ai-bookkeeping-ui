@@ -1,5 +1,5 @@
 import { type FC, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import api from '@/utils/api';
 import {
   PageContainer,
@@ -98,6 +98,8 @@ export const InternalClients: FC = () => {
                   <tr className="text-left text-[11px] uppercase tracking-wide text-white/30 border-b border-white/10">
                     <th className="py-2 px-5 font-medium">Organization</th>
                     <th className="py-2 px-5 font-medium text-right">Entries</th>
+                    {/* O-S31-1 C4: second per-org drill-in. */}
+                    <th className="py-2 px-5 font-medium text-right">Cards</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -109,6 +111,17 @@ export const InternalClients: FC = () => {
                     >
                       <td className="py-2.5 px-5 text-white/90">{o.name}</td>
                       <td className="py-2.5 px-5 text-right text-[#4DA6FF]">View entries →</td>
+                      {/* stopPropagation: the ROW click still goes to entries
+                          (unchanged); this cell is the only path to cards. */}
+                      <td className="py-2.5 px-5 text-right">
+                        <Link
+                          to={`/internal/clients/${o.id}/cards`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-white/60 hover:text-white"
+                        >
+                          Card registry →
+                        </Link>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
