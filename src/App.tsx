@@ -33,6 +33,7 @@ import { LandingPage } from '@/pages/LandingPage';
 import { ChartOfAccounts } from '@/pages/accounts/ChartOfAccounts';
 import { BankConnections } from '@/views/accounting/BankConnections';
 import { DocumentsPage } from '@/views/accounting/DocumentsPage';
+import { CardsPage } from '@/views/accounting/CardsPage';
 import { AccountingDashboard } from '@/views/accounting/dashboard';
 import { LedgerRegister } from '@/views/accounting/ledger';
 import { Clients } from '@/views/accounting/Clients';
@@ -172,6 +173,11 @@ const App: FC = () => {
         <Route path="/accounting/tax-profile" element={<RequireTier2><TaxProfile /></RequireTier2>} />
         <Route path="/accounting/bank-connections" element={<RequireTier2><BankConnections /></RequireTier2>} />
         <Route path="/accounting/documents" element={<RequireTier2><DocumentsPage /></RequireTier2>} />
+        {/* MUST match the card-discovery email link verbatim — the backend
+            builds it as `{FRONTEND_URL}/accounting/cards`
+            (card_notifications.py:107). The email is already shipped, so this
+            route follows the email; do not rename. */}
+        <Route path="/accounting/cards" element={<RequireTier2><CardsPage /></RequireTier2>} />
         {/* Accountant surfaces (§14, Session-25 Phase E) — Tier 2 entitlement
             gated at the route; the accountant persona (active membership role)
             drives the sidebar + landing. Owner reaches these URLs only if
