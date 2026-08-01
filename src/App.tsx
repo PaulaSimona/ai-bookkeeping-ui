@@ -1,6 +1,6 @@
 // v2 pricing flow
-import { type FC, type PropsWithChildren, useEffect } from 'react';
-import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
+import { type FC, type PropsWithChildren } from 'react';
+import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { type RootState } from '@/store/store';
 import { useUser } from '@/api/user/useUser';
@@ -125,14 +125,10 @@ const RequireTier2: FC<PropsWithChildren> = ({ children }) => {
 
 const App: FC = () => {
   const { getUser } = useUser(true);
-  const location = useLocation();
 
-  useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any).gtag?.('event', 'page_view', {
-      page_path: location.pathname + location.search,
-    });
-  }, [location]);
+  // O-S32-3: the GA4 route-change page_view was removed here, and the gtag
+  // loader with it (index.html). The Privacy Policy states we use no analytics
+  // services — that sentence is now true as written.
 
   return (
     <OrgProvider>

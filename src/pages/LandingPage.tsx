@@ -756,6 +756,40 @@ export const LandingPage: FC = () => {
         </p>
       </section>
 
+      {/* ── Featured On (restored in C3) ──────────────────────────────────── */}
+      {/* The human-visible directory badges. The JS-blind verifiers actually
+          read the hidden static copies in index.html — these are for people. */}
+      <section className="border-t border-gray-200 bg-white">
+        <div className="mx-auto flex max-w-6xl flex-col items-center gap-6 px-6 py-12">
+          <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-gray-400">
+            Featured on
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-6">
+            <a
+              href="https://betalist.com/startups/ai-bookkeeping?utm_campaign=badge-ai-bookkeeping&utm_medium=badge&utm_source=badge-featured"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <img
+                src="https://betalist.com/badges/featured?id=170360&theme=color"
+                alt="Featured on BetaList"
+                className="h-11 w-auto"
+              />
+            </a>
+            <a href="https://launchbuff.com" target="_blank" rel="noopener noreferrer" title="Featured on LaunchBuff">
+              <img
+                src="https://launchbuff.com/badge-featured-dark.svg"
+                alt="Featured on LaunchBuff"
+                className="h-11 w-auto"
+              />
+            </a>
+            <a href="https://tools.cafe" target="_blank" rel="noopener noreferrer" title="Featured on tools.cafe">
+              <img src="https://tools.cafe/b/dark.svg" alt="Featured on tools.cafe" className="h-11 w-auto" />
+            </a>
+          </div>
+        </div>
+      </section>
+
       {/* ── Footer ────────────────────────────────────────────────────────── */}
       <footer style={{ backgroundColor: NAVY }} className="text-white">
         <div className="mx-auto max-w-6xl px-6 py-16">

@@ -75,9 +75,8 @@ export const TermsOfService: FC = () => (
             and are subject to change with notice.</p>
           </Sub>
           <Sub title="Free Trial">
-            <p>New accounts receive a 5-day free trial with access to 5 document uploads. A valid credit or
-            debit card is required to start a trial. You will not be charged until the trial ends. If you
-            cancel before the trial ends, no charge will be made.</p>
+            <p>New accounts receive a free trial with access to 5 document uploads. No credit card is
+            required to start the trial. You will not be charged unless you choose a paid plan.</p>
           </Sub>
           <Sub title="Billing">
             <p>Subscriptions are billed monthly. Payments are processed by Stripe. By providing payment

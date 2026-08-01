@@ -54,7 +54,12 @@ export const WaitlistForm: FC<Props> = ({ source, variant = 'inline' }) => {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
 
-  const onLight = variant === 'inline';
+  // `variant` controls CHROME, not colour: both surfaces this renders on are
+  // light (the homepage panel sits on white, and a modal panel IS white), so
+  // the palette is the same and only the wrapping card differs. 'modal' skips
+  // the card because the modal already supplies one.
+  const onLight = true;
+  const boxed = variant === 'inline';
 
   const toggleFeature = (f: string) =>
     setSelected((prev) =>
@@ -95,11 +100,7 @@ export const WaitlistForm: FC<Props> = ({ source, variant = 'inline' }) => {
 
   if (success) {
     return (
-      <div
-        className={`rounded-2xl p-8 text-center ${
-          onLight ? 'bg-white ring-1 ring-gray-200' : 'bg-white/5 ring-1 ring-white/10'
-        }`}
-      >
+      <div className={`p-8 text-center ${boxed ? 'rounded-2xl bg-white ring-1 ring-gray-200' : ''}`}>
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50">
           <svg className="h-6 w-6 text-emerald-600" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
@@ -125,9 +126,7 @@ export const WaitlistForm: FC<Props> = ({ source, variant = 'inline' }) => {
   return (
     <form
       onSubmit={handleSubmit}
-      className={`rounded-2xl p-6 sm:p-8 ${
-        onLight ? 'bg-white ring-1 ring-gray-200 shadow-sm' : 'bg-white/5 ring-1 ring-white/10'
-      }`}
+      className={boxed ? 'rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200 sm:p-8' : ''}
       noValidate
     >
       <div>

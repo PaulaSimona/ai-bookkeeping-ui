@@ -279,7 +279,7 @@ const UploadZone: FC<UploadZoneProps> = ({ onFile, uploading, error }) => {
 
       {error === '__trial_expired__' ? (
         <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800 flex items-center justify-between gap-4">
-          <span>Your 5-day free trial has expired.</span>
+          <span>You've used your 5 free trial documents — choose a plan to continue.</span>
           <Link
             to="/subscription"
             className="shrink-0 rounded-lg bg-[#0066FF] hover:bg-[#0052cc] px-4 py-2 text-xs font-semibold text-white transition-colors"

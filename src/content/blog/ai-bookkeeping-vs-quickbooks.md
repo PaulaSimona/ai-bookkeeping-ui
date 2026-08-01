@@ -57,8 +57,8 @@ A few things make it a deliberately different experience from a full accounting 
 - **It is built to be simple.** There is no accounting vocabulary to learn. If you can take a photo, you can use it.
 - **Telegram upload.** Forwarding a receipt to a chat you already have open is a smaller habit to build than opening an accounting app every time.
 - **Built Canada-first.** GST and HST extraction is core to how it reads your receipts, not an afterthought.
-- **A human checks the uncertain ones.** When the AI is not confident about a receipt, it flags that item for human review instead of guessing — so a shaky read does not quietly end up in your records.
-- **Flat, predictable pricing.** Today's plans start at $29 CAD per month, with a free 5-day trial and no credit card required to start.
+- **Uncertain reads get flagged, not guessed at.** When the AI is not confident about a receipt, it flags that item instead of guessing — so a shaky read does not quietly end up in your records. (Having a trained internal reviewer work those flagged items is part of the Advanced plan, which is in development.)
+- **Flat, predictable pricing.** Today's plans start at $29 CAD per month. Free trial — 5 documents included, no credit card required.
 
 What it is **not** trying to be is your entire accounting department. It does not send invoices, run payroll, or manage inventory. That is the trade — it gives up breadth to be genuinely easy and focused.
 
@@ -89,7 +89,7 @@ Our Advanced plan is in active development, and it is designed to bring the dept
 - Profit & Loss reports
 - Accounts Payable and Accounts Receivable balances
 - Tax reports for Canada (GST/HST) and the US
-- Review by a human accountant
+- Review by a trained internal reviewer
 
 In other words, much of the depth people turn to QuickBooks for — built to stay simple, and with a real person checking the work.
 

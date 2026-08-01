@@ -35,7 +35,7 @@ Modern AI bookkeeping uses two core technologies working together.
 
 The first is **optical character recognition (OCR)** — software that reads an image and converts it to text. When you photograph a receipt, OCR identifies the characters on the page: the vendor name, the date, the line items, the subtotal, the tax amount, the total.
 
-The second is a **large language model (LLM)** — the same type of AI that powers tools like Claude and ChatGPT. Once the OCR has extracted the text, the language model reads it, understands the context, and makes decisions: what kind of expense is this, which category does it belong to, what is the tax treatment, is anything ambiguous?
+The second is a **large language model (LLM)** — the same type of AI that powers today's leading conversational assistants. Once the OCR has extracted the text, the language model reads it, understands the context, and makes decisions: what kind of expense is this, which category does it belong to, what is the tax treatment, is anything ambiguous?
 
 Together, these two technologies can handle a remarkable range of real-world documents — not just clean, printed receipts but handwritten notes, crumpled paper, low-resolution phone photos, foreign-language receipts, and complex multi-line invoices.
 
@@ -87,9 +87,9 @@ The AI can categorize based on what's in the document, but it can't read your mi
 
 While AI has improved dramatically at reading handwriting, a scrawled handwritten receipt from a farmer's market vendor or a handwritten invoice from a small contractor can still produce extraction errors. These are worth reviewing carefully.
 
-### Complex multi-entity transactions
+### Complex or unusual transaction structures
 
-If you have a more complex business structure — multiple entities, intercompany transactions, foreign currency with currency risk, complex asset purchases — AI bookkeeping handles the basics well but may not capture all the nuance that an accountant would apply. For most small businesses and freelancers, this isn't relevant. But it's worth knowing where the technology's scope ends.
+If a transaction has an unusual structure — a foreign-currency purchase carrying exchange risk, a financed or leased asset, a partial refund netted against a later invoice — AI bookkeeping handles the basics well but may not capture all the nuance that an accountant would apply. For most small businesses and freelancers, this isn't relevant. But it's worth knowing where the technology's scope ends.
 
 ### It doesn't replace an accountant for tax filing
 
@@ -109,7 +109,7 @@ Good AI bookkeeping tools assign a confidence score to each extraction. High-con
 
 Some AI bookkeeping platforms include a human review layer for flagged transactions — a trained bookkeeper who reviews extractions the AI isn't certain about. This hybrid approach gives you AI speed on the straightforward majority and human judgment on the edge cases.
 
-At AI Bookkeeping, transactions above certain thresholds or with lower confidence scores are routed for human review before being finalized. You get the efficiency of AI with a human backstop on anything that warrants it.
+At AI Bookkeeping, this review layer is part of the Advanced plan, which is in development: transactions above certain thresholds or with lower confidence scores will be routed for review before being finalized, so you get the efficiency of AI with a backstop on anything that warrants it.
 
 ### Your monthly review
 
@@ -181,4 +181,4 @@ Trust it for the routine work. Review the edge cases. Keep your accountant for t
 
 ---
 
-*AI Bookkeeping by Time2Win Inc. is built for Canadian and US small businesses, with built-in GST/HST/PST awareness and a human review layer for flagged transactions. Try it free at [ai-bookkeeping.ai](https://ai-bookkeeping.ai).*
+*AI Bookkeeping by Time2Win Inc. is built for Canadian and US small businesses, with built-in GST/HST/PST awareness and confidence flagging on transactions it isn't certain about. Free trial — 5 documents included, no credit card required. [ai-bookkeeping.ai](https://ai-bookkeeping.ai)*
