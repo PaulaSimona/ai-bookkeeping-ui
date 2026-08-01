@@ -270,9 +270,11 @@ export const LandingPage: FC = () => {
       {/* ── Header ────────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-50 border-b border-gray-200/70 bg-[#F9FAFB]/85 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
+          {/* F-S32-11: logo.svg already contains the "AI BOOKKEEPING" wordmark,
+              so no text label sits beside it. alt carries the accessible name
+              that the removed span used to provide. */}
           <Link to="/" className="flex items-center gap-2.5">
-            <img src={logoSvg} alt="" className="h-7 w-auto" />
-            <span className="text-[15px] font-semibold tracking-tight">AI Bookkeeping</span>
+            <img src={logoSvg} alt="AI Bookkeeping" className="h-7 w-auto" />
             <span className="rounded bg-amber-100 px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-widest text-amber-700">
               Beta
             </span>
@@ -781,10 +783,8 @@ export const LandingPage: FC = () => {
         <div className="mx-auto max-w-6xl px-6 py-16">
           <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-4">
             <div>
-              <div className="flex items-center gap-2.5">
-                <img src={logoSvg} alt="" className="h-7 w-auto" />
-                <span className="text-[15px] font-semibold">AI Bookkeeping</span>
-              </div>
+              {/* F-S32-11: wordmark lives in the SVG — no duplicate text label. */}
+              <img src={logoSvg} alt="AI Bookkeeping" className="h-7 w-auto" />
               <p className="mt-4 max-w-xs text-[13.5px] leading-relaxed text-white/50">
                 Bookkeeping done for you, by Time2Win Inc. — a Canadian corporation serving small
                 businesses in Canada and the United States.
