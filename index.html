@@ -4,16 +4,43 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AI Bookkeeping | Bookkeeping Made Easy</title>
-    <meta name="description" content="AI-powered bookkeeping for small businesses and freelancers across North America. Upload receipts, let AI extract the data, download Excel reports." />
+    <!-- S32 C2 (E2 fix): Inter + JetBrains Mono were declared in index.css but
+         never loaded, so every page silently fell back to system-ui. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <title>AI Bookkeeping — You run the business. We keep the books.</title>
+    <meta name="description" content="Bookkeeping done for you. Receipt automation is live today — free trial, 5 documents, no credit card required. Advanced double-entry books in development." />
     <meta name="keywords" content="AI bookkeeping, Canadian bookkeeping software, GST HST tracking, small business bookkeeping, freelancer accounting" />
     <meta name="google-site-verification" content="X5QXV0AKPHdl38vG1dD0VjIInu2f2XAnEkl7BNhjWLM" />
+
+    <!-- S32 C4: static social cards. The SPA never rewrites these — crawlers
+         and link unfurlers read the raw HTML, which JS never reaches. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://ai-bookkeeping.ai/" />
+    <meta property="og:site_name" content="AI Bookkeeping" />
+    <meta property="og:title" content="AI Bookkeeping — You run the business. We keep the books." />
+    <meta property="og:description" content="Bookkeeping done for you. Receipt automation is live today — free trial, 5 documents, no credit card required. Advanced double-entry books in development." />
+    <meta property="og:image" content="https://ai-bookkeeping.ai/og/home.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="AI Bookkeeping — You run the business. We keep the books." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="AI Bookkeeping — You run the business. We keep the books." />
+    <meta name="twitter:description" content="Bookkeeping done for you. Receipt automation is live today — free trial, 5 documents, no credit card required. Advanced double-entry books in development." />
+    <meta name="twitter:image" content="https://ai-bookkeeping.ai/og/home.png" />
+
+    <!-- The SINGLE Organization block for the whole site (S32 C4). The
+         LandingPage no longer injects a second one. -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
       "@type": "Organization",
       "name": "Time2Win Inc.",
-      "url": "https://ai-bookkeeping.ai",
+      "url": "https://ai-bookkeeping.ai/",
       "logo": "https://ai-bookkeeping.ai/logo.png",
       "contactPoint": {
         "@type": "ContactPoint",
@@ -22,14 +49,6 @@
       },
       "sameAs": []
     }
-    </script>
-    <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-RBNX6DYRKX"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'G-RBNX6DYRKX');
     </script>
   </head>
   <body>

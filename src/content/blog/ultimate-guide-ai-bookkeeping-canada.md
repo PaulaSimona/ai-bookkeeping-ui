@@ -50,7 +50,7 @@ A good AI bookkeeping tool built for Canada understands these distinctions autom
 
 The Canada Revenue Agency requires businesses to keep financial records for a minimum of six years. Those records need to be organized, accurate, and available on request. While the CRA doesn't specify exactly how you must store your records, they do require that your books support the figures on your tax return.
 
-AI bookkeeping tools help here in two ways. First, they create a clean, organized digital record of every transaction — timestamped, categorized, and searchable. Second, they store the original document (the receipt, the invoice, the bank statement) alongside the record, which satisfies the CRA's requirement to keep source documents.
+AI bookkeeping tools help here in two ways. First, they create a clean, organized digital record of every transaction — timestamped, categorized, and searchable. Second, they store the original document (the receipt, the invoice) alongside the record, which satisfies the CRA's requirement to keep source documents.
 
 ### The Freelancer and Contractor Reality
 

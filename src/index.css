@@ -10,6 +10,12 @@
   --color-primary-hover: #0052cc;
   --color-primary-light: #e6f0ff;
 
+  /* Tailwind v4 reads --font-sans / --font-mono for the font-sans and
+     font-mono utilities. The --font-family-* pair below is kept because the
+     html/body rule and .blog-content code already reference it (S32 C2). */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
   --font-family-sans: 'Inter', system-ui, -apple-system, sans-serif;
   --font-family-mono: 'JetBrains Mono', 'Fira Code', monospace;
 }

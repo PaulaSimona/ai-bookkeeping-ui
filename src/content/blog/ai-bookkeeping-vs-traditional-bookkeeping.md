@@ -184,7 +184,7 @@ The honest answer depends on where you are in your business.
 You're just starting out, have fewer than 20–30 transactions per month, and want to understand your finances intimately before automating anything. Spreadsheets as a learning tool make sense. Spreadsheets as a long-term system for a growing business do not.
 
 ### Choose traditional accounting software if:
-You need full double-entry accounting, have an accountant who insists on QuickBooks or Xero, or have a more complex business with payroll, inventory management, or multiple entities. These tools are powerful — they're just more than most freelancers and small businesses need.
+You need full double-entry accounting, have an accountant who insists on QuickBooks or Xero, or have a more complex business with payroll, inventory management, or job costing. These tools are powerful — they're just more than most freelancers and small businesses need.
 
 ### Choose a human bookkeeper if:
 Your business is complex, your transaction volume is high, you have employees and payroll, you operate across multiple provinces or internationally, or you simply want to hand the entire function to a professional and never think about it. Also the right choice if you've had CRA issues in the past and want expert oversight.

@@ -73,7 +73,7 @@ Here's where the picture changes significantly.
 
 The assumption that AI bookkeeping means *removing humans from the loop* is simply not accurate for well-designed systems.
 
-AI Bookkeeping, for example, uses a confidence-based routing system. When the AI processes a document, it produces a confidence score alongside its output. If that score meets the threshold — meaning the AI is highly certain the categorization is correct — the entry is processed automatically. If the confidence score is below the threshold, the transaction is flagged and routed to human review before anything is posted to the books.
+AI Bookkeeping, for example, uses a confidence-based routing system. When the AI processes a document, it produces a confidence score alongside its output. If that score meets the threshold — meaning the AI is highly certain the categorization is correct — the entry is processed automatically. If the confidence score is below the threshold, the transaction is flagged rather than quietly accepted. Routing those flagged transactions to a trained internal reviewer before anything is posted to the books is part of the Advanced plan, which is in development.
 
 This means the AI isn't making unilateral decisions on every transaction. It's making decisions on the transactions where it's certain, and asking for human judgment on the ones where it isn't. The result is a system that's faster than pure manual entry, more accurate than pure automation, and transparent about its own uncertainty.
 
@@ -81,7 +81,7 @@ This is a fundamentally different model than "AI does everything and you hope it
 
 ### High-value transactions get extra scrutiny
 
-Responsible AI bookkeeping systems apply different rules to different types of transactions. A $12 coffee receipt and a $4,800 equipment purchase shouldn't be handled the same way. In AI Bookkeeping, transactions above a defined threshold are always routed for human review — regardless of confidence score. The AI's job is to extract and suggest; a human's job is to confirm.
+Responsible AI bookkeeping systems apply different rules to different types of transactions. A $12 coffee receipt and a $4,800 equipment purchase shouldn't be handled the same way. In AI Bookkeeping's Advanced plan, which is in development, transactions above a defined threshold will always be routed for review — regardless of confidence score. The AI's job is to extract and suggest; a person's job is to confirm.
 
 ### You can always see what the AI did and why
 
@@ -119,7 +119,7 @@ That's not blind trust in a black box. That's a system with appropriate checks b
 
 If you've been hesitant to try AI bookkeeping because of concerns like the ones above, those concerns deserve to be taken seriously. The question isn't whether AI bookkeeping is perfect. It isn't. The question is whether it's better than the alternative — and for most small business owners, it is.
 
-[See how AI Bookkeeping handles confidence and human review](https://ai-bookkeeping.ai) — or [start a free 14-day trial](https://ai-bookkeeping.ai/register) with no credit card required.
+[See how AI Bookkeeping handles confidence scoring and flagged transactions](https://ai-bookkeeping.ai) — or [get started](https://ai-bookkeeping.ai/register). Free trial — 5 documents included, no credit card required.
 
 ---
 

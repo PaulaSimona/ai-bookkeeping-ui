@@ -19,7 +19,7 @@ const FAQ_DATA: FaqCategory[] = [
       {
         question: 'What is AI Bookkeeping?',
         answer:
-          'AI Bookkeeping is an automated bookkeeping service designed for Canadian small business owners. You upload receipts, invoices, and bank statements — our AI powered by Claude extracts and categorizes every transaction, generates your annual Excel workbook, and produces GST/HST ITC and expense reports. No accounting experience required.',
+          'AI Bookkeeping is an automated bookkeeping service for small business owners in Canada and the United States. You upload receipts and invoices — our AI extracts and categorizes every transaction, generates your annual Excel workbook, and produces GST/HST ITC and expense reports. Connected bank feeds are part of the Advanced plan, which is in development. No accounting experience required.',
       },
       {
         question: 'How do I upload my receipts?',
@@ -49,12 +49,12 @@ const FAQ_DATA: FaqCategory[] = [
       {
         question: 'What plans are available?',
         answer:
-          'We offer three active plans: Starter (ideal for sole proprietors with light receipt volume), Growth (for growing businesses with higher volume and reporting needs), and Pro (for businesses that need advanced reporting and priority support). An Advanced plan for complex multi-entity needs is in development.',
+          'We offer three active plans: Starter (ideal for sole proprietors with light receipt volume), Growth (for growing businesses with higher volume and reporting needs), and Pro (for businesses that need advanced reporting and priority support). An Advanced plan with full double-entry bookkeeping is in development and not yet available to purchase.',
       },
       {
         question: 'Is there a free trial?',
         answer:
-          'We offer a limited free tier so you can try the core upload and extraction features before committing to a paid plan. Paid plans are billed monthly and you can cancel at any time.',
+          'Free trial — 5 documents included, no credit card required. That lets you try the upload and extraction features before committing. Paid plans are billed monthly and you can cancel at any time.',
       },
       {
         question: 'Can I upgrade or downgrade my plan?',
@@ -83,17 +83,12 @@ const FAQ_DATA: FaqCategory[] = [
       {
         question: 'Which provinces are supported?',
         answer:
-          'All Canadian provinces and territories are supported. GST, HST, and QST (Quebec) rates are applied correctly based on the vendor location and your business province.',
+          'All Canadian provinces and territories are supported. GST and HST amounts are extracted from your receipts and tracked for input tax credits, and provincial sales tax is treated according to the rules that apply in your province.',
       },
       {
         question: 'Can I use the export for my T2125 (business income tax)?',
         answer:
           'Yes. The annual Excel workbook organizes expenses by CRA-recognized categories (advertising, office, travel, meals, etc.) that map directly to the T2125 Statement of Business Activities. Your accountant or tax preparer can use it to file your return.',
-      },
-      {
-        question: 'Does it handle QST for Quebec businesses?',
-        answer:
-          'Yes. QST amounts are extracted and reported separately so Quebec businesses can reconcile their QST input tax refunds (ITRs) accurately.',
       },
       {
         question: 'Does the AI classify expenses to CRA categories?',
@@ -108,22 +103,22 @@ const FAQ_DATA: FaqCategory[] = [
       {
         question: 'Where is my data stored?',
         answer:
-          'Your account data is stored in a secure PostgreSQL database on Railway. Financial documents are stored in Cloudflare R2 object storage with private access — files are never publicly accessible without a signed URL.',
+          'Your account data is held in a private database, and your financial documents are stored privately and served through expiring signed links rather than public file URLs. Each organization’s data is isolated from every other, and the permission rules are covered by deny-path tests.',
       },
       {
         question: 'Is my data encrypted?',
         answer:
-          'Yes. All data in transit is protected by TLS/HTTPS. Passwords are hashed with bcrypt and never stored in plaintext. Database access is restricted to application servers only.',
+          'All data in transit is protected by TLS/HTTPS. Passwords are hashed and never stored in plaintext, and sensitive credentials such as bank connection tokens are encrypted at rest. No system can be guaranteed 100% secure, but a formal security review program is in place and independent assessment is planned as the platform scales.',
       },
       {
         question: 'Do you sell or share my financial data?',
         answer:
-          'No. We do not sell your personal or financial data. We share data only with service providers needed to operate the app (Anthropic for AI extraction, Stripe for payments, SendGrid for email). See our Privacy Policy for the full list.',
+          'No. We do not sell your personal or financial data. We share it only with the service providers needed to operate the app — for example Stripe for payments and SendGrid for email. See our Privacy Policy for the full list.',
       },
       {
-        question: 'Does Anthropic use my documents to train AI models?',
+        question: 'Are my documents used to train AI models?',
         answer:
-          "No. Documents submitted via the Claude API are processed under Anthropic's API terms, which do not use your data to train models.",
+          'No. Documents are processed by our AI provider under commercial API terms that do not permit your data to be used for model training.',
       },
       {
         question: 'What happens to my data if I cancel?',
@@ -148,7 +143,7 @@ const FAQ_DATA: FaqCategory[] = [
       {
         question: 'Can I have multiple businesses on one account?',
         answer:
-          'Currently each account is tied to one business entity. Multi-entity support is planned for our Advanced tier. Contact us if you need this sooner.',
+          'Each account manages a single business. If you run more than one, get in touch and we will tell you honestly whether we are a fit today.',
       },
       {
         question: 'How do I cancel my subscription?',
