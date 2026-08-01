@@ -17,6 +17,7 @@
 import { type FC, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import logoSvg from '@/assets/logo.svg';
+import advancedPreview from '@/assets/advanced-preview.webp';
 import { WaitlistForm } from '@/components/marketing/WaitlistForm';
 
 // ─── Tokens ───────────────────────────────────────────────────────────────────
@@ -405,23 +406,34 @@ export const LandingPage: FC = () => {
             </p>
           </div>
 
-          {/* Browser-chrome frame. Deliberately a styled placeholder, not a
-              screenshot — the product it depicts is not shipped. */}
-          <div className="rounded-2xl bg-white/5 p-2 ring-1 ring-white/10">
-            <div className="overflow-hidden rounded-xl bg-[#0f1424]">
-              <div className="flex items-center gap-1.5 border-b border-white/10 px-4 py-3">
-                <span className="h-2.5 w-2.5 rounded-full bg-white/20" />
-                <span className="h-2.5 w-2.5 rounded-full bg-white/20" />
-                <span className="h-2.5 w-2.5 rounded-full bg-white/20" />
-                <span className="ml-3 font-mono text-[10px] text-white/30">ai-bookkeeping.ai</span>
-              </div>
-              <div className="flex min-h-[300px] items-center justify-center px-8 py-14 text-center">
-                <p className="max-w-xs font-mono text-[11px] leading-relaxed text-white/35">
-                  Advanced private-beta preview — in development. Figures shown are from a
-                  demonstration organization.
-                </p>
+          {/* Browser-chrome frame around the Advanced preview (C7). The image
+              shows a DEMONSTRATION organization with fictional figures — the
+              disclosure below the frame is load-bearing and must travel with
+              it. aspect-[7/4] + object-top crops the empty space below the
+              dashboard's last row rather than letterboxing it. */}
+          <div>
+            <div className="rounded-2xl bg-white/5 p-2 ring-1 ring-white/10">
+              <div className="overflow-hidden rounded-xl bg-[#0f1424]">
+                <div className="flex items-center gap-1.5 border-b border-white/10 px-4 py-3">
+                  <span className="h-2.5 w-2.5 rounded-full bg-white/20" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-white/20" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-white/20" />
+                  <span className="ml-3 font-mono text-[10px] text-white/30">ai-bookkeeping.ai</span>
+                </div>
+                <img
+                  src={advancedPreview}
+                  loading="lazy"
+                  width={1120}
+                  height={798}
+                  alt="Preview of the AI Bookkeeping Advanced dashboard — demonstration organization"
+                  className="block aspect-[7/4] w-full object-cover object-top"
+                />
               </div>
             </div>
+            <p className="mt-3 font-mono text-[11px] leading-relaxed text-white/35">
+              Advanced private-beta preview — in development. Figures shown are from a
+              demonstration organization.
+            </p>
           </div>
         </div>
       </section>
