@@ -12,8 +12,18 @@
 //
 // `source` is sent on EVERY submit: C1 persists first-touch attribution and
 // the field was previously never set at all.
+//
+// F-S32-12 — this is the ONE place in the app that deliberately bypasses the
+// shared api client (utils/api.tsx). That client's request interceptor attaches
+// `Authorization: Bearer ${getToken()}` unconditionally, so a visitor carrying a
+// stale/expired JWT in localStorage (e.g. from a prior login on this domain) had
+// their submit rejected 401 by JWT auth BEFORE AllowAny was ever consulted — and
+// the response interceptor then fired a doomed refresh/ 400 on top. Anonymous
+// visitors were unaffected, which is why this survived review.
+// POST /api/waitlist/ is a public endpoint: it must carry zero auth surface, so
+// it uses a bare fetch with no Authorization header and no credentials.
 import { type FC, type FormEvent, useState } from 'react';
-import api from '@/utils/api';
+import { API_DOMAIN } from '@/utils';
 
 export type WaitlistSource = 'homepage' | 'pricing' | 'subscription';
 export type WaitlistVariant = 'inline' | 'modal';
@@ -79,19 +89,31 @@ export const WaitlistForm: FC<Props> = ({ source, variant = 'inline' }) => {
     setSubmitting(true);
     setError('');
     try {
-      const res = await api.post('/api/waitlist/', {
-        email: trimmed,
-        features_wanted: selected,
-        country,
-        source,
+      // Trailing slash stripped because axios' combineURLs did it for us and a
+      // template literal does not: `${domain}//api/waitlist/` would 404.
+      const res = await fetch(`${API_DOMAIN.replace(/\/+$/, '')}/api/waitlist/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: trimmed,
+          features_wanted: selected,
+          country,
+          source,
+        }),
       });
-      // The api interceptor RESOLVES non-401 HTTP errors, so status-check
-      // rather than trusting that we got here.
-      if (res == null) return;               // cancelled — silent no-op
-      if (res.status === 200) setSuccess(true);
-      else setError('Something went wrong. Please try again.');
+
+      if (res.ok) {
+        setSuccess(true);
+      } else if (res.status === 429) {
+        // W-S32-4: the throttle is per-IP (5/hour), so on shared/office NAT an
+        // innocent visitor can be blocked by a stranger. Say so plainly instead
+        // of implying they broke something.
+        setError('Too many attempts from your network — please try again in about an hour.');
+      } else {
+        setError('Something went wrong. Please try again.');
+      }
     } catch {
-      // Never echo a server body to a public visitor.
+      // Network/CORS failure. Never echo a server body to a public visitor.
       setError('Something went wrong. Please try again.');
     } finally {
       setSubmitting(false);
