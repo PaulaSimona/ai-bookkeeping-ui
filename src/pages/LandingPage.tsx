@@ -255,23 +255,9 @@ export const LandingPage: FC = () => {
     return () => { document.head.removeChild(script); };
   }, []);
 
-  useEffect(() => {
-    const script = document.createElement('script');
-    script.type = 'application/ld+json';
-    script.text = JSON.stringify({
-      '@context': 'https://schema.org',
-      '@type': 'Organization',
-      name: 'Time2Win Inc.',
-      url: 'https://ai-bookkeeping.ai/',
-      contactPoint: {
-        '@type': 'ContactPoint',
-        email: 'support@ai-bookkeeping.ai',
-        contactType: 'customer support',
-      },
-    });
-    document.head.appendChild(script);
-    return () => { document.head.removeChild(script); };
-  }, []);
+  // NOTE: Organization JSON-LD is NOT injected here. It lives statically in
+  // index.html (S32 C4) so crawlers see it without executing JS, and so exactly
+  // one Organization node exists site-wide.
 
   const scrollTo = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
