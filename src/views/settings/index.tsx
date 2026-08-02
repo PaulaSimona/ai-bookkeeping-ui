@@ -22,24 +22,16 @@ import {
   ToastBanner,
   useToast,
 } from './ui';
+// O-S33-1: the canonical jurisdiction tables. A local 11-entry copy used to
+// live in this file — no territories, and 'Québec' where every other table
+// said 'Quebec'. That was the FOURTH divergent province list in the product.
+import { CA_PROVINCES, US_STATES } from '@/utils/constants';
 import { TaxProfileTab } from './TaxProfileTab';
 import { PlaidConnectionsCard } from './PlaidConnectionsCard';
 import { ChartOfAccountsPanel } from './ChartOfAccountsPanel';
 import { TeamAccessTab } from './TeamAccessTab';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const CA_PROVINCES = [
-  { code: 'AB', name: 'Alberta' },
-  { code: 'BC', name: 'British Columbia' },
-  { code: 'MB', name: 'Manitoba' },
-  { code: 'NB', name: 'New Brunswick' },
-  { code: 'NL', name: 'Newfoundland and Labrador' },
-  { code: 'NS', name: 'Nova Scotia' },
-  { code: 'ON', name: 'Ontario' },
-  { code: 'PE', name: 'Prince Edward Island' },
-  { code: 'QC', name: 'Québec' },
-  { code: 'SK', name: 'Saskatchewan' },
-];
 
 type ToastFns = { showSuccess: (m: string) => void; showError: (m: string) => void };
 
@@ -147,7 +139,12 @@ const BusinessProfileSection: FC<ToastFns> = ({ showSuccess, showError }) => {
                 ))}
               </Select>
             ) : (
-              <Input value={form.province} onChange={set('province')} placeholder="CA" maxLength={2} />
+              <Select value={form.province} onChange={set('province')}>
+                <option value="">Select…</option>
+                {US_STATES.map((s) => (
+                  <option key={s.code} value={s.code}>{s.name}</option>
+                ))}
+              </Select>
             )}
           </Field>
         </div>

@@ -3,6 +3,11 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useRegister } from '@/api/auth/useRegister';
 import { Loader } from '@/components/Loader';
 import logoSvg from '@/assets/logo.svg';
+import {
+  COUNTRIES,
+  REGIONS_BY_COUNTRY,
+  type CountryCode,
+} from '@/utils/constants';
 
 // ─── Password input with show/hide toggle ─────────────────────────────────────
 
@@ -61,43 +66,10 @@ const PasswordStrength: FC<{ password: string }> = ({ password }) => {
   );
 };
 
-// ─── Location data ───────────────────────────────────────────────────────────
-
-const CANADA_PROVINCES = [
-  { code: 'AB', name: 'Alberta' },
-  { code: 'BC', name: 'British Columbia' },
-  { code: 'MB', name: 'Manitoba' },
-  { code: 'NB', name: 'New Brunswick' },
-  { code: 'NL', name: 'Newfoundland and Labrador' },
-  { code: 'NS', name: 'Nova Scotia' },
-  { code: 'NT', name: 'Northwest Territories' },
-  { code: 'NU', name: 'Nunavut' },
-  { code: 'ON', name: 'Ontario' },
-  { code: 'PE', name: 'Prince Edward Island' },
-  { code: 'QC', name: 'Quebec' },
-  { code: 'SK', name: 'Saskatchewan' },
-  { code: 'YT', name: 'Yukon' },
-];
-
-const US_STATES = [
-  { code: 'AL', name: 'Alabama' }, { code: 'AK', name: 'Alaska' }, { code: 'AZ', name: 'Arizona' },
-  { code: 'AR', name: 'Arkansas' }, { code: 'CA', name: 'California' }, { code: 'CO', name: 'Colorado' },
-  { code: 'CT', name: 'Connecticut' }, { code: 'DE', name: 'Delaware' }, { code: 'DC', name: 'District of Columbia' },
-  { code: 'FL', name: 'Florida' }, { code: 'GA', name: 'Georgia' }, { code: 'HI', name: 'Hawaii' },
-  { code: 'ID', name: 'Idaho' }, { code: 'IL', name: 'Illinois' }, { code: 'IN', name: 'Indiana' },
-  { code: 'IA', name: 'Iowa' }, { code: 'KS', name: 'Kansas' }, { code: 'KY', name: 'Kentucky' },
-  { code: 'LA', name: 'Louisiana' }, { code: 'ME', name: 'Maine' }, { code: 'MD', name: 'Maryland' },
-  { code: 'MA', name: 'Massachusetts' }, { code: 'MI', name: 'Michigan' }, { code: 'MN', name: 'Minnesota' },
-  { code: 'MS', name: 'Mississippi' }, { code: 'MO', name: 'Missouri' }, { code: 'MT', name: 'Montana' },
-  { code: 'NE', name: 'Nebraska' }, { code: 'NV', name: 'Nevada' }, { code: 'NH', name: 'New Hampshire' },
-  { code: 'NJ', name: 'New Jersey' }, { code: 'NM', name: 'New Mexico' }, { code: 'NY', name: 'New York' },
-  { code: 'NC', name: 'North Carolina' }, { code: 'ND', name: 'North Dakota' }, { code: 'OH', name: 'Ohio' },
-  { code: 'OK', name: 'Oklahoma' }, { code: 'OR', name: 'Oregon' }, { code: 'PA', name: 'Pennsylvania' },
-  { code: 'RI', name: 'Rhode Island' }, { code: 'SC', name: 'South Carolina' }, { code: 'SD', name: 'South Dakota' },
-  { code: 'TN', name: 'Tennessee' }, { code: 'TX', name: 'Texas' }, { code: 'UT', name: 'Utah' },
-  { code: 'VT', name: 'Vermont' }, { code: 'VA', name: 'Virginia' }, { code: 'WA', name: 'Washington' },
-  { code: 'WV', name: 'West Virginia' }, { code: 'WI', name: 'Wisconsin' }, { code: 'WY', name: 'Wyoming' },
-];
+// Location data lives in utils/constants (O-S33-1): ONE table, mirroring
+// accounting/jurisdiction.py on the backend. The local copies that used to
+// sit here diverged from both the backend and utils/constants — which is how
+// a Yukon registrant ended up submitting a value nothing recognised.
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -116,7 +88,7 @@ export const Register: FC<Props> = () => {
     confirm_email: '',
     password: '',
     confirm: '',
-    country: 'CA',
+    country: 'CA' as CountryCode,
     province: '',
   });
   const [emailMismatch, setEmailMismatch] = useState(false);
@@ -150,8 +122,12 @@ export const Register: FC<Props> = () => {
     register(form);
   };
 
-  const fieldError = (key: keyof typeof errors): string | undefined =>
-    errors?.[key]?.[0];
+  // `confirm_email` is a CLIENT-ONLY field — the server never reports an
+  // error for it (it is not part of the wire payload), so the lookup must
+  // tolerate a key the errors map does not contain rather than force every
+  // caller to narrow. Its mismatch message is rendered separately below.
+  const fieldError = (key: string): string | undefined =>
+    (errors as Record<string, string[] | undefined>)?.[key]?.[0];
 
   return (
     <div className="flex min-h-screen">
@@ -235,57 +211,54 @@ export const Register: FC<Props> = () => {
               </div>
             ))}
 
-            {/* Country */}
+            {/* Country — CA/US only (O-S34-1). The 'Other' option was removed:
+                a jurisdiction we cannot seed a chart of accounts for is one we
+                cannot keep books for, and the backend now 400s anything else. */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Country</label>
               <select
                 value={form.country}
                 onChange={(e) => {
-                  setForm((f) => ({ ...f, country: e.target.value, province: '' }));
+                  // Region is cleared on every country change — a code valid in
+                  // one country is not valid in the other, and the server
+                  // rejects a mismatched pair rather than repairing it.
+                  setForm((f) => ({
+                    ...f,
+                    country: e.target.value as CountryCode,
+                    province: '',
+                  }));
                   setProvinceError(false);
                 }}
                 className="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0066FF] focus:border-transparent transition"
               >
-                <option value="CA">Canada</option>
-                <option value="US">United States</option>
-                <option value="OTHER">Other</option>
+                {COUNTRIES.map((c) => (
+                  <option key={c.code} value={c.code}>{c.name}</option>
+                ))}
               </select>
             </div>
 
-            {/* Province / State */}
+            {/* Province / State — one dependent select, driven by the canonical
+                table. The value submitted is always the CODE ('BC', 'TX'); the
+                display name is never a stored value. */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                {form.country === 'CA' ? 'Province' : form.country === 'US' ? 'State' : 'Province / State / Region'}
+                {form.country === 'CA' ? 'Province' : 'State'}
               </label>
-              {form.country === 'CA' && (
-                <select
-                  value={form.province}
-                  onChange={(e) => { setForm((f) => ({ ...f, province: e.target.value })); setProvinceError(false); }}
-                  className={`w-full rounded-lg border px-3.5 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0066FF] focus:border-transparent transition ${provinceError || fieldError('province') ? 'border-red-400' : 'border-gray-300'}`}
-                >
-                  <option value="">Select province…</option>
-                  {CANADA_PROVINCES.map((p) => <option key={p.code} value={p.code}>{p.name}</option>)}
-                </select>
-              )}
-              {form.country === 'US' && (
-                <select
-                  value={form.province}
-                  onChange={(e) => { setForm((f) => ({ ...f, province: e.target.value })); setProvinceError(false); }}
-                  className={`w-full rounded-lg border px-3.5 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0066FF] focus:border-transparent transition ${provinceError || fieldError('province') ? 'border-red-400' : 'border-gray-300'}`}
-                >
-                  <option value="">Select state…</option>
-                  {US_STATES.map((s) => <option key={s.code} value={s.code}>{s.name}</option>)}
-                </select>
-              )}
-              {form.country === 'OTHER' && (
-                <input
-                  type="text"
-                  value={form.province}
-                  onChange={(e) => { setForm((f) => ({ ...f, province: e.target.value })); setProvinceError(false); }}
-                  placeholder="Enter your province, state, or region"
-                  className={`w-full rounded-lg border px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0066FF] focus:border-transparent transition ${provinceError || fieldError('province') ? 'border-red-400' : 'border-gray-300'}`}
-                />
-              )}
+              <select
+                value={form.province}
+                onChange={(e) => {
+                  setForm((f) => ({ ...f, province: e.target.value }));
+                  setProvinceError(false);
+                }}
+                className={`w-full rounded-lg border px-3.5 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0066FF] focus:border-transparent transition ${provinceError || fieldError('province') ? 'border-red-400' : 'border-gray-300'}`}
+              >
+                <option value="">
+                  {form.country === 'CA' ? 'Select province…' : 'Select state…'}
+                </option>
+                {REGIONS_BY_COUNTRY[form.country].map((r) => (
+                  <option key={r.code} value={r.code}>{r.name}</option>
+                ))}
+              </select>
               {provinceError && <p className="mt-1 text-xs text-red-600">Province/State is required.</p>}
               {fieldError('province') && <p className="mt-1 text-xs text-red-600">{fieldError('province')}</p>}
             </div>

@@ -8,6 +8,11 @@
 // including chart_reseeded, which is ABSENT (not false) on a PUT that did not
 // change the country, so consumers keep the truthy check.
 import { type FC, type FormEvent, useEffect, useState } from 'react';
+// O-S33-1: the canonical table. The local copy removed from here held the
+// same 13 codes in the same order — the only difference is the label
+// 'Quebec' where this file said 'Québec'; the canonical spelling matches
+// the backend chart fixture.
+import { CA_PROVINCES } from '@/utils/constants';
 import {
   useSaveTaxProfile,
   type TaxProfile,
@@ -23,21 +28,6 @@ import {
 // view) so the Tier 2 data layer stays self-contained. PST provinces are
 // flagged for the inline hint.
 
-const CA_PROVINCES: { code: string; name: string }[] = [
-  { code: 'AB', name: 'Alberta' },
-  { code: 'BC', name: 'British Columbia' },
-  { code: 'MB', name: 'Manitoba' },
-  { code: 'NB', name: 'New Brunswick' },
-  { code: 'NL', name: 'Newfoundland and Labrador' },
-  { code: 'NS', name: 'Nova Scotia' },
-  { code: 'NT', name: 'Northwest Territories' },
-  { code: 'NU', name: 'Nunavut' },
-  { code: 'ON', name: 'Ontario' },
-  { code: 'PE', name: 'Prince Edward Island' },
-  { code: 'QC', name: 'Québec' },
-  { code: 'SK', name: 'Saskatchewan' },
-  { code: 'YT', name: 'Yukon' },
-];
 
 const FILING_FREQUENCIES: { value: FilingFrequency; label: string }[] = [
   { value: 'monthly', label: 'Monthly' },
