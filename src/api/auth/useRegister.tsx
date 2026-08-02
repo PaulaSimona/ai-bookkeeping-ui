@@ -1,6 +1,27 @@
 import axios from 'axios';
 import { useState } from 'react';
 import { API_DOMAIN } from '../../utils';
+import type { CountryCode } from '../../utils/constants';
+
+/**
+ * The registration wire payload (O-S33-1).
+ *
+ * `country` and `province` are declared TOGETHER and honestly: the backend
+ * requires a valid region CODE for the country when country is present, and
+ * 400s anything else. Typing them here is what stops a caller quietly
+ * sending a display name or a stale 'OTHER' — the same type-level principle
+ * C5b applied when it removed mapped_account from ClassifyPayload.
+ */
+export interface RegisterPayload {
+  first_name: string;
+  last_name: string;
+  email: string;
+  password: string;
+  confirm: string;
+  province: string;
+  country: CountryCode;
+  phone_number?: string;
+}
 
 const EMPTY_ERRORS = {
   email: [] as string[],
@@ -28,7 +49,23 @@ const extractFieldErrors = (data: any): typeof EMPTY_ERRORS => {
   return result;
 };
 
-export const useRegister = (): any => {
+interface UseRegister {
+  register: (data: RegisterPayload) => Promise<void>;
+  errors: typeof EMPTY_ERRORS;
+  success: boolean;
+  requiresVerification: boolean;
+  registeredEmail: string;
+  error: string;
+  inProgress: boolean;
+  completed: boolean;
+}
+
+// The return type was annotated `: any`, which erased every type on the way
+// out — `register` arrived at the call site as `any`, so its parameter type
+// was never enforced and Register.tsx could pass an object missing required
+// fields with a clean tsc. Typed properly, the RegisterPayload contract above
+// actually binds.
+export const useRegister = (): UseRegister => {
   const [flags, setFlags] = useState({
     success: false,
     requiresVerification: false,
@@ -39,15 +76,7 @@ export const useRegister = (): any => {
   });
   const [errors, setErrors] = useState(EMPTY_ERRORS);
 
-  const register = async (data: {
-    first_name: string;
-    last_name: string;
-    email: string;
-    phone_number: string;
-    password: string;
-    confirm: string;
-    province: string;
-  }): Promise<any> => {
+  const register = async (data: RegisterPayload): Promise<void> => {
     setFlags((f) => ({ ...f, inProgress: true, success: false, requiresVerification: false, error: '' }));
     setErrors(EMPTY_ERRORS);
 
