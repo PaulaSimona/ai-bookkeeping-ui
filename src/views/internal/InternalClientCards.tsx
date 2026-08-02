@@ -50,16 +50,36 @@ const CHIP: Record<StaffCard['classification'], { label: string; tone: 'warning'
   personal: { label: 'Personal', tone: 'neutral' },
 };
 
-// Mirrors the MODEL invariant (OrgCard.clean, backend models.py:1415-1445).
-// The server is the authority; this only avoids offering a choice that 400s.
+// Mirrors the MODEL invariant (OrgCard.clean, backend accounting/models.py).
+// The server is the AUTHORITY — it validates on save and the serializer
+// narrows its own queryset the same way; this only avoids offering a choice
+// that would 400.
+//
+// This staff console KEEPS the picker. O-S33-4 removed it from the client lane
+// only: an owner cannot be expected to choose a ledger account, but staff can,
+// and staff also handle the cases the client lane refuses.
 const ALLOWED_TYPES: Record<'business' | 'personal', string[]> = {
   business: ['liability'],
   personal: ['liability', 'equity'],
 };
 
+// O-S33-3: two families of account pass the type check above but are never
+// valid card mappings — 2140 Card Settlement Clearing (a transient holding
+// position that would never clear) and the 22xx tax/control range (reconciled
+// against filings; a card balance there corrupts the remittance position).
+// Both are liabilities in the CA and US charts, so ALLOWED_TYPES cannot catch
+// them. Mirrors backend card_constants.excluded_mapping_reason.
+const EXCLUDED_CLEARING_CODE = '2140';
+const EXCLUDED_TAX_PREFIX = '22';
+
+const isExcludedAccountCode = (code: string) =>
+  code === EXCLUDED_CLEARING_CODE || code.startsWith(EXCLUDED_TAX_PREFIX);
+
 const PICKER_NOTE: Record<'business' | 'personal', string> = {
   business: 'A business card maps to a liability account — the card’s own payable.',
-  personal: 'A personal card maps to a shareholder loan or owner drawings account.',
+  // Jurisdiction-neutral: the owner account differs by country (the CA and US
+  // charts use different codes for it), so name the purpose, not the account.
+  personal: 'A personal card maps to the org’s owner-loan or owner-equity account.',
 };
 
 const fmtDate = (s: string) =>
@@ -90,7 +110,9 @@ const ClassifyPanel: FC<{
     if (!choice) return [];
     const allowed = ALLOWED_TYPES[choice];
     return accounts
-      .filter((a) => a.is_active && allowed.includes(a.type))
+      .filter((a) => a.is_active
+        && allowed.includes(a.type)
+        && !isExcludedAccountCode(a.code))   // O-S33-3
       .sort((a, b) => a.code.localeCompare(b.code));
   }, [choice, accounts]);
 
