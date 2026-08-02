@@ -2,7 +2,7 @@
 //
 // Consumes the SHIPPED s29 endpoints exactly; no new backend surface:
 //   GET   /api/accounting/cards/        (paginated, OrgCardClientSerializer)
-//   PATCH /api/accounting/cards/<pk>/   (classification, mapped_account, label)
+//   PATCH /api/accounting/cards/<pk>/   (classification, label)
 //
 // The client lane is classify-only by design — there is no create and no
 // delete (card_views.py:16-18): cards are DETECTED by the settlement
@@ -33,9 +33,13 @@ export interface OrgCard {
   updated_at: string;
 }
 
+// O-S33-4: mapped_account is NOT part of this payload. The server resolves the
+// account from the classification, and the API rejects a client-supplied
+// mapped_account with a 400 — so sending it would break the call, not merely
+// be ignored. Typed out deliberately rather than left optional: the type is
+// what stops a future caller re-adding it.
 export interface ClassifyPayload {
   classification: Exclude<CardClassification, 'unidentified'>;
-  mapped_account: string;
   label?: string;
 }
 
@@ -47,11 +51,12 @@ export const CARDS_URL = '/api/accounting/cards/';
 
 export const useCards = () => usePaginatedList<OrgCard>(CARDS_URL);
 
-// Pull a DRF error body into one human sentence. The model invariant
-// (OrgCard.clean) surfaces through the serializer as
-// {classification: ["A business card must map to a liability account; …"]} —
-// those messages are user-actionable, so they are shown verbatim rather than
-// replaced with a generic failure line.
+// Pull a DRF error body into one human sentence. Two shapes reach this lane,
+// both already written as customer-facing copy, so both are shown verbatim
+// rather than replaced with a generic failure line:
+//   409 {detail: "…Our team can set it up for you."}  — O-S33-4, no account
+//       can be resolved; the card stays unidentified and staff finish it.
+//   400 {classification: ["…"]}                        — the model invariant.
 const errorMessage = (data: unknown): string => {
   if (typeof data === 'string') return data;
   if (data && typeof data === 'object') {

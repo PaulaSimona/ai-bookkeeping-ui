@@ -8,16 +8,16 @@
 //
 // Data layer is its own (useCards → the shipped s29 client endpoints); only
 // the design system is shared with Tier 1 (MASTER_T2 §14-§15). Page-local
-// toast + Section/Field/Select primitives follow the live Tier 2 convention
+// toast + Spinner primitives follow the live Tier 2 convention
 // (settings/ui.tsx), the same choice BankConnections made — the shared
 // components/ Badge/Button/Toast are dead react-bootstrap legacy.
 import { type FC, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useOrgMe, useAccounts, type Account } from '@/hooks/useAccounts';
+import { useOrgMe } from '@/hooks/useAccounts';
 import { PageLoader } from '@/components/Loader';
 import { PageHeader } from '@/components/t2/PageHeader';
 import { Card } from '@/components/t2/Card';
-import { Field, Select, Spinner, ToastBanner, useToast } from '@/views/settings/ui';
+import { Spinner, ToastBanner, useToast } from '@/views/settings/ui';
 import {
   useCards,
   useClassifyCard,
@@ -55,64 +55,34 @@ const Chip: FC<{ classification: CardClassification }> = ({ classification }) =>
   );
 };
 
-const accountLabel = (a: Account) => `${a.code} — ${a.name}`;
-
 // ─── Classify flow ────────────────────────────────────────────────────────────
 
-// Which account types each classification may map to. Mirrors the MODEL
-// invariant (OrgCard.clean, backend models.py:1415-1445) — the server is the
-// authority; this only avoids offering a choice that would 400:
-//   business -> LIABILITY only        (the card's own payable)
-//   personal -> LIABILITY or EQUITY   (shareholder loan / owner drawings)
-const ALLOWED_TYPES: Record<'business' | 'personal', Account['type'][]> = {
-  business: ['liability'],
-  personal: ['liability', 'equity'],
-};
-
-const PICKER_COPY: Record<'business' | 'personal', { label: string; note: string }> = {
-  business: {
-    label: 'Which account holds this card’s balance?',
-    note: 'Card balances live in a liability account — what the business owes the card issuer.',
-  },
-  personal: {
-    label: 'Which account tracks amounts owed to or from the owner?',
-    note: 'Payments to a personal card are money drawn from the business — usually a shareholder loan or owner drawings account.',
-  },
-};
+// O-S33-4: the account picker is GONE from this lane. Choosing a ledger
+// account is a bookkeeping question the owner has no way to answer correctly,
+// and the right answer differs by jurisdiction, so the SERVER resolves it from
+// the classification alone (backend card_settlement.resolve_card_account). The
+// payload is now `{ classification }` and nothing else — the API rejects a
+// client-supplied mapped_account outright. The STAFF console keeps its picker.
+//
+// The line below says what happens, factually, without naming accounts or
+// explaining bookkeeping treatment (O-S33-2 spirit — same reasoning as the
+// discovery email this page is linked from).
+const CHOICE_NOTE =
+  'Business cards get their own card account automatically; personal card payments are routed for review.';
 
 const ClassifyForm: FC<{
   card: OrgCard;
-  accounts: Account[];
-  accountsLoading: boolean;
   onDone: (choice: 'business' | 'personal') => void;
   onCancel: () => void;
-}> = ({ card, accounts, accountsLoading, onDone, onCancel }) => {
+}> = ({ card, onDone, onCancel }) => {
   const { classify, savingId } = useClassifyCard();
   const [choice, setChoice] = useState<'business' | 'personal' | null>(null);
-  const [accountId, setAccountId] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const options = useMemo(() => {
-    if (!choice) return [];
-    const allowed = ALLOWED_TYPES[choice];
-    return accounts
-      .filter((a) => a.is_active && allowed.includes(a.type))
-      .sort((a, b) => a.code.localeCompare(b.code));
-  }, [choice, accounts]);
-
-  const pick = (next: 'business' | 'personal') => {
-    setChoice(next);
-    setAccountId('');   // an account valid for one choice may be invalid for the other
-    setError(null);
-  };
-
   const submit = async () => {
-    if (!choice || !accountId) return;
+    if (!choice) return;
     setError(null);
-    const res = await classify(card.id, {
-      classification: choice,
-      mapped_account: accountId,
-    });
+    const res = await classify(card.id, { classification: choice });
     if (res.ok) onDone(choice);
     else setError(res.error);
   };
@@ -128,7 +98,7 @@ const ClassifyForm: FC<{
           <button
             key={value}
             type="button"
-            onClick={() => pick(value)}
+            onClick={() => { setChoice(value); setError(null); }}
             aria-pressed={choice === value}
             className={`rounded-lg border px-4 py-2 text-sm font-semibold capitalize transition-colors ${
               choice === value
@@ -141,33 +111,11 @@ const ClassifyForm: FC<{
         ))}
       </div>
 
-      {choice && (
-        <div className="mt-4 space-y-3">
-          <Field label={PICKER_COPY[choice].label} required>
-            {accountsLoading ? (
-              <div className="flex h-[42px] items-center gap-2 text-sm text-gray-500">
-                <Spinner /> Loading accounts…
-              </div>
-            ) : options.length === 0 ? (
-              <p className="text-[13px] text-amber-700">
-                No suitable account found in your chart of accounts. Add one under
-                Settings → Chart of accounts, then come back.
-              </p>
-            ) : (
-              <Select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
-                <option value="">Select an account…</option>
-                {options.map((a) => (
-                  <option key={a.id} value={a.id}>{accountLabel(a)}</option>
-                ))}
-              </Select>
-            )}
-          </Field>
-          <p className="text-[12.5px] text-gray-500">{PICKER_COPY[choice].note}</p>
-        </div>
-      )}
+      <p className="mt-3 text-[12.5px] text-gray-500">{CHOICE_NOTE}</p>
 
-      {/* The invariant 400s are user-actionable, so the server's own wording
-          is shown rather than a generic failure line. */}
+      {/* The server's refusals on this lane are written as customer-facing
+          copy that names no account and no code (backend O-S33-4), so its own
+          wording is shown rather than a generic failure line. */}
       {error && (
         <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-[13px] text-red-700">{error}</p>
       )}
@@ -176,11 +124,11 @@ const ClassifyForm: FC<{
         <button
           type="button"
           onClick={submit}
-          disabled={!choice || !accountId || saving}
+          disabled={!choice || saving}
           className="inline-flex h-[38px] items-center gap-2 rounded-lg bg-[var(--color-primary)] px-4 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-primary-hover)] disabled:opacity-50"
         >
           {saving && <Spinner light />}
-          {saving ? 'Saving…' : 'Save'}
+          {saving ? 'Saving…' : 'Confirm'}
         </button>
         <button
           type="button"
@@ -199,10 +147,8 @@ const ClassifyForm: FC<{
 
 const CardRow: FC<{
   card: OrgCard;
-  accounts: Account[];
-  accountsLoading: boolean;
   onClassified: (choice: 'business' | 'personal') => void;
-}> = ({ card, accounts, accountsLoading, onClassified }) => {
+}> = ({ card, onClassified }) => {
   const [open, setOpen] = useState(false);
   const unidentified = card.classification === 'unidentified';
 
@@ -245,8 +191,6 @@ const CardRow: FC<{
       {unidentified && open && (
         <ClassifyForm
           card={card}
-          accounts={accounts}
-          accountsLoading={accountsLoading}
           onDone={(choice) => { setOpen(false); onClassified(choice); }}
           onCancel={() => setOpen(false)}
         />
@@ -263,10 +207,8 @@ export const CardsPage: FC = () => {
   const canView = role === 'owner' || role === 'accountant';
 
   const { items, count, page, setPage, pageSize, isLoading, error, refetch } = useCards();
-  // The chart is bounded well under one page (useAccounts pulls page_size=200),
-  // so fetch active accounts once and filter per classification client-side —
-  // one request instead of one per choice.
-  const { accounts, isLoading: accountsLoading } = useAccounts({ active: true });
+  // O-S33-4: the chart fetch is gone with the picker — this lane no longer
+  // needs the account list at all, so the page makes one request fewer.
   const { toast, showSuccess } = useToast();
 
   // D-S31-3: informational only. Set after a BUSINESS classification, never
@@ -286,7 +228,10 @@ export const CardsPage: FC = () => {
     showSuccess(
       choice === 'business'
         ? 'Card saved. Future payments to it will post automatically.'
-        : 'Card saved. Payments to it will be treated as owner drawings.',
+        // O-S33-2 spirit: say what happens, not how it is booked. "treated as
+        // owner drawings" named a CA-only account concept that is wrong for US
+        // orgs anyway (their owner account is a different code entirely).
+        : 'Card saved. Payments to it will be routed for review.',
     );
     if (choice === 'business') setNudge(true);
     refetch();
@@ -363,8 +308,6 @@ export const CardsPage: FC = () => {
                   <CardRow
                     key={card.id}
                     card={card}
-                    accounts={accounts}
-                    accountsLoading={accountsLoading}
                     onClassified={onClassified}
                   />
                 ))}
