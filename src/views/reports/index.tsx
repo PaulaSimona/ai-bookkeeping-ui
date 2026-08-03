@@ -1,5 +1,6 @@
 import { type FC, useEffect, useState } from 'react';
 import api from '@/utils/api';
+import { CA_PROVINCES as CANONICAL_CA_PROVINCES } from '@/utils/constants';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -8,7 +9,9 @@ interface Doc { id: number; created_at: string; extraction_status: string }
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const CURRENT_YEAR = new Date().getFullYear();
-const CA_PROVINCES = new Set(['ON','QC','NS','NB','MB','BC','PE','SK','AB','NL']);
+// O-S35-1 (F-S34-2): membership derives from the canonical jurisdiction
+// vocabulary — all 13 CA regions including NT/NU/YT, one table in one place.
+const CA_PROVINCE_CODES = new Set(CANONICAL_CA_PROVINCES.map((p) => p.code));
 const YEARS = Array.from({ length: CURRENT_YEAR - 2022 }, (_, i) => CURRENT_YEAR - i);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -168,7 +171,7 @@ export const Reports: FC = () => {
 
     api.get('/api/user/profile').then((res) => {
       const province = res?.data?.company?.province ?? '';
-      setIsCanada(CA_PROVINCES.has(province) || province === '');
+      setIsCanada(CA_PROVINCE_CODES.has(province) || province === '');
     });
   }, []);
 
