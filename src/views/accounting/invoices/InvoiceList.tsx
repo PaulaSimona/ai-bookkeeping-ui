@@ -11,7 +11,6 @@ import { StatusBadge } from '@/components/t2/StatusBadge';
 import { TableShell, TableRow, type T2Column } from '@/components/t2/TableShell';
 import { usePaginatedList } from '@/hooks/usePaginatedList';
 import { useOrgMe } from '@/hooks/useAccounts';
-import { useToast } from '@/hooks/useToast';
 import {
   fmtMoney,
   invoiceNumberLabel,
@@ -22,6 +21,7 @@ import {
   inputCls,
 } from '@/hooks/useSalesInvoices';
 import { ClientCreateDialog } from '@/views/accounting/ClientCreateForm';
+import { LocalToast, type ToastFeedback } from '@/views/accounting/invoices/InvoiceActions';
 import type { InvoiceStatus, InvoiceKind, SalesInvoice } from '@/types/salesInvoice';
 
 const STATUS_FILTERS: { value: '' | InvoiceStatus; label: string }[] = [
@@ -54,8 +54,8 @@ export const InvoiceList: FC = () => {
   const { role } = useOrgMe();
   const canWrite = role === 'owner' || role === 'accountant';
   const { byId } = useCounterpartyOptions();
-  const { showToast } = useToast();
   const [showAddClient, setShowAddClient] = useState(false);
+  const [feedback, setFeedback] = useState<ToastFeedback | null>(null);
 
   const [status, setStatus] = useState<'' | InvoiceStatus>('');
   const [kind, setKind] = useState<'' | InvoiceKind>('');
@@ -176,11 +176,14 @@ export const InvoiceList: FC = () => {
         <ClientCreateDialog
           onCreated={() => {
             setShowAddClient(false);
-            showToast({ title: 'Client added', message: 'The client is now available.', variant: 'success' });
+            setFeedback({ message: 'Client added — now available.', variant: 'success' });
+            window.setTimeout(() => setFeedback(null), 5000);
           }}
           onClose={() => setShowAddClient(false)}
         />
       )}
+
+      <LocalToast toast={feedback} />
     </div>
   );
 };

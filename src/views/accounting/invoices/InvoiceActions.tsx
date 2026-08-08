@@ -1,13 +1,15 @@
-// §INV action bar + dialogs (S41 UI). Issue / void / payment / credit-note /
-// send / PDF. Every WRITE action gates on canWrite; PDF (a read) is always
-// available. Mutations status-check the resolved response and surface
-// res.data.detail. Money is display-only.
-import { type FC, type ReactNode, useState } from 'react';
+// §INV action bar + dialogs (S41 UI; F-S41-2 error surfacing). Issue / void /
+// payment / credit-note / send / PDF. Every WRITE action gates on canWrite; PDF
+// (a read) is always available. Mutations status-check the resolved response
+// (and catch rejects), surfacing res.data.detail INLINE in the open dialog (the
+// dialog stays open so the user can correct and retry). Success + PDF feedback
+// render via a LOCAL toast (BankConnections convention) — the global useToast is
+// dead (unrendered) and deliberately NOT used here. Money is display-only.
+import { type FC, type ReactNode, useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { Card } from '@/components/t2/Card';
 import { useAccounts } from '@/hooks/useAccounts';
-import { useToast } from '@/hooks/useToast';
 import { useInvoicePdf } from '@/hooks/useInvoicePdf';
 import {
   issueInvoice,
@@ -33,12 +35,46 @@ interface Props {
 const detailOf = (res: any, fallback = 'That action could not be completed.'): string =>
   res?.data?.detail ?? fallback;
 
+// ── Local toast (BankConnections convention) — fixed, auto-dismissing ─────────
+
+export interface ToastFeedback { message: string; variant: 'success' | 'error' | 'info' }
+
+const TOAST_STYLES: Record<ToastFeedback['variant'], string> = {
+  success: 'bg-emerald-500',
+  error: 'bg-red-600',
+  info: 'bg-[#0066FF]',
+};
+
+export const LocalToast: FC<{ toast: ToastFeedback | null }> = ({ toast }) => {
+  if (!toast) return null;
+  return (
+    <div className={`fixed top-5 right-5 z-[60] max-w-md rounded-xl px-5 py-3.5 text-sm font-medium text-white shadow-lg ${TOAST_STYLES[toast.variant]}`}>
+      {toast.message}
+    </div>
+  );
+};
+
+// Inline error inside a dialog (house field-error → detail → fallback shape).
+const InlineError: FC<{ error?: string | null }> = ({ error }) =>
+  error ? <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null;
+
 export const InvoiceActionBar: FC<Props> = ({ invoice, canWrite, counterpartyEmail, onChanged }) => {
   const navigate = useNavigate();
-  const { showToast } = useToast();
   const { openPdf, isOpening } = useInvoicePdf();
   const [dialog, setDialog] = useState<Dialog>(null);
+  const [dialogError, setDialogError] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<ToastFeedback | null>(null);
   const [busy, setBusy] = useState(false);
+  const timer = useRef<number | null>(null);
+
+  const flash = useCallback((message: string, variant: ToastFeedback['variant']) => {
+    if (timer.current) window.clearTimeout(timer.current);
+    setFeedback({ message, variant });
+    timer.current = window.setTimeout(() => setFeedback(null), 5000);
+  }, []);
+
+  const openDialog = (d: Dialog) => { setDialogError(null); setDialog(d); };
+  const closeDialog = () => { setDialogError(null); setDialog(null); };
 
   const isDraft = invoice.status === 'draft';
   const isVoided = invoice.status === 'voided';
@@ -48,18 +84,23 @@ export const InvoiceActionBar: FC<Props> = ({ invoice, canWrite, counterpartyEma
 
   const pdfLabel = isDraft ? 'Preview (draft)' : 'PDF';
 
+  // On non-2xx OR a rejected promise: surface the detail INLINE, keep the dialog
+  // open, no refetch. On success: close, flash a local success toast, refetch.
   const run = async (fn: () => Promise<any>, okMsg: string, after?: (data: any) => void) => {
     setBusy(true);
+    setDialogError(null);
     try {
       const res = await fn();
-      if (res == null) { showToast({ title: 'Error', message: 'Request cancelled — retry.', variant: 'danger' }); return; }
+      if (res == null) { setDialogError('Request was cancelled — please retry.'); return; }
       if (res.status >= 200 && res.status < 300) {
-        showToast({ title: 'Done', message: okMsg, variant: 'success' });
         setDialog(null);
+        flash(okMsg, 'success');
         if (after) after(res.data); else onChanged();
       } else {
-        showToast({ title: 'Error', message: detailOf(res), variant: 'danger' });
+        setDialogError(detailOf(res));
       }
+    } catch (err: any) {
+      setDialogError(detailOf(err?.response));
     } finally {
       setBusy(false);
     }
@@ -67,68 +108,73 @@ export const InvoiceActionBar: FC<Props> = ({ invoice, canWrite, counterpartyEma
 
   const doPdf = async () => {
     const r = await openPdf(invoice.id);
-    if (!r.ok) showToast({ title: 'Error', message: r.detail ?? 'Could not open the PDF.', variant: 'danger' });
+    if (!r.ok) flash(r.detail ?? 'Could not open the PDF.', 'error');
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <button className={secondaryBtn} onClick={doPdf} disabled={isOpening}>{pdfLabel}</button>
+    <>
+      <div className="flex flex-wrap items-center gap-2">
+        <button className={secondaryBtn} onClick={doPdf} disabled={isOpening}>{pdfLabel}</button>
 
-      {canWrite && isDraft && (
-        <>
-          <button className={secondaryBtn} onClick={() => navigate(`/accounting/invoices/${invoice.id}/edit`)}>Edit</button>
-          <button className={primaryBtn} onClick={() => setDialog('issue')}>Issue</button>
-        </>
-      )}
-      {canWrite && isIssuedLike && (
-        <>
-          <button className={secondaryBtn} onClick={() => setDialog('send')}>Send</button>
-          {canPay && <button className={secondaryBtn} onClick={() => setDialog('payment')}>Record payment</button>}
-          <button className={secondaryBtn} onClick={() => setDialog('credit')}>Credit note</button>
-          {canVoid && <button className={secondaryBtn} onClick={() => setDialog('void')}>Void</button>}
-        </>
-      )}
-      {isVoided && <span className="text-sm text-gray-400">Voided — no further actions.</span>}
+        {canWrite && isDraft && (
+          <>
+            <button className={secondaryBtn} onClick={() => navigate(`/accounting/invoices/${invoice.id}/edit`)}>Edit</button>
+            <button className={primaryBtn} onClick={() => openDialog('issue')}>Issue</button>
+          </>
+        )}
+        {canWrite && isIssuedLike && (
+          <>
+            <button className={secondaryBtn} onClick={() => openDialog('send')}>Send</button>
+            {canPay && <button className={secondaryBtn} onClick={() => openDialog('payment')}>Record payment</button>}
+            <button className={secondaryBtn} onClick={() => openDialog('credit')}>Credit note</button>
+            {canVoid && <button className={secondaryBtn} onClick={() => openDialog('void')}>Void</button>}
+          </>
+        )}
+        {isVoided && <span className="text-sm text-gray-400">Voided — no further actions.</span>}
 
-      {dialog === 'issue' && (
-        <Modal title="Issue invoice" onClose={() => setDialog(null)}>
-          <p className="text-sm text-gray-600">
-            Issuing assigns a permanent invoice number and posts the entry. This cannot be undone
-            (corrections are made with a credit note). Continue?
-          </p>
-          <DialogButtons
-            busy={busy}
-            confirmLabel="Issue"
-            onCancel={() => setDialog(null)}
-            onConfirm={() => run(() => issueInvoice(invoice.id), 'Invoice issued.')}
-          />
-        </Modal>
-      )}
+        {dialog === 'issue' && (
+          <Modal title="Issue invoice" onClose={closeDialog}>
+            <p className="text-sm text-gray-600">
+              Issuing assigns a permanent invoice number and posts the entry. This cannot be undone
+              (corrections are made with a credit note). Continue?
+            </p>
+            <InlineError error={dialogError} />
+            <DialogButtons
+              busy={busy}
+              confirmLabel="Issue"
+              onCancel={closeDialog}
+              onConfirm={() => run(() => issueInvoice(invoice.id), 'Invoice issued.')}
+            />
+          </Modal>
+        )}
 
-      {dialog === 'void' && (
-        <VoidDialog busy={busy} onClose={() => setDialog(null)}
-          onConfirm={(reason) => run(() => voidInvoice(invoice.id, reason), 'Invoice voided.')} />
-      )}
+        {dialog === 'void' && (
+          <VoidDialog busy={busy} error={dialogError} onClose={closeDialog}
+            onConfirm={(reason) => run(() => voidInvoice(invoice.id, reason), 'Invoice voided.')} />
+        )}
 
-      {dialog === 'payment' && (
-        <PaymentDialog busy={busy} onClose={() => setDialog(null)}
-          onConfirm={(p) => run(() => recordInvoicePayment(invoice.id, p), 'Payment recorded.')} />
-      )}
+        {dialog === 'payment' && (
+          <PaymentDialog busy={busy} error={dialogError} onClose={closeDialog}
+            onConfirm={(p) => run(() => recordInvoicePayment(invoice.id, p), 'Payment recorded.')} />
+        )}
 
-      {dialog === 'credit' && (
-        <CreditNoteDialog busy={busy} onClose={() => setDialog(null)}
-          onConfirm={(lines) => run(
-            () => createCreditNote(invoice.id, lines),
-            'Credit note created.',
-            (data) => { setDialog(null); navigate(`/accounting/invoices/${data?.id}`); },
-          )} />
-      )}
+        {dialog === 'credit' && (
+          <CreditNoteDialog busy={busy} error={dialogError} onClose={closeDialog}
+            onConfirm={(lines) => run(
+              () => createCreditNote(invoice.id, lines),
+              'Credit note created.',
+              (data) => { setDialog(null); flash('Credit note created.', 'success'); navigate(`/accounting/invoices/${data?.id}`); },
+            )} />
+        )}
 
-      {dialog === 'send' && (
-        <SendDialog busy={busy} placeholder={counterpartyEmail} onClose={() => setDialog(null)}
-          onConfirm={(recipient) => run(() => sendInvoice(invoice.id, recipient || undefined), 'Send queued.')} />
-      )}
-    </div>
+        {dialog === 'send' && (
+          <SendDialog busy={busy} error={dialogError} placeholder={counterpartyEmail} onClose={closeDialog}
+            onConfirm={(recipient) => run(() => sendInvoice(invoice.id, recipient || undefined), 'Send queued.')} />
+        )}
+      </div>
+
+      <LocalToast toast={feedback} />
+    </>
   );
 };
 
@@ -160,12 +206,13 @@ const DialogButtons: FC<{ busy: boolean; confirmLabel: string; onCancel: () => v
 
 // ── Void ────────────────────────────────────────────────────────────────────
 
-const VoidDialog: FC<{ busy: boolean; onClose: () => void; onConfirm: (reason: string) => void }> = ({ busy, onClose, onConfirm }) => {
+const VoidDialog: FC<{ busy: boolean; error?: string | null; onClose: () => void; onConfirm: (reason: string) => void }> = ({ busy, error, onClose, onConfirm }) => {
   const [reason, setReason] = useState('');
   return (
     <Modal title="Void invoice" onClose={onClose}>
       <p className="mb-2 text-sm text-gray-600">Voiding requires a reason. An invoice with recorded payments cannot be voided.</p>
       <textarea className={`${inputCls} min-h-[80px] w-full`} placeholder="Reason" value={reason} onChange={(e) => setReason(e.target.value)} />
+      <InlineError error={error} />
       <DialogButtons busy={busy} confirmLabel="Void" disabled={!reason.trim()} onCancel={onClose} onConfirm={() => onConfirm(reason.trim())} />
     </Modal>
   );
@@ -173,7 +220,7 @@ const VoidDialog: FC<{ busy: boolean; onClose: () => void; onConfirm: (reason: s
 
 // ── Payment ─────────────────────────────────────────────────────────────────
 
-const PaymentDialog: FC<{ busy: boolean; onClose: () => void; onConfirm: (p: { amount: string; payment_date: string; method?: string }) => void }> = ({ busy, onClose, onConfirm }) => {
+const PaymentDialog: FC<{ busy: boolean; error?: string | null; onClose: () => void; onConfirm: (p: { amount: string; payment_date: string; method?: string }) => void }> = ({ busy, error, onClose, onConfirm }) => {
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState('');
   const [method, setMethod] = useState('');
@@ -193,6 +240,7 @@ const PaymentDialog: FC<{ busy: boolean; onClose: () => void; onConfirm: (p: { a
           <input className={inputCls} value={method} onChange={(e) => setMethod(e.target.value)} />
         </label>
       </div>
+      <InlineError error={error} />
       <DialogButtons busy={busy} confirmLabel="Record" disabled={!amount || !date}
         onCancel={onClose} onConfirm={() => onConfirm({ amount, payment_date: date, method: method || undefined })} />
     </Modal>
@@ -201,7 +249,7 @@ const PaymentDialog: FC<{ busy: boolean; onClose: () => void; onConfirm: (p: { a
 
 // ── Send ────────────────────────────────────────────────────────────────────
 
-const SendDialog: FC<{ busy: boolean; placeholder?: string; onClose: () => void; onConfirm: (recipient: string) => void }> = ({ busy, placeholder, onClose, onConfirm }) => {
+const SendDialog: FC<{ busy: boolean; error?: string | null; placeholder?: string; onClose: () => void; onConfirm: (recipient: string) => void }> = ({ busy, error, placeholder, onClose, onConfirm }) => {
   const [recipient, setRecipient] = useState('');
   return (
     <Modal title="Send invoice" onClose={onClose}>
@@ -214,6 +262,7 @@ const SendDialog: FC<{ busy: boolean; placeholder?: string; onClose: () => void;
         <input className={inputCls} type="email" placeholder={placeholder || 'customer@example.com'}
           value={recipient} onChange={(e) => setRecipient(e.target.value)} />
       </label>
+      <InlineError error={error} />
       <DialogButtons busy={busy} confirmLabel="Send" onCancel={onClose} onConfirm={() => onConfirm(recipient.trim())} />
     </Modal>
   );
@@ -223,7 +272,7 @@ const SendDialog: FC<{ busy: boolean; placeholder?: string; onClose: () => void;
 
 const blankLine = (): InvoiceLineInput => ({ description: '', quantity: '1', unit_price: '', account: '', tax_treatment: 'taxable' });
 
-const CreditNoteDialog: FC<{ busy: boolean; onClose: () => void; onConfirm: (lines: InvoiceLineInput[]) => void }> = ({ busy, onClose, onConfirm }) => {
+const CreditNoteDialog: FC<{ busy: boolean; error?: string | null; onClose: () => void; onConfirm: (lines: InvoiceLineInput[]) => void }> = ({ busy, error, onClose, onConfirm }) => {
   const { accounts } = useAccounts({ type: 'revenue', active: true });
   const [lines, setLines] = useState<InvoiceLineInput[]>([blankLine()]);
   const setLine = (i: number, patch: Partial<InvoiceLineInput>) =>
@@ -246,6 +295,7 @@ const CreditNoteDialog: FC<{ busy: boolean; onClose: () => void; onConfirm: (lin
         ))}
       </div>
       <button className={secondaryBtn + ' mt-2'} onClick={() => setLines((p) => [...p, blankLine()])}>Add line</button>
+      <InlineError error={error} />
       <DialogButtons busy={busy} confirmLabel="Create credit note" disabled={!valid} onCancel={onClose} onConfirm={() => onConfirm(lines)} />
     </Modal>
   );
