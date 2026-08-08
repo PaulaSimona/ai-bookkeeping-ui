@@ -15,11 +15,11 @@ import { TableShell, TableRow, type T2Column } from '@/components/t2/TableShell'
 // useCounterparties LIST hook and its CounterpartyRow type are retired here —
 // the balances endpoint is now the table's sole source (14-C-4 U3).
 import {
-  createCounterparty,
   archiveCounterparty,
   unarchiveCounterparty,
   type CounterpartyRole,
 } from '@/hooks/useCounterparties';
+import { ClientCreateForm } from '@/views/accounting/ClientCreateForm';
 import {
   useCounterpartyBalances,
   type AgingBuckets,
@@ -97,18 +97,11 @@ const AgingBar: FC<{ aging: AgingBuckets }> = ({ aging }) => {
   );
 };
 
-const blankForm = {
-  name: '', contact_name: '', email: '', city: '', province: '', payment_terms: '',
-};
-
 export const CounterpartyManager: FC<{ config: RoleConfig }> = ({ config }) => {
   const [archivedTab, setArchivedTab] = useState(false);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState(blankForm);
-  const [errors, setErrors] = useState<Record<string, string[]> | null>(null);
-  const [submitting, setSubmitting] = useState(false);
 
   // Two balances queries (active + archived) so both filter chips show a live,
   // C4-semantic count (all role-enabled counterparties, incl. zero-activity);
@@ -140,30 +133,6 @@ export const CounterpartyManager: FC<{ config: RoleConfig }> = ({ config }) => {
   const selectTab = (archived: boolean) => {
     setArchivedTab(archived);
     (archived ? archivedBalances : activeBalances).setPage(1);
-  };
-
-  const submit = async () => {
-    setSubmitting(true);
-    setErrors(null);
-    try {
-      const flag = config.role === 'client' ? { is_client: true } : { is_supplier: true };
-      const res = await createCounterparty({ ...form, ...flag });
-      if (res?.status === 201) {
-        setForm(blankForm);
-        setShowForm(false);
-        refetchAll();
-      } else if (res?.status === 400) {
-        const d = res.data;
-        setErrors(d?.detail ? { detail: [d.detail] } : (d ?? { detail: ['Could not create.'] }));
-      } else {
-        setErrors({ detail: ['Could not create.'] });
-      }
-    } catch (e: any) {
-      const d = e?.response?.data;
-      setErrors(d && typeof d === 'object' ? d : { detail: ['Could not create.'] });
-    } finally {
-      setSubmitting(false);
-    }
   };
 
   const doArchive = async (id: string) => { await archiveCounterparty(id); refetchAll(); };
@@ -217,7 +186,7 @@ export const CounterpartyManager: FC<{ config: RoleConfig }> = ({ config }) => {
             />
             <button
               type="button"
-              onClick={() => { setShowForm((v) => !v); setErrors(null); }}
+              onClick={() => setShowForm((v) => !v)}
               className="rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)] transition-colors"
             >
               {config.addLabel}
@@ -226,67 +195,12 @@ export const CounterpartyManager: FC<{ config: RoleConfig }> = ({ config }) => {
 
           {showForm && (
             <div className="px-4 py-4 border-b border-gray-100 bg-gray-50/60">
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                <div className="md:col-span-1">
-                  <label className="block text-xs font-medium text-gray-600 mb-1">
-                    Business name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    value={form.name}
-                    onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    className={`${inputCls} w-full`}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Contact name</label>
-                  <input value={form.contact_name} onChange={(e) => setForm({ ...form, contact_name: e.target.value })} className={`${inputCls} w-full`} />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
-                  <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={`${inputCls} w-full`} />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">City</label>
-                  <input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} className={`${inputCls} w-full`} />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Province</label>
-                  <input value={form.province} onChange={(e) => setForm({ ...form, province: e.target.value })} className={`${inputCls} w-full`} />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Payment terms</label>
-                  <select value={form.payment_terms} onChange={(e) => setForm({ ...form, payment_terms: e.target.value })} className={`${inputCls} w-full`}>
-                    <option value="">—</option>
-                    {TERMS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              {errors && (
-                <div className="mt-3 text-sm text-red-600 space-y-0.5">
-                  {Object.entries(errors).map(([field, msgs]) => (
-                    <div key={field}>{field === 'detail' ? '' : `${field}: `}{(msgs as string[]).join(' ')}</div>
-                  ))}
-                </div>
-              )}
-
-              <div className="mt-3 flex gap-2">
-                <button
-                  type="button"
-                  disabled={submitting || !form.name.trim()}
-                  onClick={submit}
-                  className="rounded-lg bg-[var(--color-navy)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40 transition"
-                >
-                  {submitting ? 'Saving…' : `Save ${config.noun}`}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setShowForm(false); setErrors(null); }}
-                  className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition"
-                >
-                  Cancel
-                </button>
-              </div>
+              <ClientCreateForm
+                role={config.role}
+                noun={config.noun}
+                onCreated={() => { setShowForm(false); refetchAll(); }}
+                onCancel={() => setShowForm(false)}
+              />
             </div>
           )}
 

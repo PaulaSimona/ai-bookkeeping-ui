@@ -11,14 +11,17 @@ import { StatusBadge } from '@/components/t2/StatusBadge';
 import { TableShell, TableRow, type T2Column } from '@/components/t2/TableShell';
 import { usePaginatedList } from '@/hooks/usePaginatedList';
 import { useOrgMe } from '@/hooks/useAccounts';
+import { useToast } from '@/hooks/useToast';
 import {
   fmtMoney,
   invoiceNumberLabel,
   statusMeta,
   useCounterpartyOptions,
   primaryBtn,
+  secondaryBtn,
   inputCls,
 } from '@/hooks/useSalesInvoices';
+import { ClientCreateDialog } from '@/views/accounting/ClientCreateForm';
 import type { InvoiceStatus, InvoiceKind, SalesInvoice } from '@/types/salesInvoice';
 
 const STATUS_FILTERS: { value: '' | InvoiceStatus; label: string }[] = [
@@ -51,6 +54,8 @@ export const InvoiceList: FC = () => {
   const { role } = useOrgMe();
   const canWrite = role === 'owner' || role === 'accountant';
   const { byId } = useCounterpartyOptions();
+  const { showToast } = useToast();
+  const [showAddClient, setShowAddClient] = useState(false);
 
   const [status, setStatus] = useState<'' | InvoiceStatus>('');
   const [kind, setKind] = useState<'' | InvoiceKind>('');
@@ -85,9 +90,10 @@ export const InvoiceList: FC = () => {
           title="Invoices"
           subtitle="Sales invoices and credit notes"
           right={canWrite ? (
-            <button className={primaryBtn} onClick={() => navigate('/accounting/invoices/new')}>
-              New invoice
-            </button>
+            <div className="flex items-center gap-2">
+              <button className={secondaryBtn} onClick={() => setShowAddClient(true)}>Add client</button>
+              <button className={primaryBtn} onClick={() => navigate('/accounting/invoices/new')}>New invoice</button>
+            </div>
           ) : undefined}
         />
 
@@ -165,6 +171,16 @@ export const InvoiceList: FC = () => {
           </div>
         </div>
       </div>
+
+      {showAddClient && (
+        <ClientCreateDialog
+          onCreated={() => {
+            setShowAddClient(false);
+            showToast({ title: 'Client added', message: 'The client is now available.', variant: 'success' });
+          }}
+          onClose={() => setShowAddClient(false)}
+        />
+      )}
     </div>
   );
 };

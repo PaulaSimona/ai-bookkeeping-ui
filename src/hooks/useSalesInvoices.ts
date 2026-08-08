@@ -59,6 +59,9 @@ export const useCounterpartyOptions = () => {
   const [options, setOptions] = useState<CounterpartyOption[]>([]);
   const [byId, setById] = useState<Record<string, CounterpartyOption>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [revision, setRevision] = useState(0);
+
+  const refetch = useCallback(() => setRevision((r) => r + 1), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -72,9 +75,9 @@ export const useCounterpartyOptions = () => {
       })
       .finally(() => { if (!cancelled) setIsLoading(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [revision]);
 
-  return { options, byId, isLoading };
+  return { options, byId, isLoading, refetch };
 };
 
 // ── Mutations (resolved axios responses — status-check at the call site) ───────
