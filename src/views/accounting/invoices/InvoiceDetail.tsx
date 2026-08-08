@@ -18,6 +18,7 @@ import {
   secondaryBtn,
 } from '@/hooks/useSalesInvoices';
 import { InvoiceActionBar } from './InvoiceActions';
+import { BillFromBanner } from '@/components/accounting/BillFromBanner';
 
 const LINE_COLS: T2Column[] = [
   { label: 'Description', fr: 2.2 },
@@ -79,6 +80,10 @@ export const InvoiceDetail: FC = () => {
             </button>
           )}
         </div>
+
+        {/* O-S41-8: pre-flight bill-from warning — only for a draft (issued
+            invoices are snapshot-frozen, so identity gaps no longer matter). */}
+        {invoice.status === 'draft' && <BillFromBanner isOwner={role === 'owner'} />}
 
         <Card padding className="mt-5">
           <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">

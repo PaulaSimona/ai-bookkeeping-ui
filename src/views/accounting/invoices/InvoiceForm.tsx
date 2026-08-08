@@ -19,6 +19,7 @@ import {
   secondaryBtn,
 } from '@/hooks/useSalesInvoices';
 import { ClientCreateDialog } from '@/views/accounting/ClientCreateForm';
+import { BillFromBanner } from '@/components/accounting/BillFromBanner';
 import type { InvoiceLineInput, TaxTreatment } from '@/types/salesInvoice';
 
 const TERMS = [
@@ -135,6 +136,9 @@ export const InvoiceForm: FC = () => {
     <div className="min-h-screen bg-gray-50 text-gray-900">
       <div className="mx-auto max-w-4xl px-6 py-8">
         <PageHeader title={isEdit ? 'Edit draft invoice' : 'New invoice'} />
+
+        {/* O-S41-8: pre-flight bill-from warning (advisory; server guards issue). */}
+        <BillFromBanner isOwner={role === 'owner'} />
 
         {errors.length > 0 && (
           <div className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
