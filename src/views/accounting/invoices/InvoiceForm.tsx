@@ -9,7 +9,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Card } from '@/components/t2/Card';
 import { PageHeader } from '@/components/t2/PageHeader';
 import { useOrgMe, useAccounts } from '@/hooks/useAccounts';
-import { useToast } from '@/hooks/useToast';
 import {
   createInvoice,
   patchInvoice,
@@ -49,7 +48,6 @@ export const InvoiceForm: FC = () => {
   const canWrite = role === 'owner' || role === 'accountant';
   const { options: counterparties, refetch: refetchCounterparties } = useCounterpartyOptions();
   const { accounts } = useAccounts({ type: 'revenue', active: true });
-  const { showToast } = useToast();
   const [showAddClient, setShowAddClient] = useState(false);
 
   const { invoice, isLoading: loadingExisting } = useSalesInvoice(isEdit ? id : undefined);
@@ -112,7 +110,7 @@ export const InvoiceForm: FC = () => {
       if (res == null) { setErrors(['Request was cancelled — please retry.']); return; }
       if (res.status === 201 || res.status === 200) {
         const invId = res.data?.id ?? id;
-        showToast({ title: 'Saved', message: 'Draft saved.', variant: 'success' });
+        // Success feedback is the navigation to the saved invoice's detail page.
         navigate(`/accounting/invoices/${invId}`);
       } else {
         const d = res.data;
