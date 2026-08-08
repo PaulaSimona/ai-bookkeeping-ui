@@ -19,6 +19,7 @@ import {
   primaryBtn,
   secondaryBtn,
 } from '@/hooks/useSalesInvoices';
+import { ClientCreateDialog } from '@/views/accounting/ClientCreateForm';
 import type { InvoiceLineInput, TaxTreatment } from '@/types/salesInvoice';
 
 const TERMS = [
@@ -46,9 +47,10 @@ export const InvoiceForm: FC = () => {
 
   const { role } = useOrgMe();
   const canWrite = role === 'owner' || role === 'accountant';
-  const { options: counterparties } = useCounterpartyOptions();
+  const { options: counterparties, refetch: refetchCounterparties } = useCounterpartyOptions();
   const { accounts } = useAccounts({ type: 'revenue', active: true });
   const { showToast } = useToast();
+  const [showAddClient, setShowAddClient] = useState(false);
 
   const { invoice, isLoading: loadingExisting } = useSalesInvoice(isEdit ? id : undefined);
 
@@ -145,10 +147,19 @@ export const InvoiceForm: FC = () => {
         <Card padding className="mt-6">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Customer">
-              <select className={inputCls} value={counterparty} onChange={(e) => setCounterparty(e.target.value)}>
-                <option value="">Select a customer…</option>
-                {counterparties.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              <div className="flex items-center gap-2">
+                <select className={`${inputCls} flex-1`} value={counterparty} onChange={(e) => setCounterparty(e.target.value)}>
+                  <option value="">Select a customer…</option>
+                  {counterparties.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                <button
+                  type="button"
+                  className="whitespace-nowrap rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-[var(--color-primary)] hover:bg-gray-50"
+                  onClick={() => setShowAddClient(true)}
+                >
+                  + New client
+                </button>
+              </div>
             </Field>
             <Field label="Payment terms">
               <select className={inputCls} value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)}>
@@ -228,6 +239,17 @@ export const InvoiceForm: FC = () => {
           </button>
         </div>
       </div>
+
+      {showAddClient && (
+        <ClientCreateDialog
+          onCreated={(c) => {
+            setShowAddClient(false);
+            refetchCounterparties();
+            setCounterparty(c.id); // auto-select the new client
+          }}
+          onClose={() => setShowAddClient(false)}
+        />
+      )}
     </div>
   );
 };
