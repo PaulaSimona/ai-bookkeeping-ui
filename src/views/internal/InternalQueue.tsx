@@ -285,6 +285,8 @@ export const InternalQueue: FC = () => {
                         </td>
                         <td className="py-2.5 px-3 text-white/70 truncate max-w-[10rem]">
                           {e.org_name ?? '—'}
+                          {/* O-S43-3: short org-id disambiguator (id.slice(0,8) + font-mono). */}
+                          {e.org_id && <span className="ml-2 font-mono text-xs text-white/40">{e.org_id.slice(0, 8)}</span>}
                         </td>
                         <td className="py-2.5 px-3 text-right text-white/80">
                           {formatMoney(e.total_debits)}

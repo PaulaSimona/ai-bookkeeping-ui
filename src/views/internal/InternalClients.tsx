@@ -109,7 +109,13 @@ export const InternalClients: FC = () => {
                       onClick={() => navigate(`/internal/clients/${o.id}/entries`)}
                       className="border-b border-white/5 cursor-pointer hover:bg-white/5 transition-colors"
                     >
-                      <td className="py-2.5 px-5 text-white/90">{o.name}</td>
+                      <td className="py-2.5 px-5 text-white/90">
+                        {o.name}
+                        {/* O-S43-3: short org-id disambiguator (house convention
+                            id.slice(0,8) + font-mono) — distinguishes rows whose
+                            identity name collides. */}
+                        <span className="ml-2 font-mono text-xs text-white/40">{o.id.slice(0, 8)}</span>
+                      </td>
                       <td className="py-2.5 px-5 text-right text-[#4DA6FF]">View entries →</td>
                       {/* stopPropagation: the ROW click still goes to entries
                           (unchanged); this cell is the only path to cards. */}
