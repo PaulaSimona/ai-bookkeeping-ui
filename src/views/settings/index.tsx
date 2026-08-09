@@ -30,6 +30,7 @@ import { TaxProfileTab } from './TaxProfileTab';
 import { PlaidConnectionsCard } from './PlaidConnectionsCard';
 import { ChartOfAccountsPanel } from './ChartOfAccountsPanel';
 import { TeamAccessTab } from './TeamAccessTab';
+import { UnifiedBusinessProfile } from './UnifiedBusinessProfile';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -572,7 +573,9 @@ export const Settings: FC = () => {
         </div>
 
         <div className="mt-6">
-          {active === 'business'     && <BusinessProfileSection showSuccess={showSuccess} showError={showError} />}
+          {active === 'business'     && (hasTier2
+            ? <UnifiedBusinessProfile showSuccess={showSuccess} showError={showError} />
+            : <BusinessProfileSection showSuccess={showSuccess} showError={showError} />)}
           {active === 'tax'          && hasTier2 && <TaxProfileTab onSaved={showSuccess} />}
           {active === 'integrations' && (
             <div className="space-y-6">

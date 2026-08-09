@@ -50,7 +50,6 @@ import { PeriodClose } from '@/views/accountant/PeriodClose';
 import { PlaidOauthCallback } from '@/views/accounting/PlaidOauthCallback';
 import { AccountingReview } from '@/pages/accounting/AccountingReview';
 import { TaxProfile } from '@/pages/accounting/TaxProfile';
-import { BusinessIdentity } from '@/pages/accounting/BusinessIdentity';
 import { Onboarding } from '@/pages/accounting/Onboarding';
 import { OnboardingGate } from '@/components/accounting/OnboardingGate';
 import { ReviewerManagement } from '@/pages/accounting/ReviewerManagement';
@@ -177,7 +176,9 @@ const App: FC = () => {
         <Route path="/accounting/reports" element={<RequireTier2><AccountingReports /></RequireTier2>} />
         <Route path="/accounting/taxes" element={<RequireTier2><AccountingTaxes /></RequireTier2>} />
         <Route path="/accounting/tax-profile" element={<RequireTier2><TaxProfile /></RequireTier2>} />
-        <Route path="/accounting/business-identity" element={<RequireTier2><BusinessIdentity /></RequireTier2>} />
+        {/* S43 O-S43-2 v2: standalone Business Identity absorbed into the unified
+            Settings → Business profile surface. Old route redirects. */}
+        <Route path="/accounting/business-identity" element={<Navigate to="/settings" replace />} />
         <Route path="/accounting/bank-connections" element={<RequireTier2><BankConnections /></RequireTier2>} />
         <Route path="/accounting/documents" element={<RequireTier2><DocumentsPage /></RequireTier2>} />
         {/* MUST match the card-discovery email link verbatim — the backend
