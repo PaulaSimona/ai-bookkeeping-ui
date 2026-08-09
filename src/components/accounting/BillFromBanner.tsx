@@ -35,7 +35,7 @@ export const BillFromBanner: FC<BillFromBannerProps> = ({ isOwner }) => {
             <p>
               Missing: {editableMissing.join(', ')}.{' '}
               {isOwner ? (
-                <Link to="/accounting/business-identity" className="font-medium underline hover:text-amber-900">
+                <Link to="/settings" className="font-medium underline hover:text-amber-900">
                   Set business identity →
                 </Link>
               ) : (
