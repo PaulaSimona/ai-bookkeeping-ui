@@ -145,7 +145,11 @@ export const InternalAssignments: FC = () => {
                     {active.map((a) => (
                       <tr key={a.id} className="border-b border-white/5">
                         <td className="py-2.5 px-5 text-white/90">{reviewerLabel(a)}</td>
-                        <td className="py-2.5 px-3 text-white/70">{a.org_name || a.org_id}</td>
+                        <td className="py-2.5 px-3 text-white/70">
+                          {a.org_name || a.org_id}
+                          {/* O-S43-3: short org-id disambiguator (id.slice(0,8) + font-mono). */}
+                          <span className="ml-2 font-mono text-xs text-white/40">{a.org_id.slice(0, 8)}</span>
+                        </td>
                         <td className="py-2.5 px-3 text-white/50">{a.assigned_at?.slice(0, 10) ?? '—'}</td>
                         <td className="py-2.5 px-5 text-right">
                           <SecondaryButton tone="danger" onClick={() => revoke(a)} disabled={busyKey === a.id}>
@@ -176,7 +180,11 @@ export const InternalAssignments: FC = () => {
                     {inactive.map((a) => (
                       <tr key={a.id} className="border-b border-white/5 opacity-50">
                         <td className="py-2.5 px-5 text-white/80">{reviewerLabel(a)}</td>
-                        <td className="py-2.5 px-3 text-white/60">{a.org_name || a.org_id}</td>
+                        <td className="py-2.5 px-3 text-white/60">
+                          {a.org_name || a.org_id}
+                          {/* O-S43-3: short org-id disambiguator (id.slice(0,8) + font-mono). */}
+                          <span className="ml-2 font-mono text-xs text-white/40">{a.org_id.slice(0, 8)}</span>
+                        </td>
                         <td className="py-2.5 px-3 text-white/40">{a.deactivated_at?.slice(0, 10) ?? '—'}</td>
                         <td className="py-2.5 px-5 text-right">
                           <Pill tone="danger">Inactive</Pill>
