@@ -568,6 +568,17 @@ export const Settings: FC = () => {
           subtitle="Manage your business profile, integrations, and account security."
         />
 
+        {/* S45 §21 Chain C — entry point to the Bookkeeping Service plans page
+            (O-S45-1(d) / O-S45-2). Reads the existing hasTier2 value only. */}
+        <div className="mt-2">
+          <Link
+            to="/accounting/subscription"
+            className="text-sm font-semibold text-[var(--color-primary)] hover:underline"
+          >
+            {hasTier2 ? 'Manage subscription' : 'Upgrade to Bookkeeping Service'} →
+          </Link>
+        </div>
+
         <div className="mt-6">
           <TabBar tabs={tabs} active={active} onChange={setActive} />
         </div>

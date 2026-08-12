@@ -50,6 +50,8 @@ import { PeriodClose } from '@/views/accountant/PeriodClose';
 import { PlaidOauthCallback } from '@/views/accounting/PlaidOauthCallback';
 import { AccountingReview } from '@/pages/accounting/AccountingReview';
 import { TaxProfile } from '@/pages/accounting/TaxProfile';
+import { AdvancedPlans } from '@/pages/accounting/AdvancedPlans';
+import { AdvancedPlansSuccess } from '@/pages/accounting/AdvancedPlansSuccess';
 import { Onboarding } from '@/pages/accounting/Onboarding';
 import { OnboardingGate } from '@/components/accounting/OnboardingGate';
 import { ReviewerManagement } from '@/pages/accounting/ReviewerManagement';
@@ -204,6 +206,11 @@ const App: FC = () => {
         <Route path="/feedback"             element={<Feedback />} />
         <Route path="/subscription"         element={<Subscription />} />
         <Route path="/subscription/success" element={<SubscriptionSuccess />} />
+        {/* S45 §21 Chain C — Bookkeeping Service plans + checkout-success poll.
+            Ungated (no RequireTier2): the plans page must render for a
+            non-entitled owner; backend can_manage_org gates the checkout POST. */}
+        <Route path="/accounting/subscription"         element={<AdvancedPlans />} />
+        <Route path="/accounting/subscription/success" element={<AdvancedPlansSuccess />} />
         <Route path="/reviewer"             element={<ReviewerDashboard />} />
         <Route path="/accounts"             element={<RequireSuperuser><ChartOfAccounts /></RequireSuperuser>} />
         <Route path="/reviewer-management"  element={<RequireSuperuser><ReviewerManagement /></RequireSuperuser>} />
