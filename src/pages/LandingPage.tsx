@@ -29,12 +29,14 @@ const PAGE_TITLE = 'AI Bookkeeping — You run the business. We keep the books.'
 
 // ─── Content ──────────────────────────────────────────────────────────────────
 
-const NAV_LINKS: { label: string; to: string; hash?: boolean }[] = [
+// `external: true` = served outside the SPA (Django-rendered), so it must be a
+// plain anchor and a real navigation, never a react-router Link (O-S46-11).
+const NAV_LINKS: { label: string; to: string; hash?: boolean; external?: boolean }[] = [
   { label: 'Advanced', to: 'advanced', hash: true },
   { label: 'How it works', to: 'how', hash: true },
   { label: 'Available today', to: 'today', hash: true },
   { label: 'Plans', to: 'pricing', hash: true },
-  { label: 'Blog', to: '/blog' },
+  { label: 'Blog', to: '/blog', external: true },
   { label: 'FAQ', to: '/faq' },
 ];
 
@@ -292,6 +294,10 @@ export const LandingPage: FC = () => {
                 >
                   {l.label}
                 </button>
+              ) : l.external ? (
+                <a key={l.to} href={l.to} className="text-[14px] text-gray-600 transition hover:text-gray-900">
+                  {l.label}
+                </a>
               ) : (
                 <Link key={l.to} to={l.to} className="text-[14px] text-gray-600 transition hover:text-gray-900">
                   {l.label}
@@ -336,6 +342,15 @@ export const LandingPage: FC = () => {
                   >
                     {l.label}
                   </button>
+                ) : l.external ? (
+                  <a
+                    key={l.to}
+                    href={l.to}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="py-2 text-[15px] text-gray-700"
+                  >
+                    {l.label}
+                  </a>
                 ) : (
                   <Link
                     key={l.to}
@@ -815,7 +830,7 @@ export const LandingPage: FC = () => {
             <div>
               <p className="font-mono text-[11px] uppercase tracking-wider text-white/40">Learn</p>
               <ul className="mt-4 space-y-2.5 text-[14px]">
-                <li><Link to="/blog" className="text-white/70 transition hover:text-white">Blog</Link></li>
+                <li><a href="/blog" className="text-white/70 transition hover:text-white">Blog</a></li>
                 <li><Link to="/faq" className="text-white/70 transition hover:text-white">FAQ</Link></li>
                 <li><button type="button" onClick={() => scrollTo('how')} className="text-white/70 transition hover:text-white">How it works</button></li>
               </ul>
