@@ -42,7 +42,7 @@ PST is a provincial-only tax charged by provinces that have not harmonized with 
 | New Brunswick | HST | 15% | Harmonized |
 | Newfoundland and Labrador | HST | 15% | Harmonized |
 | Northwest Territories | GST only | 5% | No territorial sales tax |
-| Nova Scotia | HST | 15% | Harmonized |
+| Nova Scotia | HST | 14% | Harmonized; 14% since Apr 1, 2025 |
 | Nunavut | GST only | 5% | No territorial sales tax |
 | Ontario | HST | 13% | Harmonized |
 | Prince Edward Island | HST | 15% | Harmonized |
