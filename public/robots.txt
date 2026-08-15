@@ -1,3 +1,3 @@
 User-agent: *
 Allow: /
-Sitemap: https://ai-bookkeeping.ai/sitemap.xml
+Sitemap: https://www.ai-bookkeeping.ai/sitemap.xml
