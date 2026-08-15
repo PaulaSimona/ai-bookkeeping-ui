@@ -241,9 +241,9 @@ export const FAQ: FC = () => {
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Frequently Asked Questions</h1>
         <p className="text-gray-500 mb-10">
           Everything you need to know about AI Bookkeeping.{' '}
-          <Link to="/blog" className="text-[#0066FF] hover:underline">
+          <a href="/blog" className="text-[#0066FF] hover:underline">
             Visit our blog
-          </Link>{' '}
+          </a>{' '}
           for in-depth guides.
         </p>
 

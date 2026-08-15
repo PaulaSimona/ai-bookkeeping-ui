@@ -10,16 +10,15 @@ export const PublicPageShell: FC<{ children: ReactNode }> = ({ children }) => (
           <img src={logoSvg} alt="AI Bookkeeping" className="h-7 w-auto" />
         </NavLink>
         <nav className="flex items-center gap-1 sm:gap-3">
-          <NavLink
-            to="/blog"
-            className={({ isActive }) =>
-              `text-sm px-3 py-1.5 rounded-lg transition-colors ${
-                isActive ? 'text-[#0066FF] font-medium' : 'text-gray-500 hover:text-gray-900'
-              }`
-            }
+          {/* /blog is server-rendered by Django (O-S46-1/O-S46-11), so it must
+              be a real navigation, not a react-router Link. No isActive branch
+              is possible here — the SPA never owns this route. */}
+          <a
+            href="/blog"
+            className="text-sm px-3 py-1.5 rounded-lg transition-colors text-gray-500 hover:text-gray-900"
           >
             Blog
-          </NavLink>
+          </a>
           <NavLink
             to="/faq"
             className={({ isActive }) =>
@@ -47,7 +46,7 @@ export const PublicPageShell: FC<{ children: ReactNode }> = ({ children }) => (
         <p className="text-sm text-gray-400">© 2026 Time2Win Inc.</p>
         <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-gray-400">
           <span className="font-medium text-gray-500">Resources</span>
-          <NavLink to="/blog" className="hover:text-gray-700 transition-colors">Blog</NavLink>
+          <a href="/blog" className="hover:text-gray-700 transition-colors">Blog</a>
           <NavLink to="/faq" className="hover:text-gray-700 transition-colors">FAQ</NavLink>
           <NavLink to="/privacy-policy" className="hover:text-gray-700 transition-colors">Privacy</NavLink>
           <NavLink to="/terms-of-service" className="hover:text-gray-700 transition-colors">Terms</NavLink>

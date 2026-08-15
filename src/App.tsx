@@ -55,8 +55,6 @@ import { AdvancedPlansSuccess } from '@/pages/accounting/AdvancedPlansSuccess';
 import { Onboarding } from '@/pages/accounting/Onboarding';
 import { OnboardingGate } from '@/components/accounting/OnboardingGate';
 import { ReviewerManagement } from '@/pages/accounting/ReviewerManagement';
-import { BlogList } from '@/views/blog/BlogList';
-import { BlogPost } from '@/views/blog/BlogPost';
 import { FAQ } from '@/views/faq';
 // Internal staff console (§15) — own shell + System B guards
 // (GET /api/accounting/staff/me/), separate from the client surfaces.
@@ -153,8 +151,9 @@ const App: FC = () => {
       <Route path="/invite/accept" element={<InviteAccept />} />
       <Route path="/privacy-policy"    element={<PrivacyPolicy />} />
       <Route path="/terms-of-service"  element={<TermsOfService />} />
-      <Route path="/blog"              element={<BlogList />} />
-      <Route path="/blog/:slug"        element={<BlogPost />} />
+      {/* /blog and /blog/:slug are served server-side by Django (O-S46-1);
+          the React blog was retired in O-S46-11. Links to them are plain
+          anchors, not react-router Links. */}
       <Route path="/faq"               element={<FAQ />} />
 
       <Route element={<PrivateLayout />}>
