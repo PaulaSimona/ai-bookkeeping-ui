@@ -56,6 +56,7 @@ import { Onboarding } from '@/pages/accounting/Onboarding';
 import { OnboardingGate } from '@/components/accounting/OnboardingGate';
 import { ReviewerManagement } from '@/pages/accounting/ReviewerManagement';
 import { FAQ } from '@/views/faq';
+import { NotFound } from '@/views/not-found';
 // Internal staff console (§15) — own shell + System B guards
 // (GET /api/accounting/staff/me/), separate from the client surfaces.
 import { InternalLayout } from '@/components/internal/InternalLayout';
@@ -235,7 +236,7 @@ const App: FC = () => {
         <Route path="/internal/assignments" element={<RequireInternalSuper><InternalAssignments /></RequireInternalSuper>} />
       </Route>
 
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<NotFound />} />
     </Routes>
     </OrgProvider>
   );
