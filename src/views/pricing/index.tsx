@@ -2,6 +2,7 @@ import { type FC, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { WaitlistForm } from '@/components/marketing/WaitlistForm';
 import logoSvg from '@/assets/logo.svg';
+import SiteFooter from '@/components/Layout/SiteFooter';
 
 // ─── Plan data ────────────────────────────────────────────────────────────────
 
@@ -249,6 +250,8 @@ export const Pricing: FC = () => {
 
         </div>
       </div>
+
+      <SiteFooter />
 
       {showWaitlist && <WaitlistModal onClose={() => setShowWaitlist(false)} />}
     </>

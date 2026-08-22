@@ -1,5 +1,6 @@
 import { type FC } from 'react';
 import { NavLink } from 'react-router-dom';
+import SiteFooter from '@/components/Layout/SiteFooter';
 
 const Section: FC<{ n: number; title: string; children: React.ReactNode }> = ({ n, title, children }) => (
   <section className="mb-10">
@@ -223,5 +224,7 @@ export const TermsOfService: FC = () => (
         <NavLink to="/privacy-policy" className="hover:underline">Privacy Policy</NavLink>
       </p>
     </div>
+
+    <SiteFooter />
   </div>
 );
