@@ -22,6 +22,7 @@ const SHARED_FEATURES = [
 // invoices/payments (§INV + counterparty ledgers), Plaid bank & card
 // connections, reconciliation, P&L / AP / AR / tax reports — all live.
 const BOOKKEEPING_SERVICE_FEATURES = [
+  'Human bookkeeper review included',
   'Everything in Pro',
   'Supplier invoice recording',
   'Supplier payment tracking',
@@ -189,7 +190,8 @@ export const Pricing: FC = () => {
               <h2 className="text-2xl font-bold text-gray-900">Bookkeeping Service</h2>
               <p className="mt-2 text-gray-500">
                 Complete double-entry books — bank and card connections, invoices,
-                reconciliation, and financial statements. 15-day free trial.
+                reconciliation, and financial statements — with a human bookkeeper
+                reviewing every uncertain entry. 15-day free trial.
               </p>
             </div>
 
