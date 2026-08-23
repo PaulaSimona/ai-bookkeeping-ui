@@ -1,6 +1,7 @@
-import { type FC, useState } from 'react';
+import { type FC } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { WaitlistForm } from '@/components/marketing/WaitlistForm';
+import { useSelector } from 'react-redux';
+import { type RootState } from '@/store/store';
 import logoSvg from '@/assets/logo.svg';
 import SiteFooter from '@/components/Layout/SiteFooter';
 
@@ -15,7 +16,12 @@ const SHARED_FEATURES = [
   'Email support',
 ] as const;
 
-const ADVANCED_FEATURES = [
+// O-S55-3: customer-facing Tier 2 name is "Bookkeeping Service" — the
+// legacy internal name never appears. Feature list truth-reviewed against
+// shipped capability:
+// invoices/payments (§INV + counterparty ledgers), Plaid bank & card
+// connections, reconciliation, P&L / AP / AR / tax reports — all live.
+const BOOKKEEPING_SERVICE_FEATURES = [
   'Everything in Pro',
   'Supplier invoice recording',
   'Supplier payment tracking',
@@ -34,7 +40,7 @@ const PLANS = [
     id: 'starter',
     name: 'Starter',
     price: 29,
-    docs: '100 documents / month',
+    docs: '100 receipts / month',
     storage: '1 GB storage',
     features: SHARED_FEATURES,
     highlight: false,
@@ -43,7 +49,7 @@ const PLANS = [
     id: 'growth',
     name: 'Growth',
     price: 49,
-    docs: '300 documents / month',
+    docs: '300 receipts / month',
     storage: '5 GB storage',
     features: SHARED_FEATURES,
     highlight: true,
@@ -53,50 +59,28 @@ const PLANS = [
     id: 'pro',
     name: 'Pro',
     price: 69,
-    docs: '500 documents / month',
+    docs: '500 receipts / month',
     storage: '20 GB storage',
     features: SHARED_FEATURES,
     highlight: false,
   },
 ] as const;
 
-// ─── Waitlist modal ────────────────────────────────────────────────────────────
-
-// Thin modal chrome around the SHARED waitlist form (S32 C3).
-const WaitlistModal: FC<{ onClose: () => void }> = ({ onClose }) => (
-  <>
-    <div className="fixed inset-0 z-50 bg-black/50" onClick={onClose} />
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div
-        className="flex max-h-[90vh] w-full max-w-md flex-col rounded-2xl bg-white shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-5">
-          <div>
-            <h2 className="text-base font-semibold text-gray-900">Join the Advanced waitlist</h2>
-            <p className="mt-0.5 text-xs text-gray-400">Be first to know when it launches.</p>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 transition-colors hover:text-gray-600"
-            aria-label="Close"
-          >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto px-6 py-5">
-          <WaitlistForm source="pricing" variant="modal" />
-        </div>
-      </div>
-    </div>
-  </>
-);
+// O-S55-3 (P11-v2 ruling): Bookkeeping Service tiers — 150/250/500 documents
+// per month, 15-day free trial (the live Stripe checkout's trial_period_days).
+const BOOKKEEPING_SERVICE_PLANS = [
+  { id: 'bs-starter', name: 'Starter', price: 99, docs: '150 documents / month', highlight: false },
+  { id: 'bs-growth', name: 'Growth', price: 199, docs: '250 documents / month', highlight: true, badge: 'Most chosen' },
+  { id: 'bs-pro', name: 'Pro', price: 399, docs: '500 documents / month', highlight: false },
+] as const;
 
 export const Pricing: FC = () => {
   const navigate = useNavigate();
-  const [showWaitlist, setShowWaitlist] = useState(false);
+  const { user } = useSelector((s: RootState) => s.auth);
+  // Logged-out → create an account first; logged-in → the in-app
+  // Bookkeeping Service plans page (live checkout).
+  const bookkeepingCta = () =>
+    navigate(user ? '/accounting/subscription' : '/register');
 
   const CheckIcon = () => (
     <svg className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
@@ -129,7 +113,7 @@ export const Pricing: FC = () => {
               </svg>
               <span>
                 <span className="font-semibold text-white">Free trial</span>
-                {' — '}5 documents included{' · '}no credit card required
+                {' — '}5 receipts included{' · '}no credit card required
               </span>
             </div>
           </div>
@@ -142,8 +126,8 @@ export const Pricing: FC = () => {
             </p>
           </div>
 
-          {/* Plan cards — 3 active + 1 coming soon */}
-          <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+          {/* Receipt plans — 3 cards */}
+          <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
 
             {PLANS.map((plan) => (
               <div
@@ -197,48 +181,68 @@ export const Pricing: FC = () => {
               </div>
             ))}
 
-            {/* Advanced — Coming Soon card */}
-            <div className="relative bg-white rounded-2xl flex flex-col border border-gray-100 shadow-sm overflow-hidden opacity-75">
-              <div className="absolute top-0 right-0 w-28 h-28 overflow-hidden rounded-tr-2xl pointer-events-none">
-                <div
-                  className="absolute bg-gray-400 text-white text-[9px] font-bold tracking-widest uppercase text-center py-1.5 w-36"
-                  style={{ top: 20, right: -32, transform: 'rotate(45deg)' }}
-                >
-                  Coming Soon
-                </div>
-              </div>
+          </div>
 
-              <div className="px-6 pt-8 pb-6 flex-1">
-                <p className="text-sm font-semibold text-gray-400 uppercase tracking-wide">Advanced</p>
-                <div className="mt-3">
-                  <span className="text-2xl font-bold text-gray-400">Coming Soon</span>
-                </div>
-                <p className="mt-3 text-xs text-gray-400 leading-relaxed">
-                  Full double-entry bookkeeping for growing businesses
-                </p>
-                <ul className="mt-6 space-y-2.5">
-                  {ADVANCED_FEATURES.map((f) => (
-                    <li key={f} className="flex items-start gap-2.5 text-sm text-gray-400">
-                      <svg className="w-4 h-4 text-gray-300 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                      </svg>
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="px-6 pb-6 opacity-100">
-                <button
-                  onClick={() => setShowWaitlist(true)}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#0A1628] hover:bg-[#112040] py-3 text-sm font-semibold text-white transition-colors"
-                  style={{ opacity: 1 }}
-                >
-                  Join Waitlist
-                </button>
-              </div>
+          {/* Bookkeeping Service — full double-entry books (live, 15-day trial) */}
+          <div className="max-w-6xl mx-auto mt-14">
+            <div className="text-center mb-8">
+              <h2 className="text-2xl font-bold text-gray-900">Bookkeeping Service</h2>
+              <p className="mt-2 text-gray-500">
+                Complete double-entry books — bank and card connections, invoices,
+                reconciliation, and financial statements. 15-day free trial.
+              </p>
             </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {BOOKKEEPING_SERVICE_PLANS.map((plan) => (
+                <div
+                  key={plan.id}
+                  className={`relative bg-white rounded-2xl flex flex-col ${
+                    plan.highlight
+                      ? 'border-2 border-[#0A1628] shadow-lg'
+                      : 'border border-gray-100 shadow-sm'
+                  }`}
+                >
+                  {'badge' in plan && (
+                    <div className="absolute -top-3.5 inset-x-0 flex justify-center">
+                      <span className="bg-[#0A1628] text-white text-xs font-semibold px-3 py-1 rounded-full">
+                        {plan.badge}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="px-6 pt-8 pb-6 flex-1">
+                    <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">{plan.name}</p>
+                    <div className="mt-3 flex items-end gap-1">
+                      <span className="text-4xl font-bold text-gray-900">${plan.price}</span>
+                      <span className="text-sm text-gray-400 mb-1.5">CAD / mo</span>
+                    </div>
+                    <div className="mt-4 space-y-1.5">
+                      <p className="text-sm font-medium text-gray-700">{plan.docs}</p>
+                      <p className="text-sm text-gray-500">15-day free trial</p>
+                    </div>
+                  </div>
+
+                  <div className="px-6 pb-6">
+                    <button
+                      onClick={bookkeepingCta}
+                      className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#0A1628] hover:bg-[#112040] py-3 text-sm font-semibold text-white transition-colors"
+                    >
+                      Start 15-Day Free Trial
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <ul className="mt-8 max-w-3xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2.5">
+              {BOOKKEEPING_SERVICE_FEATURES.map((f) => (
+                <li key={f} className="flex items-start gap-2.5 text-sm text-gray-600">
+                  <CheckIcon />
+                  {f}
+                </li>
+              ))}
+            </ul>
           </div>
 
           {/* Footer note */}
@@ -252,8 +256,6 @@ export const Pricing: FC = () => {
       </div>
 
       <SiteFooter />
-
-      {showWaitlist && <WaitlistModal onClose={() => setShowWaitlist(false)} />}
     </>
   );
 };
