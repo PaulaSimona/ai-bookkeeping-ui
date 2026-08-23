@@ -245,7 +245,7 @@ export const LandingPage: FC = () => {
       name: 'AI Bookkeeping',
       applicationCategory: 'BusinessApplication',
       operatingSystem: 'Web',
-      url: 'https://ai-bookkeeping.ai/',
+      url: 'https://www.ai-bookkeeping.ai/',
       description:
         'Bookkeeping done for you. Receipt automation is available today; Advanced — bank connections, double-entry books, financial statements, and internal human review — is in development.',
       offers: [
