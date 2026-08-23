@@ -1,7 +1,6 @@
 import { type FC, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '@/utils/api';
-import { WaitlistForm } from '@/components/marketing/WaitlistForm';
 
 // ─── Plan data ────────────────────────────────────────────────────────────────
 
@@ -15,28 +14,13 @@ const SHARED_FEATURES = [
   'Email support',
 ] as const;
 
-const ADVANCED_FEATURES = [
-  'Everything in Pro',
-  'Supplier invoice recording',
-  'Supplier payment tracking',
-  'Customer invoice recording',
-  'Customer payment tracking',
-  'Bank & credit card connection (via Plaid)',
-  'Bank reconciliation',
-  'Profit & Loss reports',
-  'Accounts Payable balance',
-  'Accounts Receivable balance',
-  'Tax reports (CA & US)',
-  'Internal reviewers resolve entries requiring human judgment',
-] as const;
-
 const PLANS = [
   {
     id: 'starter',
     name: 'Starter',
     price: 29,
     priceId: import.meta.env.VITE_STRIPE_STARTER_PRICE_ID as string,
-    docs: '100 documents / month',
+    docs: '100 receipts / month',
     storage: '1 GB storage',
     features: SHARED_FEATURES,
     highlight: false,
@@ -46,7 +30,7 @@ const PLANS = [
     name: 'Growth',
     price: 49,
     priceId: import.meta.env.VITE_STRIPE_GROWTH_PRICE_ID as string,
-    docs: '300 documents / month',
+    docs: '300 receipts / month',
     storage: '5 GB storage',
     features: SHARED_FEATURES,
     highlight: true,
@@ -57,48 +41,12 @@ const PLANS = [
     name: 'Pro',
     price: 69,
     priceId: import.meta.env.VITE_STRIPE_PRO_PRICE_ID as string,
-    docs: '500 documents / month',
+    docs: '500 receipts / month',
     storage: '20 GB storage',
     features: SHARED_FEATURES,
     highlight: false,
   },
 ] as const;
-
-// ─── Waitlist modal ────────────────────────────────────────────────────────────
-
-// Thin modal chrome around the SHARED waitlist form (S32 C3). The previous
-// inline copy of the form lived here and had already drifted from the other
-// two; the form itself now lives in components/marketing/WaitlistForm.
-const WaitlistModal: FC<{ onClose: () => void }> = ({ onClose }) => (
-  <>
-    <div className="fixed inset-0 z-50 bg-black/50" onClick={onClose} />
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div
-        className="flex max-h-[90vh] w-full max-w-md flex-col rounded-2xl bg-white shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-5">
-          <div>
-            <h2 className="text-base font-semibold text-gray-900">Join the Advanced waitlist</h2>
-            <p className="mt-0.5 text-xs text-gray-400">Be first to know when it launches.</p>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 transition-colors hover:text-gray-600"
-            aria-label="Close"
-          >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto px-6 py-5">
-          <WaitlistForm source="subscription" variant="modal" />
-        </div>
-      </div>
-    </div>
-  </>
-);
 
 // ─── Subscription success page ─────────────────────────────────────────────────
 
@@ -130,9 +78,9 @@ export const SubscriptionSuccess: FC = () => {
 // ─── Subscription page ────────────────────────────────────────────────────────
 
 export const Subscription: FC = () => {
+  const navigate = useNavigate();
   const [loadingId, setLoadingId]       = useState<string | null>(null);
   const [error, setError]               = useState('');
-  const [showWaitlist, setShowWaitlist] = useState(false);
 
   const handleSubscribe = async (plan: typeof PLANS[number]) => {
     if (!plan.priceId) {
@@ -196,7 +144,7 @@ export const Subscription: FC = () => {
           )}
 
           {/* Plan cards — 3 active + 1 coming soon */}
-          <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+          <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
 
             {/* Active plans */}
             {PLANS.map((plan) => (
@@ -256,52 +204,28 @@ export const Subscription: FC = () => {
               </div>
             ))}
 
-            {/* Advanced — Coming Soon card */}
-            <div className="relative bg-white rounded-2xl flex flex-col border border-gray-100 shadow-sm overflow-hidden opacity-75">
+          </div>
 
-              {/* Diagonal "Coming Soon" ribbon */}
-              <div className="absolute top-0 right-0 w-28 h-28 overflow-hidden rounded-tr-2xl pointer-events-none">
-                <div
-                  className="absolute bg-gray-400 text-white text-[9px] font-bold tracking-widest uppercase text-center py-1.5 w-36"
-                  style={{ top: 20, right: -32, transform: 'rotate(45deg)' }}
-                >
-                  Coming Soon
-                </div>
-              </div>
-
-              <div className="px-6 pt-8 pb-6 flex-1">
-                <p className="text-sm font-semibold text-gray-400 uppercase tracking-wide">Advanced</p>
-                <div className="mt-3">
-                  <span className="text-2xl font-bold text-gray-400">Coming Soon</span>
-                </div>
-                <p className="mt-3 text-xs text-gray-400 leading-relaxed">
-                  Full double-entry bookkeeping for growing businesses
+          {/* Bookkeeping Service — direct upgrade (O-S55-3): complete
+              double-entry books with a 15-day free trial, purchased in-app. */}
+          <div className="max-w-6xl mx-auto mt-10">
+            <div className="rounded-2xl bg-[#0A1628] px-8 py-8 flex flex-col md:flex-row items-center justify-between gap-6">
+              <div>
+                <h2 className="text-lg font-bold text-white">Bookkeeping Service</h2>
+                <p className="mt-1.5 text-sm text-white/70 max-w-xl">
+                  Complete double-entry books — bank and card connections, supplier and
+                  customer invoices, reconciliation, and financial statements. Plans at
+                  $99, $199, or $399 CAD per month for 150, 250, or 500 documents.
+                  15-day free trial.
                 </p>
-
-                <ul className="mt-6 space-y-2.5">
-                  {ADVANCED_FEATURES.map((f) => (
-                    <li key={f} className="flex items-start gap-2.5 text-sm text-gray-400">
-                      <svg className="w-4 h-4 text-gray-300 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                      </svg>
-                      {f}
-                    </li>
-                  ))}
-                </ul>
               </div>
-
-              {/* Waitlist CTA — full opacity */}
-              <div className="px-6 pb-6 opacity-100">
-                <button
-                  onClick={() => setShowWaitlist(true)}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#0A1628] hover:bg-[#112040] py-3 text-sm font-semibold text-white transition-colors"
-                  style={{ opacity: 1 }}
-                >
-                  Join Waitlist
-                </button>
-              </div>
+              <button
+                onClick={() => navigate('/accounting/subscription')}
+                className="shrink-0 rounded-xl bg-white px-6 py-3 text-sm font-semibold text-[#0A1628] transition-colors hover:bg-gray-100"
+              >
+                View plans →
+              </button>
             </div>
-
           </div>
 
           {/* Footer note */}
@@ -313,7 +237,6 @@ export const Subscription: FC = () => {
         </div>
       </div>
 
-      {showWaitlist && <WaitlistModal onClose={() => setShowWaitlist(false)} />}
     </>
   );
 };
