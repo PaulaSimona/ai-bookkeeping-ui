@@ -58,7 +58,7 @@ export const PlaidConnectionsCard: FC = () => {
 
   return (
     <Section
-      title="Bank connections"
+      title="Bank Transactions"
       description="Connected bank and card accounts feeding your books automatically."
     >
       <div className="mb-4 flex justify-end">

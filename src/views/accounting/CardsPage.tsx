@@ -262,14 +262,14 @@ export const CardsPage: FC = () => {
         {nudge && (
           <div className="mt-6 flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
             <span className="flex-1">
-              Connect this card’s account under Bank connections and its own
+              Connect this card’s account under Bank Transactions and its own
               transactions flow in automatically — the same way your bank account does.
             </span>
             <Link
               to="/accounting/bank-connections"
               className="shrink-0 font-semibold text-emerald-900 underline hover:text-emerald-700"
             >
-              Bank connections
+              Bank Transactions
             </Link>
             <button
               type="button"
