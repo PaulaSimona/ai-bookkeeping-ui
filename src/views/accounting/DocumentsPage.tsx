@@ -238,13 +238,13 @@ export const DocumentsPage: FC = () => {
           <div className="mt-6 flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
             <span className="flex-1">
               Bank statements aren't source documents — the agent doesn't book them.
-              Connect your bank or add these transactions in Bank Intake.
+              Connect your bank or add these transactions in Bank Transactions.
             </span>
             <Link
               to="/accounting/bank-connections"
               className="shrink-0 font-semibold text-amber-900 underline hover:text-amber-700"
             >
-              Bank Intake
+              Bank Transactions
             </Link>
           </div>
         )}

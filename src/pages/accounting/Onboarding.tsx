@@ -625,7 +625,7 @@ export const Onboarding: FC = () => {
               </p>
               <div className="mt-5 flex items-center gap-3">
                 <Link to="/accounting/bank-connections" className={primaryBtnCls}>
-                  Go to Bank connections
+                  Go to Bank Transactions
                 </Link>
                 <button
                   type="button"

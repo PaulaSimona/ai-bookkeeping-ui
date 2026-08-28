@@ -137,7 +137,7 @@ export const PlaidOauthCallback: FC = () => {
             onClick={() => navigate('/accounting/bank-connections')}
             className="mt-5 rounded-xl bg-[#0066FF] hover:bg-[#0052cc] px-5 py-2.5 text-sm font-semibold text-white transition-colors"
           >
-            Back to bank connections
+            Back to Bank Transactions
           </button>
         </div>
       </Shell>

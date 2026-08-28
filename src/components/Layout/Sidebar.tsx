@@ -344,7 +344,7 @@ export const Sidebar: FC = () => {
           {/* Tier 2 user features — §21 entitlement gate (D-21-5); §14 D-14C-6
               nav order. The Tier 2 group renders BEFORE the surviving NAV_MAIN
               items, so the on-screen order for a hasTier2 user is:
-              Dashboard · Documents · Ledger · Tax Profile · Bank connections ·
+              Dashboard · Documents · Ledger · Tax Profile · Bank Transactions ·
               Workbook · Reports · Settings. Stays in the main-nav group (no
               divider). */}
           {hasTier2 && (
@@ -367,8 +367,8 @@ export const Sidebar: FC = () => {
               <NavItem to="/accounting/tax-profile" label="Tax Profile" icon={ICONS.taxProfile} />
               {/* S43 O-S43-2 v2: Business identity absorbed into the unified
                   Settings → Business profile surface; standalone nav removed. */}
-              <NavItem to="/accounting/bank-connections" label="Bank connections" icon={ICONS.bank} />
-              {/* O-S31-1 C3: Cards sits beside Bank connections — both are
+              <NavItem to="/accounting/bank-connections" label="Bank Transactions" icon={ICONS.bank} />
+              {/* O-S31-1 C3: Cards sits beside Bank Transactions — both are
                   "where money moves through" surfaces. Glyph path inlined
                   (credit-card) to match the Clients/Suppliers precedent above,
                   keeping the addition inside this same hasTier2 guard. */}
