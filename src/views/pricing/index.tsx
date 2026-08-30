@@ -67,12 +67,19 @@ const PLANS = [
   },
 ] as const;
 
-// O-S55-3 (P11-v2 ruling): Bookkeeping Service tiers — 150/250/500 documents
-// per month, 15-day free trial (the live Stripe checkout's trial_period_days).
+// O-S55-3 (P11-v2 ruling): Bookkeeping Service tiers — 150/250/500 documents,
+// 15-day free trial (the live Stripe checkout's trial_period_days).
+//
+// F-S61-4 / O-S61-19: these counts are deliberately UNIT-FREE. They come from
+// settings.TIER2_PLAN_MAPPING, which resolve_org_daily_limit applies as a DAILY
+// agent-document cap — not a monthly allowance — so any time period attached
+// here ("/ month") would be a false claim. The Receipt Automation tiers above
+// keep "receipts / month" because that quota genuinely is monthly
+// (billing/plans.py _PLAN_QUOTA). Matches the landing page's ratified wording.
 const BOOKKEEPING_SERVICE_PLANS = [
-  { id: 'bs-starter', name: 'Starter', price: 99, docs: '150 documents / month', highlight: false },
-  { id: 'bs-growth', name: 'Growth', price: 199, docs: '250 documents / month', highlight: true, badge: 'Most chosen' },
-  { id: 'bs-pro', name: 'Pro', price: 399, docs: '500 documents / month', highlight: false },
+  { id: 'bs-starter', name: 'Starter', price: 99, docs: '150 docs', highlight: false },
+  { id: 'bs-growth', name: 'Growth', price: 199, docs: '250 docs', highlight: true, badge: 'Most chosen' },
+  { id: 'bs-pro', name: 'Pro', price: 399, docs: '500 docs', highlight: false },
 ] as const;
 
 export const Pricing: FC = () => {
