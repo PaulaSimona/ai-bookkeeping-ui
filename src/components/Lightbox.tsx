@@ -230,7 +230,11 @@ export const LightboxImage: FC<LightboxImageProps> = ({
           type="button"
           onClick={() => setOpen(true)}
           aria-label={`${alt} — click to enlarge`}
-          className="block w-full cursor-zoom-in"
+          // h-full matters: when a caller sizes the figure (e.g. a fixed-height
+          // frame) and the image uses h-full/object-cover, an auto-height button
+          // would collapse the height chain after hydration and letterbox the
+          // image — visibly different from the prerendered state.
+          className="block h-full w-full cursor-zoom-in"
         >
           {img}
         </button>
