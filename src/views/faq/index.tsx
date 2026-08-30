@@ -19,7 +19,7 @@ const FAQ_DATA: FaqCategory[] = [
       {
         question: 'What is AI Bookkeeping?',
         answer:
-          'AI Bookkeeping is an automated bookkeeping service for small business owners in Canada and the United States. You upload receipts and invoices — our AI extracts and categorizes every transaction, generates your annual Excel workbook, and produces GST/HST ITC and expense reports. Connected bank feeds are part of the Advanced plan, which is in development. No accounting experience required.',
+          'AI Bookkeeping is an automated bookkeeping service for small business owners in Canada and the United States. You upload receipts and invoices — our AI extracts and categorizes every transaction, generates your annual Excel workbook, and produces GST/HST ITC and expense reports. Connected bank feeds are part of the Bookkeeping Service. No accounting experience required.',
       },
       {
         question: 'How do I upload my receipts?',
@@ -49,7 +49,7 @@ const FAQ_DATA: FaqCategory[] = [
       {
         question: 'What plans are available?',
         answer:
-          'We offer three active plans: Starter (ideal for sole proprietors with light receipt volume), Growth (for growing businesses with higher volume and reporting needs), and Pro (for businesses that need advanced reporting and priority support). An Advanced plan with full double-entry bookkeeping is in development and not yet available to purchase.',
+          'We offer three active plans: Starter (ideal for sole proprietors with light receipt volume), Growth (for growing businesses with higher volume and reporting needs), and Pro (for businesses that need advanced reporting and priority support). The Bookkeeping Service adds full double-entry bookkeeping, bank and card connections, and financial statements, and is available to purchase.',
       },
       {
         question: 'Is there a free trial?',
