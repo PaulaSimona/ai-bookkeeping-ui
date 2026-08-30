@@ -27,6 +27,7 @@
 // development", or "Advanced" as a product name reappears in shipped markup.
 import { type FC, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import logoSvg from '@/assets/logo.svg';
 import dashboardPreview from '@/assets/dashboard-illustrative.webp';
 import { LightboxImage } from '@/components/Lightbox';
 
@@ -251,22 +252,20 @@ const Mono: FC<{ children: string; color: string; className?: string }> = ({ chi
   </div>
 );
 
+/**
+ * OD-S61-2: brand identity overrides prototype fidelity. The prototype's "ai"
+ * badge is dropped in favour of the real logo asset, in exactly the treatment
+ * production already ships — plain on light, `brightness-0 invert` (the white
+ * variant) on the dark footer.
+ */
 const Brand: FC<{ dark?: boolean }> = ({ dark = false }) => (
-  <div className="flex items-center gap-2.5">
-    <span
-      className="flex h-[26px] w-[26px] items-center justify-center rounded-[7px] text-[13px] font-bold tracking-[-0.03em]"
-      style={{ background: dark ? '#FFFFFF' : INK, color: dark ? INK : '#FFFFFF' }}
-      aria-hidden="true"
-    >
-      ai
-    </span>
-    <span
-      className="text-[15px] font-semibold tracking-[-0.02em]"
-      style={{ color: dark ? '#FFFFFF' : INK }}
-    >
-      AI Bookkeeping
-    </span>
-  </div>
+  <img
+    src={logoSvg}
+    alt="AI Bookkeeping"
+    width={140}
+    height={32}
+    className={`h-8 w-auto${dark ? ' brightness-0 invert' : ''}`}
+  />
 );
 
 const Tick: FC<{ color: string }> = ({ color }) => (
