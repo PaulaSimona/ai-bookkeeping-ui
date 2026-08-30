@@ -14,12 +14,21 @@ Sentry.init({
   enabled: !!import.meta.env.VITE_SENTRY_DSN,
 });
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+// O-S61-7: hydrate a prerendered shell (server-rendered #root has children),
+// otherwise mount fresh. The tree is identical either way.
+const rootEl = document.getElementById('root')!;
+const app = (
   <React.StrictMode>
     <Provider store={store}>
       <BrowserRouter>
         <App />
       </BrowserRouter>
     </Provider>
-  </React.StrictMode>,
+  </React.StrictMode>
 );
+
+if (rootEl.hasChildNodes()) {
+  ReactDOM.hydrateRoot(rootEl, app);
+} else {
+  ReactDOM.createRoot(rootEl).render(app);
+}
