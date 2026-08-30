@@ -344,9 +344,15 @@ export const Sidebar: FC = () => {
           {/* Tier 2 user features — §21 entitlement gate (D-21-5); §14 D-14C-6
               nav order. The Tier 2 group renders BEFORE the surviving NAV_MAIN
               items, so the on-screen order for a hasTier2 user is:
-              Dashboard · Documents · Ledger · Tax Profile · Bank Transactions ·
-              Workbook · Reports · Settings. Stays in the main-nav group (no
-              divider). */}
+              Dashboard · Documents · Ledger · Clients · Suppliers · Invoices ·
+              Reports · Taxes · Bank Transactions · Settings — Settings being
+              the only NAV_MAIN entry the filter below leaves standing. Stays in
+              the main-nav group (no divider).
+
+              O-S62-1b: Tax Profile and Cards were REMOVED from this group. Both
+              surfaces are reached from Settings (Tax profile tab; Bank &
+              integrations → Manage cards) and both ROUTES remain registered in
+              App.tsx — this removed nav entries, not routes. */}
           {hasTier2 && (
             <>
               <NavItem to="/accounting/dashboard" label="Dashboard" icon={ICONS.dashboard} />
@@ -364,15 +370,9 @@ export const Sidebar: FC = () => {
                   addition stays inside this same hasTier2 && guard. */}
               <NavItem to="/accounting/reports" label="Reports" icon="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
               <NavItem to="/accounting/taxes" label="Taxes" icon="M9 14.25l6-6m4.5-3.493V21.75l-3.75-1.5-3.75 1.5-3.75-1.5-3.75 1.5V4.757c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0c1.1.128 1.907 1.077 1.907 2.185zM9.75 9h.008v.008H9.75V9zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 4.5h.008v.008h-.008V13.5zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-              <NavItem to="/accounting/tax-profile" label="Tax Profile" icon={ICONS.taxProfile} />
               {/* S43 O-S43-2 v2: Business identity absorbed into the unified
                   Settings → Business profile surface; standalone nav removed. */}
               <NavItem to="/accounting/bank-connections" label="Bank Transactions" icon={ICONS.bank} />
-              {/* O-S31-1 C3: Cards sits beside Bank Transactions — both are
-                  "where money moves through" surfaces. Glyph path inlined
-                  (credit-card) to match the Clients/Suppliers precedent above,
-                  keeping the addition inside this same hasTier2 guard. */}
-              <NavItem to="/accounting/cards" label="Cards" icon="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
             </>
           )}
           {/* One "Documents" + one "Dashboard" per user (§21 D-21-5, §14 D-14B-6):
