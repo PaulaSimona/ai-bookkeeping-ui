@@ -6,7 +6,7 @@
 // (item 14). Own data layer (wrapped api client) — no Tier 1 hook edits. Brand
 // tokens + Tailwind neutrals only; ZERO raw hex.
 import { type FC, type FormEvent, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { type RootState } from '@/store/store';
 import api from '@/utils/api';
@@ -544,7 +544,6 @@ const BASE_TABS = {
 
 export const Settings: FC = () => {
   const { toast, showSuccess, showError } = useToast();
-  const [active, setActive] = useState('business'); // default: Business profile
 
   // Entitlement — identical expression to App.tsx RequireTier2 (do not invent a
   // new check). Non-entitled → the U1 four-tab set only.
@@ -555,6 +554,20 @@ export const Settings: FC = () => {
   const tabs = hasTier2
     ? [BASE_TABS.business, BASE_TABS.tax, BASE_TABS.integrations, BASE_TABS.chart, BASE_TABS.subscription, BASE_TABS.security, BASE_TABS.team]
     : [BASE_TABS.business, BASE_TABS.integrations, BASE_TABS.subscription, BASE_TABS.security];
+
+  // O-S62-1b: ?tab=<id> deep link. Added because the Cards page's back
+  // affordance must land on Bank & integrations — the tab it was reached from
+  // — and tab state was purely local before this, so /settings always opened
+  // on Business profile. Validated against the tabs THIS user can actually
+  // see, not the registry: ?tab=tax on a non-entitled org would otherwise set
+  // a tab whose panel is entitlement-gated and render an empty page. The tab
+  // bar still drives local state; the query string only supplies the INITIAL
+  // value.
+  const [searchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const [active, setActive] = useState(
+    tabs.some((t) => t.id === requestedTab) ? (requestedTab as string) : 'business',
+  );
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">

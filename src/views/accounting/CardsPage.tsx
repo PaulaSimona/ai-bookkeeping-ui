@@ -21,7 +21,10 @@ import { Spinner, ToastBanner, useToast } from '@/views/settings/ui';
 import {
   useCards,
   useClassifyCard,
+  useCreateCard,
   type CardClassification,
+  type CardNetwork,
+  type CreateCardPayload,
   type OrgCard,
 } from '@/api/accounting/useCards';
 
@@ -199,6 +202,221 @@ const CardRow: FC<{
   );
 };
 
+
+// ─── Add a card (S62, O-S62-2) ────────────────────────────────────────────────
+
+// NETWORK OPTIONS MIRROR THE BACKEND MODEL. Authority is
+// accounting/models.py OrgCard.Network (visa | mastercard | amex | other) and
+// the create serializer takes its ChoiceField straight off that enum, so a
+// value outside this set is a 400. Same mirror-comment discipline as the S33
+// classification controls: when the model gains a network, this list follows
+// it — the model is never edited to match the UI.
+const NETWORK_OPTIONS: { value: CardNetwork; label: string }[] = [
+  { value: 'visa', label: 'Visa' },
+  { value: 'mastercard', label: 'Mastercard' },
+  { value: 'amex', label: 'American Express' },
+  { value: 'other', label: 'Other' },
+];
+
+// Bounded to the serializer's max_length (OrgCard.label is CharField(100)).
+const LABEL_MAX = 100;
+
+const FIELD =
+  'w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 ' +
+  'focus:border-[#0066FF] focus:outline-none focus:ring-1 focus:ring-[#0066FF]';
+
+const FieldError: FC<{ message?: string }> = ({ message }) =>
+  message ? <p className="mt-1 text-xs text-red-600">{message}</p> : null;
+
+// `open` is owned by the PAGE so the trigger can live in the PageHeader action
+// slot while the form renders in the body flow.
+const AddCardForm: FC<{
+  open: boolean;
+  onClose: () => void;
+  onAdded: (label: string) => void;
+}> = ({ open, onClose, onAdded }) => {
+  const { create, saving } = useCreateCard();
+
+  const [network, setNetwork] = useState<CardNetwork>('visa');
+  const [last4, setLast4] = useState('');
+  const [label, setLabel] = useState('');
+  const [classification, setClassification] =
+    useState<CreateCardPayload['classification'] | null>(null);
+
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState('');
+
+  const reset = () => {
+    setNetwork('visa');
+    setLast4('');
+    setLabel('');
+    setClassification(null);
+    setFieldErrors({});
+    setFormError('');
+  };
+
+  const close = () => {
+    reset();
+    onClose();
+  };
+
+  const submit = async () => {
+    setFormError('');
+    // Client-side shape check only. The server revalidates everything — this
+    // exists to save a round trip, never as the authority.
+    if (!/^\d{4}$/.test(last4)) {
+      setFieldErrors({ last4: 'Enter the last four digits of the card number.' });
+      return;
+    }
+    if (classification === null) {
+      setFieldErrors({ classification: 'Choose whose card this is.' });
+      return;
+    }
+    setFieldErrors({});
+
+    // O-S33-4 / O-S62-2: FACTS ONLY. There is no account field here and
+    // CreateCardPayload has no member for one.
+    const payload: CreateCardPayload = { network, last4, classification };
+    if (label.trim()) payload.label = label.trim();
+
+    const res = await create(payload);
+    if (res.ok) {
+      const added = `${NETWORK_LABEL[res.data.network] ?? 'Card'} ····${res.data.last4}`;
+      close();
+      onAdded(added);
+      return;
+    }
+    setFieldErrors(res.fieldErrors);
+    // Shown when the failure is not attributable to one field: a duplicate or
+    // unresolvable-account 409, or a 429. Server copy is factual and names no
+    // account, so it is rendered verbatim.
+    if (Object.keys(res.fieldErrors).length === 0) setFormError(res.error);
+  };
+
+  if (!open) return null;
+
+  return (
+    <section className="mt-6">
+      <Card>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void submit();
+          }}
+          className="px-6 py-5"
+        >
+          <h2 className="text-sm font-semibold text-gray-900">Add a card</h2>
+          <p className="mt-1 text-sm text-gray-500">
+            Tell us the card and whose it is. We handle how it is recorded.
+          </p>
+
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="card-network" className="block text-xs font-medium text-gray-700">
+                Card network
+              </label>
+              <select
+                id="card-network"
+                value={network}
+                onChange={(e) => setNetwork(e.target.value as CardNetwork)}
+                className={`mt-1 ${FIELD}`}
+              >
+                {NETWORK_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+              <FieldError message={fieldErrors.network} />
+            </div>
+
+            <div>
+              <label htmlFor="card-last4" className="block text-xs font-medium text-gray-700">
+                Last four digits
+              </label>
+              <input
+                id="card-last4"
+                value={last4}
+                onChange={(e) => setLast4(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={4}
+                placeholder="1234"
+                aria-invalid={Boolean(fieldErrors.last4)}
+                className={`mt-1 ${FIELD}`}
+              />
+              <FieldError message={fieldErrors.last4} />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label htmlFor="card-label" className="block text-xs font-medium text-gray-700">
+                Name it <span className="font-normal text-gray-400">(optional)</span>
+              </label>
+              <input
+                id="card-label"
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                maxLength={LABEL_MAX}
+                autoComplete="off"
+                placeholder="Shop card"
+                className={`mt-1 ${FIELD}`}
+              />
+              <FieldError message={fieldErrors.label} />
+            </div>
+          </div>
+
+          {/* Same two answers, and the same wording, as the identify flow on
+              each row — one question the owner can actually answer. */}
+          <fieldset className="mt-4">
+            <legend className="text-xs font-medium text-gray-700">Whose card is this?</legend>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {(['business', 'personal'] as const).map((choice) => (
+                <button
+                  key={choice}
+                  type="button"
+                  onClick={() => setClassification(choice)}
+                  aria-pressed={classification === choice}
+                  className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                    classification === choice
+                      ? 'border-[#0066FF] bg-blue-50 text-[#0066FF]'
+                      : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  {choice === 'business' ? 'Business card' : 'Personal card'}
+                </button>
+              ))}
+            </div>
+            <FieldError message={fieldErrors.classification} />
+          </fieldset>
+
+          {formError && (
+            <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+              {formError}
+            </p>
+          )}
+
+          <div className="mt-5 flex items-center gap-2">
+            <button
+              type="submit"
+              disabled={saving}
+              className="inline-flex items-center gap-2 rounded-lg bg-[#0066FF] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#0052cc] disabled:opacity-60"
+            >
+              {saving && <Spinner />}
+              Add card
+            </button>
+            <button
+              type="button"
+              onClick={close}
+              disabled={saving}
+              className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-60"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </Card>
+    </section>
+  );
+};
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export const CardsPage: FC = () => {
@@ -214,6 +432,15 @@ export const CardsPage: FC = () => {
   // D-S31-3: informational only. Set after a BUSINESS classification, never
   // gates anything, and dismissible.
   const [nudge, setNudge] = useState(false);
+
+  // O-S62-2: Add-card panel. Open state lives here so the trigger can sit in
+  // the page header while the form renders in the body flow.
+  const [addOpen, setAddOpen] = useState(false);
+
+  const onCardAdded = (added: string) => {
+    showSuccess(`${added} added.`);
+    refetch();
+  };
 
   // Server orders by (classification, created_at) — 'business' < 'personal' <
   // 'unidentified' alphabetically, so unidentified would sort LAST. Re-sort
@@ -253,9 +480,40 @@ export const CardsPage: FC = () => {
       <ToastBanner toast={toast} />
 
       <div className="mx-auto max-w-5xl px-6 py-8">
-        <PageHeader
-          title="Cards"
-          subtitle="Tell us whose card is whose, and payments to it file themselves from then on."
+        {/* O-S62-1b: this page left the sidebar, so it needs a way back to
+            where it is now reached from — Settings → Bank & integrations, the
+            tab that hosts the "Manage cards" link (settings/index.tsx
+            CardsSummarySection). The ?tab= deep link was added in the same
+            chain; without it /settings always opens on Business profile. */}
+        <Link
+          to="/settings?tab=integrations"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 transition-colors hover:text-gray-900"
+        >
+          <span aria-hidden="true">←</span> Settings
+        </Link>
+
+        <div className="mt-4">
+          <PageHeader
+            title="Cards"
+            subtitle="Tell us whose card is whose, and payments to it file themselves from then on."
+            right={
+              !addOpen ? (
+                <button
+                  type="button"
+                  onClick={() => setAddOpen(true)}
+                  className="rounded-lg bg-[#0066FF] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#0052cc]"
+                >
+                  Add a card
+                </button>
+              ) : undefined
+            }
+          />
+        </div>
+
+        <AddCardForm
+          open={addOpen}
+          onClose={() => setAddOpen(false)}
+          onAdded={onCardAdded}
         />
 
         {/* D-S31-3: non-blocking nudge after a business classification. */}
