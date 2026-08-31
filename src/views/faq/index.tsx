@@ -122,8 +122,14 @@ const FAQ_DATA: FaqCategory[] = [
       },
       {
         question: 'What happens to my data if I cancel?',
+        // F-S61-5 / O-S63-1: pinned to PrivacyPolicy.tsx §9. The previous answer
+        // claimed deletion "within 30 days" and CRA retention of "typically 6
+        // years" — neither appears in the policy, and the 30-day version is
+        // WEAKER than what §9 actually promises (erasure on delete). Every
+        // clause below maps to §9: erasure on delete, statutory retention only,
+        // erasure on request at the address the policy itself names.
         answer:
-          'If you delete your account, your personal data and documents are deleted within 30 days. Extracted financial data may be retained for the legally required period under CRA record-keeping rules (typically 6 years).',
+          'When you delete a document or your account, the underlying files are erased from storage — not just the records pointing to them. Where the law requires specific records to be kept, they are retained for that period and no longer. You can request erasure of your personal information at any time by emailing support@ai-bookkeeping.ai.',
       },
     ],
   },
