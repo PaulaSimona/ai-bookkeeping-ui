@@ -176,3 +176,39 @@ export const SaveButton: FC<{ saving: boolean; label?: string }> = ({ saving, la
     {saving ? 'Saving…' : label}
   </button>
 );
+
+// ─── Confirm modal (InvoiceActions Modal + DialogButtons pattern) ─────────────
+// Extracted verbatim from views/accounting/BankConnections.tsx (S68, O-S68-18)
+// so the Settings integrations cards can share the exact disconnect-confirm
+// shape. No prop or JSX change.
+
+export const ConfirmModal: FC<{ title: string; onClose: () => void; children: ReactNode }> = ({ title, onClose, children }) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+    <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="text-base font-semibold text-gray-900">{title}</h3>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
+      </div>
+      {children}
+    </div>
+  </div>
+);
+
+export const DialogButtons: FC<{ busy: boolean; confirmLabel: string; onCancel: () => void; onConfirm: () => void }> = ({ busy, confirmLabel, onCancel, onConfirm }) => (
+  <div className="mt-5 flex justify-end gap-2">
+    <button
+      className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+      onClick={onCancel}
+      disabled={busy}
+    >
+      Cancel
+    </button>
+    <button
+      className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+      onClick={onConfirm}
+      disabled={busy}
+    >
+      {busy ? 'Working…' : confirmLabel}
+    </button>
+  </div>
+);
