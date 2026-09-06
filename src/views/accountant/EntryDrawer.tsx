@@ -13,11 +13,13 @@ import api from '@/utils/api';
 import { AdjustmentForm, today } from './AdjustmentForm';
 import { voidAdjustment } from './hooks/adjustmentApi';
 import { type AccountantLedgerRow } from './hooks/useAccountantLedger';
+import { formatIsoDate } from '@/utils/dates';
 
 const CAD = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' });
 const fmtMoney = (v: string | null): string => (v == null || v === '' ? '' : CAD.format(Number(v)));
-const fmtDate = (iso: string): string =>
-  new Date(iso).toLocaleDateString('en-CA', { year: 'numeric', month: 'short', day: 'numeric' });
+// entry_date is a calendar DATE — parsed locally (O-S68-21). fmtDateTime below
+// formats voided_at, a real instant, and correctly keeps new Date(iso).
+const fmtDate = (iso: string): string => formatIsoDate(iso);
 const fmtDateTime = (iso: string): string =>
   new Date(iso).toLocaleString('en-CA', {
     year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',

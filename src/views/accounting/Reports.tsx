@@ -5,6 +5,7 @@
 // render from the payload; the only JS on money strings is display formatting.
 import { type FC, type ReactNode, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { formatIsoDate } from '@/utils/dates';
 
 import { Card } from '@/components/t2/Card';
 import { PageHeader } from '@/components/t2/PageHeader';
@@ -30,12 +31,9 @@ const fmtMoney = (s: string): string => {
   return n < 0 ? `-$${abs}` : `$${abs}`;
 };
 
+// as_of / period bounds are calendar DATES — parsed locally (O-S68-21).
 const fmtDate = (iso: string | null): string =>
-  iso === null
-    ? '—'
-    : new Date(iso).toLocaleDateString('en-CA', {
-        year: 'numeric', month: 'long', day: 'numeric',
-      });
+  iso === null ? '—' : formatIsoDate(iso, { year: 'numeric', month: 'long', day: 'numeric' });
 
 const MONO = 'font-[var(--font-family-mono)] tabular-nums';
 
