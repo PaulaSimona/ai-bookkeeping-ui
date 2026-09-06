@@ -28,6 +28,7 @@ import {
 import { CA_PROVINCES, US_STATES } from '@/utils/constants';
 import { TaxProfileTab } from './TaxProfileTab';
 import { PlaidConnectionsCard } from './PlaidConnectionsCard';
+import { StripeConnectCard } from './StripeConnectCard';
 import { ChartOfAccountsPanel } from './ChartOfAccountsPanel';
 import { TeamAccessTab } from './TeamAccessTab';
 import { UnifiedBusinessProfile } from './UnifiedBusinessProfile';
@@ -604,6 +605,7 @@ export const Settings: FC = () => {
           {active === 'integrations' && (
             <div className="space-y-6">
               {hasTier2 && <PlaidConnectionsCard />}
+              {hasTier2 && <StripeConnectCard />}
               {hasTier2 && <CardsSummarySection />}
               <BankIntegrationsSection showSuccess={showSuccess} showError={showError} />
             </div>
