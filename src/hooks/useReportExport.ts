@@ -17,7 +17,9 @@ export type ExportResult =
   | { ok: false; status: number; message: string };
 
 // URL segment per kind (the backend's <kind> route uses hyphenated names).
-const KIND_PATH: Record<Exclude<ExportKind, 'account'>, string> = {
+// Exported so a non-owner builder (useStaffReports.staffExportUrl) maps kinds
+// identically instead of re-implementing the table.
+export const KIND_PATH: Record<Exclude<ExportKind, 'account'>, string> = {
   pnl: 'pnl',
   balance_sheet: 'balance-sheet',
   taxes: 'taxes',

@@ -117,6 +117,19 @@ export const InternalClients: FC = () => {
                         <span className="ml-2 font-mono text-xs text-white/40">{o.id.slice(0, 8)}</span>
                       </td>
                       <td className="py-2.5 px-5 text-right text-[#4DA6FF]">View entries →</td>
+                      {/* S69 E8 (O-S69-16): read-only reports for this client.
+                          Same stopPropagation Link pattern as the cards cell;
+                          the org name rides along so the banner can show it. */}
+                      <td className="py-2.5 px-5 text-right">
+                        <Link
+                          to={`/internal/clients/${o.id}/reports`}
+                          state={{ orgName: o.name }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-white/60 hover:text-white"
+                        >
+                          Reports →
+                        </Link>
+                      </td>
                       {/* stopPropagation: the ROW click still goes to entries
                           (unchanged); this cell is the only path to cards. */}
                       <td className="py-2.5 px-5 text-right">
