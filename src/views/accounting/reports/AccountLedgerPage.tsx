@@ -142,7 +142,7 @@ export const AccountLedgerPage: FC = () => {
 
   return (
     <div className="reports-print min-h-screen bg-gray-50 text-gray-900">
-      <div className="mx-auto max-w-5xl space-y-6 px-6 py-8">
+      <div className="mx-auto max-w-none space-y-6 px-6 py-8">
         <nav aria-label="Breadcrumb" className="no-print text-[13px] text-gray-500">
           <Link to={backHref} className="font-medium text-[var(--color-primary)] hover:underline">Reports</Link>
           <span className="mx-1.5 text-gray-300">›</span>
@@ -203,17 +203,19 @@ export const AccountLedgerPage: FC = () => {
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <table className="w-full table-fixed min-w-[64rem] text-sm">
                     <thead>
                       <tr className="border-b border-gray-100 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
-                        <th className="px-4 py-2 text-left">Date</th>
-                        <th className="px-4 py-2 text-left">Entry</th>
+                        <th className="w-28 px-4 py-2 text-left">Date</th>
+                        <th className="w-20 px-4 py-2 text-left">Entry</th>
+                        {/* Description carries no width: table-fixed gives it
+                            every remaining pixel as the page widens (O-S69-13). */}
                         <th className="px-4 py-2 text-left">Description</th>
-                        <th className="px-4 py-2 text-left">Counterparty</th>
-                        <th className="px-4 py-2 text-left">Source</th>
-                        <th className="px-4 py-2 text-right">Debit</th>
-                        <th className="px-4 py-2 text-right">Credit</th>
-                        <th className="px-4 py-2 text-right">Balance</th>
+                        <th className="w-44 px-4 py-2 text-left">Counterparty</th>
+                        <th className="w-40 px-4 py-2 text-left">Source</th>
+                        <th className="w-32 px-4 py-2 text-right">Debit</th>
+                        <th className="w-32 px-4 py-2 text-right">Credit</th>
+                        <th className="w-32 px-4 py-2 text-right">Balance</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
@@ -227,7 +229,7 @@ export const AccountLedgerPage: FC = () => {
                             >
                               <td className={cellCls}>{formatIsoDate(l.entry_date)}</td>
                               <td className={`${cellCls} ${MONO}`}>{l.entry_number != null ? `#${l.entry_number}` : '—'}</td>
-                              <td className="max-w-[28rem] truncate px-4 py-3 text-gray-700">{l.description || '—'}</td>
+                              <td className="truncate px-4 py-3 text-gray-700" title={l.description}>{l.description || '—'}</td>
                               <td className={cellCls}>{l.counterparty?.name ?? '—'}</td>
                               <td className={cellCls}>{humanize(l.source)}</td>
                               <td className={moneyCls}>{fmtMoney(l.debit)}</td>
