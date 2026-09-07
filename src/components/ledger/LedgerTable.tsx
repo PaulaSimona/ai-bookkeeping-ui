@@ -44,6 +44,8 @@ export interface LedgerTableProps {
   onPrevious: () => void;
   onNext: () => void;
   drawerActions?: ReactNode;
+  // O-S69-17: threaded to EntryDrawer; absent → the drawer's owner-lane default.
+  documentUrl?: (docId: string) => string | null;
 }
 
 export const LedgerTable: FC<LedgerTableProps> = ({
@@ -60,6 +62,7 @@ export const LedgerTable: FC<LedgerTableProps> = ({
   onPrevious,
   onNext,
   drawerActions = null,
+  documentUrl,
 }) => (
             <Card>
               {lines.length === 0 ? (
@@ -114,6 +117,7 @@ export const LedgerTable: FC<LedgerTableProps> = ({
                                     <EntryDrawer
                                       row={entry.row}
                                       readOnly={readOnly}
+                                      documentUrl={documentUrl}
                                       adjustOpen={false}
                                       onToggleAdjust={() => undefined}
                                       onPosted={() => undefined}

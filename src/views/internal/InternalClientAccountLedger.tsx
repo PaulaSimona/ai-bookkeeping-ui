@@ -131,6 +131,7 @@ export const InternalClientAccountLedger: FC = () => {
             onPrevious={() => setPage(page - 1)}
             onNext={() => setPage(page + 1)}
             drawerActions={null}
+            documentUrl={() => null}   // O-S69-17: no owner-lane call from the staff drawer
           />
 
           <Link to={backHref} state={linkState} className="inline-block text-[13px] font-medium text-[#4DA6FF] hover:underline">
