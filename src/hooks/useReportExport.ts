@@ -17,13 +17,20 @@ export type ExportResult =
   | { ok: false; status: number; message: string };
 
 // URL segment per kind (the backend's <kind> route uses hyphenated names).
-const KIND_PATH: Record<Exclude<ExportKind, 'account'>, string> = {
+// Exported so a non-owner builder (useStaffReports.staffExportUrl) maps kinds
+// identically instead of re-implementing the table.
+export const KIND_PATH: Record<Exclude<ExportKind, 'account'>, string> = {
   pnl: 'pnl',
   balance_sheet: 'balance-sheet',
   taxes: 'taxes',
 };
 
-const exportUrl = (kind: ExportKind, code?: string): string =>
+export type ExportUrlBuilder = (kind: ExportKind, code?: string) => string;
+
+// Default (owner-lane) export endpoint. A caller may pass its own builder
+// (S69 E5-UI, O-S69-15) — e.g. the staff lane's staff/orgs/<id>/reports/… —
+// but the query string, blob handling and filename logic below are shared.
+const exportUrl: ExportUrlBuilder = (kind, code) =>
   kind === 'account'
     ? `/api/accounting/reports/account/${encodeURIComponent(code ?? '')}/export/`
     : `/api/accounting/reports/${KIND_PATH[kind]}/export/`;
@@ -59,8 +66,9 @@ const errorMessage = async (status: number, data: unknown): Promise<string> => {
 
 export async function downloadReportExport(
   kind: ExportKind, fmt: ExportFormat, period: ReportPeriod, code?: string,
+  urlFor: ExportUrlBuilder = exportUrl,
 ): Promise<ExportResult> {
-  const url = `${exportUrl(kind, code)}?${exportQuery(kind, fmt, period)}`;
+  const url = `${urlFor(kind, code)}?${exportQuery(kind, fmt, period)}`;
   const res = await api.get(url, { responseType: 'blob' } as any);
   if (res == null) {
     return { ok: false, status: 0, message: 'The export could not be generated. Please try again.' };
@@ -92,10 +100,11 @@ export const useReportExport = () => {
 
   const exportReport = useCallback(async (
     kind: ExportKind, fmt: ExportFormat, period: ReportPeriod, code?: string,
+    urlFor?: ExportUrlBuilder,
   ): Promise<ExportResult> => {
     setBusy(fmt);
     try {
-      return await downloadReportExport(kind, fmt, period, code);
+      return await downloadReportExport(kind, fmt, period, code, urlFor);
     } finally {
       setBusy(null);
     }

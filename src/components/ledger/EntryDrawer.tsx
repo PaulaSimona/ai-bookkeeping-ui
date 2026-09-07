@@ -50,11 +50,21 @@ interface EntryDrawerProps {
   // (the backend fences them anyway: can_post_adjustments is accountant-only).
   // Default false → the accountant ledger is byte-identical.
   readOnly?: boolean;
+  // S69 E8 (O-S69-17): where "View document" fetches its signed URL from.
+  // Absent → the owner-lane path below (byte-identical behaviour). A surface
+  // whose caller cannot use the owner lane (the staff ledger) passes a builder
+  // that returns null, and the button does not render at all.
+  documentUrl?: (docId: string) => string | null;
 }
+
+const defaultDocumentUrl = (docId: string): string =>
+  `/api/accounting/documents/${docId}/file-url/`;
 
 export const EntryDrawer: FC<EntryDrawerProps> = ({
   row, adjustOpen, onToggleAdjust, onPosted, onVoided, readOnly = false,
+  documentUrl = defaultDocumentUrl,
 }) => {
+  const docUrl = row.source_document_id == null ? null : documentUrl(String(row.source_document_id));
   const { showToast } = useToast();
   // Current user id from the /me-backed store (O-S26-2 exposes user.id). The store
   // already retains the whole /me payload, so no store change is needed.
@@ -120,11 +130,11 @@ export const EntryDrawer: FC<EntryDrawerProps> = ({
   // prefetched — then open it in a detached new tab. Mirrors the owner
   // DocumentStatusList action.
   const viewDocument = async () => {
-    if (row.source_document_id == null) return;
+    if (docUrl == null) return;
     const tab = window.open('about:blank', '_blank');
     if (tab) tab.opener = null;
     try {
-      const res = await api.get(`/api/accounting/documents/${row.source_document_id}/file-url/`);
+      const res = await api.get(docUrl);
       const url = res?.status === 200 ? res.data?.url : null;
       if (url) {
         if (tab) tab.location.href = url;
@@ -213,10 +223,11 @@ export const EntryDrawer: FC<EntryDrawerProps> = ({
         <p className="mt-2 text-[13px] text-gray-600">{row.description}</p>
       ) : null}
 
-      {/* Actions — View document is always available; Adjust/Void only on a
-          non-voided entry (Void only for the author of a posted adjustment). */}
+      {/* Actions — View document whenever the documentUrl builder yields a
+          path (O-S69-17); Adjust/Void only on a non-voided entry (Void only for
+          the author of a posted adjustment). */}
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        {row.source_document_id != null && (
+        {docUrl != null && (
           <button
             type="button"
             onClick={viewDocument}

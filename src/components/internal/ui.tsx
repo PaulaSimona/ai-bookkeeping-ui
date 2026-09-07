@@ -210,6 +210,28 @@ export const Toast: FC<{ toast: ToastState | null }> = ({ toast }) => {
   );
 };
 
+/**
+ * Dark-theme confirm dialog for the internal console (S69 E8, O-S69-19). Props
+ * match views/settings/ui.tsx ConfirmModal exactly ({ title; onClose; children })
+ * so a later consolidation is mechanical; only the surface tokens differ.
+ */
+export const ConfirmModal: FC<{ title: string; onClose: () => void; children: ReactNode }> = ({
+  title, onClose, children,
+}) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+    <div
+      className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#0A1628] p-6 shadow-xl"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="text-base font-semibold text-white">{title}</h3>
+        <button type="button" onClick={onClose} className="text-white/40 hover:text-white">✕</button>
+      </div>
+      {children}
+    </div>
+  </div>
+);
+
 // ─── Formatting (display-only; never do money math in JS) ──────────────────────
 
 /** Format a backend Decimal (string|number) for display. Display only. */

@@ -304,7 +304,6 @@ export const Sidebar: FC = () => {
   const isAccountantPersona =
     activeRole === 'accountant' ||
     (memberships.length > 0 && memberships.every((m) => m.role === 'accountant'));
-  const isStaff   = auth.user?.user?.is_staff ?? auth.user?.is_staff ?? false;
   const isSuperuser = auth.user?.user?.is_superuser ?? auth.user?.is_superuser ?? false;
   // §21 entitlement flag (D-21-3) — same derivation shape as the staff flags;
   // wired into the Tier 2 nav block + single-Documents rule in D-21-5.
@@ -384,28 +383,15 @@ export const Sidebar: FC = () => {
           {NAV_MAIN.filter((item) => !(hasTier2 && (item.to === '/documents' || item.to === '/dashboard' || item.to === '/reports' || item.to === '/workbook'))).map(({ to, label, icon }) => (
             <NavItem key={to} to={to} label={label} icon={icon} />
           ))}
-          {/* Chart of Accounts + Reviewer Management — staff tools, superuser-only.
-              §21: stays superuser; Chart of Accounts is exposed to Tier 2 users
-              deliberately at §14 (D-21-5). */}
+          {/* Chart of Accounts — staff tool, superuser-only. §21: stays superuser;
+              exposed to Tier 2 users deliberately at §14 (D-21-5).
+              S69 E8 (O-S69-14): the Reviewer Management, Accounting Review and
+              Reviewer links moved to the Internal Console (InternalLayout);
+              their pages, routes and guards in App.tsx are untouched. */}
           {isSuperuser && (
             <>
               <div className="my-2 border-t border-white/10" />
               <NavItem to="/accounts" label="Chart of Accounts" icon={ICONS.accounts} />
-              <NavItem to="/reviewer-management" label="Reviewer Management" icon={ICONS.reviewer} />
-            </>
-          )}
-          {/* Accounting Review — staff-only internal reviewer queue (superuser or
-              staff/reviewer). §21: stays staff-gated, not a Tier 2 user surface (D-21-5). */}
-          {(isSuperuser || isStaff) && (
-            <>
-              <div className="my-2 border-t border-white/10" />
-              <NavItem to="/accounting-review" label="Accounting Review" icon={ICONS.agentReview} />
-            </>
-          )}
-          {isStaff && (
-            <>
-              <div className="my-2 border-t border-white/10" />
-              <NavItem to="/reviewer" label="Reviewer" icon={ICONS.reviewer} />
             </>
           )}
         </nav>

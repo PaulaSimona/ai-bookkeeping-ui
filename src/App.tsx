@@ -66,6 +66,8 @@ import { InternalQueue } from '@/views/internal/InternalQueue';
 import { InternalClients } from '@/views/internal/InternalClients';
 import { InternalClientEntries } from '@/views/internal/InternalClientEntries';
 import { InternalClientCards } from '@/views/internal/InternalClientCards';
+import { InternalClientReports } from '@/views/internal/InternalClientReports';
+import { InternalClientAccountLedger } from '@/views/internal/InternalClientAccountLedger';
 import { InternalStaff } from '@/views/internal/InternalStaff';
 import { InternalAssignments } from '@/views/internal/InternalAssignments';
 
@@ -236,6 +238,11 @@ const App: FC = () => {
             above — cards are org-scoped data, so they live in the org context
             rather than the cross-org global nav. */}
         <Route path="/internal/clients/:orgId/cards" element={<RequireInternalStaff><InternalClientCards /></RequireInternalStaff>} />
+        {/* S69 E5-UI / E8 (O-S69-16): a client's reports + account drill-down as
+            seen by staff — read-only, org-addressed staff endpoints only. The
+            router ranks by specificity, so declaration order is not relied on. */}
+        <Route path="/internal/clients/:orgId/reports" element={<RequireInternalStaff><InternalClientReports /></RequireInternalStaff>} />
+        <Route path="/internal/clients/:orgId/reports/account/:code" element={<RequireInternalStaff><InternalClientAccountLedger /></RequireInternalStaff>} />
         <Route path="/internal/staff"       element={<RequireInternalSuper><InternalStaff /></RequireInternalSuper>} />
         <Route path="/internal/assignments" element={<RequireInternalSuper><InternalAssignments /></RequireInternalSuper>} />
       </Route>

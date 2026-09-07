@@ -10,11 +10,11 @@ import { formatIsoDate } from '@/utils/dates';
 import { Card } from '@/components/t2/Card';
 import { PageHeader } from '@/components/t2/PageHeader';
 import { StatusBadge } from '@/components/t2/StatusBadge';
+import { ReportTable } from '@/components/reports/ReportTable';
 import {
   usePnl,
   useBalanceSheet,
   type ReportPeriod,
-  type ReportRow,
   type ReportSection,
 } from '@/hooks/useReports';
 import { reportPeriodQueryString, useReportPeriod } from '@/hooks/useReportPeriod';
@@ -41,45 +41,8 @@ const StateNote: FC<{ children: ReactNode; tone?: 'muted' | 'error' }> = ({
   </div>
 );
 
-const Chevron: FC = () => (
-  <svg
-    className="h-3.5 w-3.5 shrink-0 text-gray-400 opacity-0 transition-opacity group-hover:opacity-100"
-    fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden="true"
-  >
-    <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-  </svg>
-);
-
-const Rows: FC<{ rows: ReportRow[]; linkTo?: (code: string) => string }> = ({ rows, linkTo }) =>
-  rows.length === 0 ? (
-    <div className="py-2 text-[13px] text-gray-400">No activity in this period.</div>
-  ) : (
-    <>
-      {rows.map((r) =>
-        // Coded rows drill into the account ledger (O-S68-30); the computed
-        // Current-year-earnings row has code=null → name only, static.
-        r.code !== null && linkTo ? (
-          <Link
-            key={r.code}
-            to={linkTo(r.code)}
-            className="group flex cursor-pointer items-center justify-between py-1.5"
-          >
-            <span className="text-[14px] text-gray-700">{r.name}</span>
-            <span className="flex items-center gap-2">
-              <span className={`text-[14px] text-gray-900 ${MONO}`}>{fmtMoney(r.amount)}</span>
-              <Chevron />
-            </span>
-          </Link>
-        ) : (
-          <div key={r.code ?? r.name} className="flex items-center justify-between py-1.5">
-            <span className="text-[14px] text-gray-700">{r.name}</span>
-            <span className={`text-[14px] text-gray-900 ${MONO}`}>{fmtMoney(r.amount)}</span>
-          </div>
-        ),
-      )}
-    </>
-  );
-
+// The coded-row list is the shared ReportTable (S69 E5-UI, O-S69-15); this
+// page injects its own drill target via accountHref.
 const Section: FC<{
   title: string; section: ReportSection; totalLabel: string; linkTo?: (code: string) => string;
 }> = ({
@@ -90,7 +53,7 @@ const Section: FC<{
       {title}
     </div>
     <div className="mt-2 divide-y divide-gray-100">
-      <Rows rows={section.rows} linkTo={linkTo} />
+      <ReportTable rows={section.rows} accountHref={linkTo} />
     </div>
     <div className="mt-2 flex items-center justify-between border-t border-gray-200 pt-2">
       <span className="text-[13px] font-medium text-gray-600">{totalLabel}</span>
