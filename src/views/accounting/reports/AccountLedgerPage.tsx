@@ -230,8 +230,8 @@ export const AccountLedgerPage: FC = () => {
                               <td className={cellCls}>{formatIsoDate(l.entry_date)}</td>
                               <td className={`${cellCls} ${MONO}`}>{l.entry_number != null ? `#${l.entry_number}` : '—'}</td>
                               <td className="truncate px-4 py-3 text-gray-700" title={l.description}>{l.description || '—'}</td>
-                              <td className={cellCls}>{l.counterparty?.name ?? '—'}</td>
-                              <td className={cellCls}>{humanize(l.source)}</td>
+                              <td className={`${cellCls} truncate`} title={l.counterparty?.name ?? '—'}>{l.counterparty?.name ?? '—'}</td>
+                              <td className={`${cellCls} truncate`} title={humanize(l.source)}>{humanize(l.source)}</td>
                               <td className={moneyCls}>{fmtMoney(l.debit)}</td>
                               <td className={moneyCls}>{fmtMoney(l.credit)}</td>
                               <td className={`${moneyCls} font-semibold`}>{fmtMoney(l.running_balance)}</td>
