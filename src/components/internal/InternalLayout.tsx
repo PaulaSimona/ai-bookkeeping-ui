@@ -52,6 +52,35 @@ const IconAssignments = (
   </svg>
 );
 
+// S69 E8 (O-S69-14): glyphs for the links moved in from the client sidebar.
+const IconReviewer = (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-6 9 2 2 4-4"
+    />
+  </svg>
+);
+const IconAgentReview = (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.456-2.456L14.25 6l1.035-.259a3.375 3.375 0 0 0 2.456-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456Z"
+    />
+  </svg>
+);
+const IconReviewerMgmt = (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z"
+    />
+  </svg>
+);
+
 const IconKey = (
   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
     <path
@@ -128,6 +157,16 @@ export const InternalLayout: FC = () => {
         <nav className="flex-1 px-3 py-4 space-y-1">
           <NavItem to="/internal/queue" icon={IconQueue} label="Pending queue" />
           <NavItem to="/internal/clients" icon={IconClients} label="Assigned clients" />
+          {/* S69 E8 (O-S69-14): the Tier 1 review links moved here from the
+              client sidebar — every active staff member (this whole shell sits
+              inside the staff gate above). Routes/guards unchanged in App.tsx. */}
+          <div className="pt-4 mt-3 border-t border-white/10 space-y-1">
+            <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-white/30">
+              Tier 1 review
+            </div>
+            <NavItem to="/reviewer" icon={IconReviewer} label="Reviewer" />
+            <NavItem to="/accounting-review" icon={IconAgentReview} label="Accounting Review" />
+          </div>
           {staff.isSuperUser && (
             <div className="pt-4 mt-3 border-t border-white/10 space-y-1">
               <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-white/30">
@@ -135,6 +174,8 @@ export const InternalLayout: FC = () => {
               </div>
               <NavItem to="/internal/staff" icon={IconStaff} label="Staff" />
               <NavItem to="/internal/assignments" icon={IconAssignments} label="Assignments" />
+              {/* O-S69-14: moved from the client sidebar's superuser block. */}
+              <NavItem to="/reviewer-management" icon={IconReviewerMgmt} label="Reviewer management" />
             </div>
           )}
         </nav>
