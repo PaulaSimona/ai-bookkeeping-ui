@@ -10,9 +10,9 @@ import { type RootState } from '@/store/store';
 import { useToast } from '@/hooks/useToast';
 import { StatusBadge } from '@/components/t2/StatusBadge';
 import api from '@/utils/api';
-import { AdjustmentForm, today } from './AdjustmentForm';
-import { voidAdjustment } from './hooks/adjustmentApi';
-import { type AccountantLedgerRow } from './hooks/useAccountantLedger';
+import { AdjustmentForm, today } from '@/views/accountant/AdjustmentForm';
+import { voidAdjustment } from '@/views/accountant/hooks/adjustmentApi';
+import { type AccountantLedgerRow } from '@/views/accountant/hooks/useAccountantLedger';
 import { formatIsoDate } from '@/utils/dates';
 
 const CAD = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' });

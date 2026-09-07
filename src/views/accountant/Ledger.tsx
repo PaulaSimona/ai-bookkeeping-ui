@@ -16,7 +16,7 @@ import {
   type AccountantLedgerRow,
 } from './hooks/useAccountantLedger';
 import { useAccountantChart } from './hooks/useAccountantChart';
-import { EntryDrawer } from './EntryDrawer';
+import { EntryDrawer } from '@/components/ledger/EntryDrawer';
 import { formatIsoDate } from '@/utils/dates';
 
 const CAD = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' });
