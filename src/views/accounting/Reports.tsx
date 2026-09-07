@@ -19,6 +19,7 @@ import {
 } from '@/hooks/useReports';
 import { reportPeriodQueryString, useReportPeriod } from '@/hooks/useReportPeriod';
 import { PeriodControls } from './reports/PeriodControls';
+import { ExportBar } from './reports/ExportBar';
 import { fmtMoney, MONO } from './reports/format';
 
 // Drill-down target for a coded row (O-S68-30): the account ledger for the SAME
@@ -113,7 +114,10 @@ const ProfitAndLossCard: FC<{ period: ReportPeriod; setPeriod: (p: ReportPeriod)
           <h2 className="text-[17px] font-semibold text-gray-900">Profit &amp; Loss</h2>
           {data && <p className="mt-0.5 text-[13px] text-gray-500">{data.period.label}</p>}
         </div>
-        <PeriodControls period={period} setPeriod={setPeriod} />
+        <div className="flex flex-col items-end gap-2">
+          <ExportBar kind="pnl" period={period} />
+          <PeriodControls period={period} setPeriod={setPeriod} />
+        </div>
       </div>
 
       {isLoading && <StateNote>Loading…</StateNote>}
@@ -140,12 +144,15 @@ const BalanceSheetCard: FC<{ period: ReportPeriod }> = ({ period }) => {
     <Card padding className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-[17px] font-semibold text-gray-900">Balance Sheet</h2>
-        {data && (
-          <div className="flex items-center gap-2">
-            {!data.balances && <StatusBadge variant="warning">Out of balance</StatusBadge>}
-            <span className="text-[13px] text-gray-500">As of {fmtDate(data.as_of)}</span>
-          </div>
-        )}
+        <div className="flex flex-wrap items-center gap-3">
+          {data && (
+            <div className="flex items-center gap-2">
+              {!data.balances && <StatusBadge variant="warning">Out of balance</StatusBadge>}
+              <span className="text-[13px] text-gray-500">As of {fmtDate(data.as_of)}</span>
+            </div>
+          )}
+          <ExportBar kind="balance_sheet" period={period} />
+        </div>
       </div>
 
       {isLoading && <StateNote>Loading…</StateNote>}
@@ -167,7 +174,7 @@ export const Reports: FC = () => {
   const [period, setPeriod] = useReportPeriod();
 
   return (
-  <div className="min-h-screen bg-gray-50 text-gray-900">
+  <div className="reports-print min-h-screen bg-gray-50 text-gray-900">
     <div className="mx-auto max-w-4xl space-y-6 px-6 py-8">
       <PageHeader
         title="Reports"

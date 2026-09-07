@@ -47,7 +47,7 @@ export const PeriodControls: FC<{ period: ReportPeriod; setPeriod: (p: ReportPer
   const customActive = period.period === 'custom' || customOpen;
 
   return (
-    <div className="flex flex-col items-end gap-2">
+    <div className="no-print flex flex-col items-end gap-2">
       <div className="flex flex-wrap gap-2">
         {PERIOD_CHIPS.map(({ kind, label }) => (
           <FilterChip

@@ -8,6 +8,7 @@ import { formatIsoDate } from '@/utils/dates';
 
 import { Card } from '@/components/t2/Card';
 import { PageHeader } from '@/components/t2/PageHeader';
+import { ExportBar } from './reports/ExportBar';
 import { StatusBadge } from '@/components/t2/StatusBadge';
 import { useTaxSummary, type TaxSummaryRegistered } from '@/hooks/useReports';
 
@@ -100,16 +101,21 @@ export const Taxes: FC = () => {
   const { data, isLoading, error } = useTaxSummary();
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
+    <div className="reports-print min-h-screen bg-gray-50 text-gray-900">
       <div className="mx-auto max-w-4xl space-y-6 px-6 py-8">
-        <PageHeader
-          title="Taxes"
-          subtitle={
-            data && !error && data.registered
-              ? "What you've collected and what you can claim back."
-              : undefined
-          }
-        />
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <PageHeader
+            title="Taxes"
+            subtitle={
+              data && !error && data.registered
+                ? "What you've collected and what you can claim back."
+                : undefined
+            }
+          />
+          {/* E4 (O-S68-31): taxes follow the filing period — the export ignores
+              the period param, so the default period object is passed. */}
+          <ExportBar kind="taxes" period={{ period: 'ytd' }} />
+        </div>
 
         {isLoading && <Card padding><StateNote>Loading…</StateNote></Card>}
         {error && <Card padding><StateNote tone="error">{error}</StateNote></Card>}

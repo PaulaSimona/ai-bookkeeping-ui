@@ -18,6 +18,7 @@ import { formatIsoDate } from '@/utils/dates';
 import { type LedgerLine, type ReportPeriod, useAccountLedger } from '@/hooks/useReports';
 import { reportPeriodQueryString, useReportPeriod } from '@/hooks/useReportPeriod';
 import { PeriodControls } from './PeriodControls';
+import { ExportBar } from './ExportBar';
 import { fmtMoney, MONO } from './format';
 
 const PAGE_SIZE = 100;
@@ -140,9 +141,9 @@ export const AccountLedgerPage: FC = () => {
   const last = count === 0 ? 0 : first + lines.length - 1;
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
+    <div className="reports-print min-h-screen bg-gray-50 text-gray-900">
       <div className="mx-auto max-w-5xl space-y-6 px-6 py-8">
-        <nav aria-label="Breadcrumb" className="text-[13px] text-gray-500">
+        <nav aria-label="Breadcrumb" className="no-print text-[13px] text-gray-500">
           <Link to={backHref} className="font-medium text-[var(--color-primary)] hover:underline">Reports</Link>
           <span className="mx-1.5 text-gray-300">›</span>
           <Link to={backHref} className="hover:underline">{fromReport}</Link>
@@ -176,6 +177,10 @@ export const AccountLedgerPage: FC = () => {
         {!isLoading && data && !error && (
           <>
             <Card padding>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <span className="text-[11.5px] font-semibold uppercase tracking-wider text-gray-500">Summary</span>
+                <ExportBar kind="account" code={data.account.code} period={period} />
+              </div>
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-7">
                 <Stat label="Account" value={`${data.account.code} · ${data.account.name}`} mono={false} />
                 <Stat
@@ -259,7 +264,7 @@ export const AccountLedgerPage: FC = () => {
               )}
 
               {count > 0 && (
-                <div className="flex items-center justify-between border-t border-gray-100 px-4 py-3 text-[13px] text-gray-500">
+                <div className="no-print flex items-center justify-between border-t border-gray-100 px-4 py-3 text-[13px] text-gray-500">
                   <span>{first}–{last} of {count}</span>
                   <div className="flex gap-2">
                     <button
@@ -283,7 +288,7 @@ export const AccountLedgerPage: FC = () => {
               )}
             </Card>
 
-            <Link to={backHref} className="inline-block text-[13px] font-medium text-[var(--color-primary)] hover:underline">
+            <Link to={backHref} className="no-print inline-block text-[13px] font-medium text-[var(--color-primary)] hover:underline">
               ← Back to Reports
             </Link>
           </>
