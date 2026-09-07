@@ -42,6 +42,7 @@ import { InvoiceList } from '@/views/accounting/invoices/InvoiceList';
 import { InvoiceForm } from '@/views/accounting/invoices/InvoiceForm';
 import { InvoiceDetail } from '@/views/accounting/invoices/InvoiceDetail';
 import { Reports as AccountingReports } from '@/views/accounting/Reports';
+import { AccountLedgerPage } from '@/views/accounting/reports/AccountLedgerPage';
 import { Taxes as AccountingTaxes } from '@/views/accounting/Taxes';
 import { AccountantLedger } from '@/views/accountant/Ledger';
 import { NewAdjustment } from '@/views/accountant/NewAdjustment';
@@ -176,6 +177,9 @@ const App: FC = () => {
         <Route path="/accounting/invoices/:id/edit" element={<RequireTier2><InvoiceForm /></RequireTier2>} />
         <Route path="/accounting/invoices/:id" element={<RequireTier2><InvoiceDetail /></RequireTier2>} />
         <Route path="/accounting/reports" element={<RequireTier2><AccountingReports /></RequireTier2>} />
+        {/* S68 E3 (O-S68-30): report drill-down — one account's ledger over the
+            same URL-backed period as the report row it was reached from. */}
+        <Route path="/accounting/reports/account/:code" element={<RequireTier2><AccountLedgerPage /></RequireTier2>} />
         <Route path="/accounting/taxes" element={<RequireTier2><AccountingTaxes /></RequireTier2>} />
         <Route path="/accounting/tax-profile" element={<RequireTier2><TaxProfile /></RequireTier2>} />
         {/* S43 O-S43-2 v2: standalone Business Identity absorbed into the unified

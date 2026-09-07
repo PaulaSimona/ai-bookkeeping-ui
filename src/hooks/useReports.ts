@@ -92,6 +92,9 @@ export interface ReportResource<T> {
   data: T | null;
   isLoading: boolean;
   error: string | null;
+  // HTTP status of the last resolved response (null while loading / cancelled) —
+  // lets a page tell a 404 ("Account not found") from a 403 without parsing text.
+  status: number | null;
   refetch: () => void;
 }
 
@@ -104,6 +107,7 @@ function useReportResource<T>(
   const [data, setData] = useState<T | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<number | null>(null);
   const [revision, setRevision] = useState(0);
 
   const refetch = useCallback(() => setRevision((r) => r + 1), []);
@@ -112,10 +116,12 @@ function useReportResource<T>(
     let cancelled = false;
     setIsLoading(true);
     setError(null);
+    setStatus(null);
 
     api.get(url, params ? { params } : undefined)
       .then((res) => {
         if (cancelled || res == null) return;
+        setStatus(res.status ?? null);
         if (res.status === 200) {
           setData(res.data as T);
         } else {
@@ -124,7 +130,10 @@ function useReportResource<T>(
         }
       })
       .catch((err) => {
-        if (!cancelled) setError(err?.response?.data?.detail ?? 'Failed to load report');
+        if (!cancelled) {
+          setStatus(err?.response?.status ?? null);
+          setError(err?.response?.data?.detail ?? 'Failed to load report');
+        }
       })
       .finally(() => { if (!cancelled) setIsLoading(false); });
 
@@ -132,7 +141,7 @@ function useReportResource<T>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, revision]);
 
-  return { data, isLoading, error, refetch };
+  return { data, isLoading, error, status, refetch };
 }
 
 export const usePnl = (p: ReportPeriod): ReportResource<PnlPayload> =>

@@ -3,27 +3,23 @@
 // (seams 31/32). Own data layer (useReports); presentational bits from
 // src/components/t2 only. Tokens only — no hex, no gradients (O-14C-3). Rows
 // render from the payload; the only JS on money strings is display formatting.
-import { type FC, type ReactNode, useState } from 'react';
+import { type FC, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { formatIsoDate } from '@/utils/dates';
 
 import { Card } from '@/components/t2/Card';
 import { PageHeader } from '@/components/t2/PageHeader';
-import { FilterChip } from '@/components/t2/FilterChip';
 import { StatusBadge } from '@/components/t2/StatusBadge';
 import {
   usePnl,
   useBalanceSheet,
-  type PnlPeriodKind,
   type ReportPeriod,
   type ReportRow,
   type ReportSection,
 } from '@/hooks/useReports';
-import {
-  customRangeError,
-  reportPeriodQueryString,
-  useReportPeriod,
-} from '@/hooks/useReportPeriod';
+import { reportPeriodQueryString, useReportPeriod } from '@/hooks/useReportPeriod';
+import { PeriodControls } from './reports/PeriodControls';
+import { fmtMoney, MONO } from './reports/format';
 
 // Drill-down target for a coded row (O-S68-30): the account ledger for the SAME
 // period, tagged with the report it came from. The computed Current-year-earnings
@@ -32,23 +28,9 @@ type FromReport = 'pnl' | 'balance_sheet';
 const ledgerHref = (code: string, period: ReportPeriod, from: FromReport): string =>
   `/accounting/reports/account/${encodeURIComponent(code)}?${reportPeriodQueryString(period)}&from_report=${from}`;
 
-// Display-only formatting — the backend two-decimal STRINGS stay the source of
-// truth; Number() only hands a numeric to the locale formatter. Negatives read
-// naturally (-$50.00); no red/green — sign does not imply status (calm).
-const fmtMoney = (s: string): string => {
-  const n = Number(s);
-  if (Number.isNaN(n)) return `$${s}`;
-  const abs = Math.abs(n).toLocaleString('en-CA', {
-    minimumFractionDigits: 2, maximumFractionDigits: 2,
-  });
-  return n < 0 ? `-$${abs}` : `$${abs}`;
-};
-
 // as_of / period bounds are calendar DATES — parsed locally (O-S68-21).
 const fmtDate = (iso: string | null): string =>
   iso === null ? '—' : formatIsoDate(iso, { year: 'numeric', month: 'long', day: 'numeric' });
-
-const MONO = 'font-[var(--font-family-mono)] tabular-nums';
 
 const StateNote: FC<{ children: ReactNode; tone?: 'muted' | 'error' }> = ({
   children, tone = 'muted',
@@ -117,80 +99,6 @@ const Section: FC<{
     </div>
   </div>
 );
-
-const PERIOD_CHIPS: { kind: PnlPeriodKind; label: string }[] = [
-  { kind: 'ytd', label: 'Year to date' },
-  { kind: 'quarter', label: 'This quarter' },
-  { kind: 'month', label: 'This month' },
-  { kind: 'custom', label: 'Custom' },
-];
-
-const dateInputCls =
-  'rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-[13px] text-gray-900 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent transition';
-
-// Period controls (O-S68-29): chips write the URL directly; custom keeps a local
-// draft of the two bounds and writes the URL only once both are valid — no
-// request ever carries a half-formed window. Invalid drafts show inline text.
-const PeriodControls: FC<{ period: ReportPeriod; setPeriod: (p: ReportPeriod) => void }> = ({
-  period, setPeriod,
-}) => {
-  const [customOpen, setCustomOpen] = useState(period.period === 'custom');
-  const [from, setFrom] = useState(period.date_from ?? '');
-  const [to, setTo] = useState(period.date_to ?? '');
-  const draftError = customRangeError(from || undefined, to || undefined);
-
-  const pick = (kind: PnlPeriodKind) => {
-    if (kind === 'custom') {
-      setCustomOpen(true);
-      if (draftError === null) setPeriod({ period: 'custom', date_from: from, date_to: to });
-      return;
-    }
-    setCustomOpen(false);
-    setPeriod({ period: kind });
-  };
-
-  const onBound = (which: 'from' | 'to', value: string) => {
-    const nextFrom = which === 'from' ? value : from;
-    const nextTo = which === 'to' ? value : to;
-    if (which === 'from') setFrom(value); else setTo(value);
-    if (customRangeError(nextFrom || undefined, nextTo || undefined) === null) {
-      setPeriod({ period: 'custom', date_from: nextFrom, date_to: nextTo });
-    }
-  };
-
-  const customActive = period.period === 'custom' || customOpen;
-
-  return (
-    <div className="flex flex-col items-end gap-2">
-      <div className="flex flex-wrap gap-2">
-        {PERIOD_CHIPS.map(({ kind, label }) => (
-          <FilterChip
-            key={kind}
-            active={kind === 'custom' ? customActive : period.period === kind && !customOpen}
-            onClick={() => pick(kind)}
-          >
-            {label}
-          </FilterChip>
-        ))}
-      </div>
-      {customActive && (
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <label className="text-[12px] text-gray-500">
-            From{' '}
-            <input type="date" value={from} onChange={(e) => onBound('from', e.target.value)} className={dateInputCls} />
-          </label>
-          <label className="text-[12px] text-gray-500">
-            To{' '}
-            <input type="date" value={to} onChange={(e) => onBound('to', e.target.value)} className={dateInputCls} />
-          </label>
-          {draftError && (from || to) && (
-            <span className="text-[12px] text-red-600">{draftError}</span>
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
 
 const ProfitAndLossCard: FC<{ period: ReportPeriod; setPeriod: (p: ReportPeriod) => void }> = ({
   period, setPeriod,
