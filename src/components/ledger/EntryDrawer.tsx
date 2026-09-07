@@ -10,14 +10,16 @@ import { type RootState } from '@/store/store';
 import { useToast } from '@/hooks/useToast';
 import { StatusBadge } from '@/components/t2/StatusBadge';
 import api from '@/utils/api';
-import { AdjustmentForm, today } from './AdjustmentForm';
-import { voidAdjustment } from './hooks/adjustmentApi';
-import { type AccountantLedgerRow } from './hooks/useAccountantLedger';
+import { AdjustmentForm, today } from '@/views/accountant/AdjustmentForm';
+import { voidAdjustment } from '@/views/accountant/hooks/adjustmentApi';
+import { type AccountantLedgerRow } from '@/views/accountant/hooks/useAccountantLedger';
+import { formatIsoDate } from '@/utils/dates';
 
 const CAD = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' });
 const fmtMoney = (v: string | null): string => (v == null || v === '' ? '' : CAD.format(Number(v)));
-const fmtDate = (iso: string): string =>
-  new Date(iso).toLocaleDateString('en-CA', { year: 'numeric', month: 'short', day: 'numeric' });
+// entry_date is a calendar DATE — parsed locally (O-S68-21). fmtDateTime below
+// formats voided_at, a real instant, and correctly keeps new Date(iso).
+const fmtDate = (iso: string): string => formatIsoDate(iso);
 const fmtDateTime = (iso: string): string =>
   new Date(iso).toLocaleString('en-CA', {
     year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
@@ -43,9 +45,16 @@ interface EntryDrawerProps {
   onToggleAdjust: () => void;
   onPosted: () => void; // adjust posted → refresh the list + collapse the drawer
   onVoided?: () => void; // void succeeded → refetch the list (drawer stays, shows voided)
+  // S68 E3 (O-S68-30): the owner's report drill-down shares this drawer as a
+  // READ surface — readOnly hides the accountant-only Adjust / Void actions
+  // (the backend fences them anyway: can_post_adjustments is accountant-only).
+  // Default false → the accountant ledger is byte-identical.
+  readOnly?: boolean;
 }
 
-export const EntryDrawer: FC<EntryDrawerProps> = ({ row, adjustOpen, onToggleAdjust, onPosted, onVoided }) => {
+export const EntryDrawer: FC<EntryDrawerProps> = ({
+  row, adjustOpen, onToggleAdjust, onPosted, onVoided, readOnly = false,
+}) => {
   const { showToast } = useToast();
   // Current user id from the /me-backed store (O-S26-2 exposes user.id). The store
   // already retains the whole /me payload, so no store change is needed.
@@ -66,6 +75,7 @@ export const EntryDrawer: FC<EntryDrawerProps> = ({ row, adjustOpen, onToggleAdj
   // author-equality fence. Shown ONLY when the entry is a posted accountant
   // adjustment authored by the current user; absent otherwise (never disabled).
   const canVoid =
+    !readOnly &&
     !isVoided &&
     row.status === 'posted' &&
     row.source === 'accountant_adjustment' &&
@@ -219,7 +229,7 @@ export const EntryDrawer: FC<EntryDrawerProps> = ({ row, adjustOpen, onToggleAdj
             View document
           </button>
         )}
-        {!isVoided && (
+        {!isVoided && !readOnly && (
           <button
             type="button"
             onClick={onToggleAdjust}
@@ -284,7 +294,7 @@ export const EntryDrawer: FC<EntryDrawerProps> = ({ row, adjustOpen, onToggleAdj
 
       {/* In-context adjust — the shared form, seeded from this entry's accounts
           (amounts blank). Absent once the entry is voided. */}
-      {adjustOpen && !isVoided && (
+      {adjustOpen && !isVoided && !readOnly && (
         <div className="mt-4">
           <div className="mb-2 text-[11.5px] font-semibold uppercase tracking-wider text-gray-500">
             New adjusting entry

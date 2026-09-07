@@ -16,12 +16,13 @@ import {
   type AccountantLedgerRow,
 } from './hooks/useAccountantLedger';
 import { useAccountantChart } from './hooks/useAccountantChart';
-import { EntryDrawer } from './EntryDrawer';
+import { EntryDrawer } from '@/components/ledger/EntryDrawer';
+import { formatIsoDate } from '@/utils/dates';
 
 const CAD = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' });
 const fmtMoney = (v: string | null): string => (v == null || v === '' ? '' : CAD.format(Number(v)));
-const fmtDate = (iso: string): string =>
-  new Date(iso).toLocaleDateString('en-CA', { year: 'numeric', month: 'short', day: 'numeric' });
+// entry_date is a calendar DATE — parsed locally (O-S68-21), never via new Date(iso).
+const fmtDate = (iso: string): string => formatIsoDate(iso);
 
 const MONO = 'font-[var(--font-family-mono)] tabular-nums';
 const GRID = 'grid grid-cols-[1fr_0.8fr_2.6fr_1fr_0.9fr_1.1fr] items-center gap-4';

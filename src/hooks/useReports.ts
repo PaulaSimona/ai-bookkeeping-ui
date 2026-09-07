@@ -9,7 +9,28 @@
 import { useCallback, useEffect, useState } from 'react';
 import api from '@/utils/api';
 
-export type PnlPeriodKind = 'ytd' | 'quarter';
+export type PnlPeriodKind = 'ytd' | 'quarter' | 'month' | 'custom';
+
+// ─── Report period (S68 E3, O-S68-29) ────────────────────────────────────────
+// The ONE shape every report read and every drill-down link carries. The
+// backend resolver (reports.resolve_report_window) validates again server-side.
+export type ReportPeriod = {
+  period: PnlPeriodKind;
+  date_from?: string; // YYYY-MM-DD, custom only
+  date_to?: string;   // YYYY-MM-DD, custom only
+};
+
+export const DEFAULT_REPORT_PERIOD: ReportPeriod = { period: 'ytd' };
+
+/** API query params for a period — custom carries date_from/date_to, others only period. */
+export const periodToParams = (p: ReportPeriod): Record<string, string> =>
+  p.period === 'custom' && p.date_from && p.date_to
+    ? { period: 'custom', date_from: p.date_from, date_to: p.date_to }
+    : { period: p.period };
+
+/** The same params as a query string (no leading '?'). */
+export const periodToQuery = (p: ReportPeriod): string =>
+  new URLSearchParams(periodToParams(p)).toString();
 
 export interface ReportRow {
   code: string | null; // null for the computed Current-year-earnings equity line
@@ -71,6 +92,9 @@ export interface ReportResource<T> {
   data: T | null;
   isLoading: boolean;
   error: string | null;
+  // HTTP status of the last resolved response (null while loading / cancelled) —
+  // lets a page tell a 404 ("Account not found") from a 403 without parsing text.
+  status: number | null;
   refetch: () => void;
 }
 
@@ -83,6 +107,7 @@ function useReportResource<T>(
   const [data, setData] = useState<T | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<number | null>(null);
   const [revision, setRevision] = useState(0);
 
   const refetch = useCallback(() => setRevision((r) => r + 1), []);
@@ -91,10 +116,12 @@ function useReportResource<T>(
     let cancelled = false;
     setIsLoading(true);
     setError(null);
+    setStatus(null);
 
     api.get(url, params ? { params } : undefined)
       .then((res) => {
         if (cancelled || res == null) return;
+        setStatus(res.status ?? null);
         if (res.status === 200) {
           setData(res.data as T);
         } else {
@@ -103,7 +130,10 @@ function useReportResource<T>(
         }
       })
       .catch((err) => {
-        if (!cancelled) setError(err?.response?.data?.detail ?? 'Failed to load report');
+        if (!cancelled) {
+          setStatus(err?.response?.status ?? null);
+          setError(err?.response?.data?.detail ?? 'Failed to load report');
+        }
       })
       .finally(() => { if (!cancelled) setIsLoading(false); });
 
@@ -111,14 +141,56 @@ function useReportResource<T>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, revision]);
 
-  return { data, isLoading, error, refetch };
+  return { data, isLoading, error, status, refetch };
 }
 
-export const usePnl = (period: PnlPeriodKind): ReportResource<PnlPayload> =>
-  useReportResource<PnlPayload>('/api/accounting/reports/pnl/', { period }, [period]);
+export const usePnl = (p: ReportPeriod): ReportResource<PnlPayload> =>
+  useReportResource<PnlPayload>(
+    '/api/accounting/reports/pnl/', periodToParams(p), [periodToQuery(p)],
+  );
 
-export const useBalanceSheet = (): ReportResource<BalanceSheetPayload> =>
-  useReportResource<BalanceSheetPayload>('/api/accounting/reports/balance-sheet/', undefined, []);
+// The balance sheet takes the same params; the backend resolves as_of =
+// min(window end, today) (E1, O-S68-22).
+export const useBalanceSheet = (p: ReportPeriod): ReportResource<BalanceSheetPayload> =>
+  useReportResource<BalanceSheetPayload>(
+    '/api/accounting/reports/balance-sheet/', periodToParams(p), [periodToQuery(p)],
+  );
 
+// Taxes follow the filing period — no period param (unchanged).
 export const useTaxSummary = (): ReportResource<TaxSummaryPayload> =>
   useReportResource<TaxSummaryPayload>('/api/accounting/reports/taxes/', undefined, []);
+
+// ─── Account ledger drill-down (E1 endpoint, O-S68-23 / O-S68-30) ─────────────
+
+export interface LedgerLine {
+  entry_id: string;
+  entry_number: number | null;
+  entry_date: string; // YYYY-MM-DD — format with formatIsoDate, never new Date()
+  description: string;
+  counterparty: { id: string; name: string } | null;
+  source: string;
+  source_document_id: number | null;
+  debit: string | null;
+  credit: string | null;
+  running_balance: string;
+}
+
+export interface AccountLedger {
+  account: { code: string; name: string; type: string; normal_balance: string };
+  period: { kind: PnlPeriodKind; label: string; start: string | null; end: string | null };
+  opening_balance: string | null;
+  total_debits: string;
+  total_credits: string;
+  net_change: string;
+  closing_balance: string;
+  lines: { count: number; next: string | null; previous: string | null; results: LedgerLine[] };
+}
+
+export const useAccountLedger = (
+  code: string, p: ReportPeriod, page: number, pageSize = 100,
+): ReportResource<AccountLedger> =>
+  useReportResource<AccountLedger>(
+    `/api/accounting/reports/account/${encodeURIComponent(code)}/ledger/`,
+    { ...periodToParams(p), page: String(page), page_size: String(pageSize) },
+    [code, periodToQuery(p), page, pageSize],
+  );

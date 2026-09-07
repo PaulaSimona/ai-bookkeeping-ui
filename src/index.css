@@ -34,3 +34,21 @@ body,
   font-family: var(--font-family-sans);
   -webkit-font-smoothing: antialiased;
 }
+
+/* ─── Report print (S68 E4, O-S68-31) ──────────────────────────────────────────
+   Scoped to pages whose root carries `.reports-print` (Reports, AccountLedgerPage,
+   Taxes) — Tier 1 pages print exactly as before. The app shell is
+   `div.flex.h-screen > [sidebar] + main.overflow-y-auto` (components/Layout/
+   AppShell.tsx:9-11): unclamp it so the report flows across pages and hide
+   everything beside <main>. `.no-print` marks in-page chrome (period chips,
+   export buttons, breadcrumb, pagination, back links). */
+@media print {
+  body:has(.reports-print) .flex.h-screen { display: block; height: auto; }
+  body:has(.reports-print) .flex.h-screen > :not(main) { display: none !important; }
+  body:has(.reports-print) main { overflow: visible !important; height: auto !important; }
+  .reports-print { background: #fff !important; }
+  .reports-print .no-print { display: none !important; }
+  .reports-print table { width: 100%; }
+  .reports-print tr { break-inside: avoid; page-break-inside: avoid; }
+  .reports-print [class*="shadow"] { box-shadow: none !important; }
+}

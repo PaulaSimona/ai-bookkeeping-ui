@@ -1,4 +1,5 @@
 import { FC, Fragment, ReactNode, useEffect, useMemo, useState } from 'react';
+import { formatIsoDate } from '@/utils/dates';
 import {
   useLedgerEntries,
   attributeEntry,
@@ -23,8 +24,8 @@ import { FilterChip } from '@/components/t2/FilterChip';
 const CAD = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' });
 const fmtMoney = (v: string | null): string => (v == null || v === '' ? '' : CAD.format(Number(v)));
 
-const fmtDate = (iso: string): string =>
-  new Date(iso).toLocaleDateString('en-CA', { year: 'numeric', month: 'short', day: 'numeric' });
+// entry_date is a calendar DATE — parsed locally (O-S68-21), never via new Date(iso).
+const fmtDate = (iso: string): string => formatIsoDate(iso);
 
 const MONO = 'font-[var(--font-family-mono)]';
 
