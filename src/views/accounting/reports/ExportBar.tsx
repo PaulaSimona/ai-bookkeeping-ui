@@ -6,20 +6,30 @@
 // The bar itself is `no-print` so it never appears on paper.
 import { type FC, useState } from 'react';
 import { type ReportPeriod } from '@/hooks/useReports';
-import { type ExportFormat, type ExportKind, useReportExport } from '@/hooks/useReportExport';
+import {
+  type ExportFormat,
+  type ExportKind,
+  type ExportUrlBuilder,
+  useReportExport,
+} from '@/hooks/useReportExport';
 
 const btnCls =
   'inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[13px] font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-60';
 
-export const ExportBar: FC<{ kind: ExportKind; period: ReportPeriod; code?: string }> = ({
-  kind, period, code,
+// `exportUrl` (S69 E5-UI, O-S69-15): an optional builder for the export
+// endpoint. Absent → the owner /api/accounting/reports/… paths, byte-identical
+// to before; a staff surface passes its staff/orgs/<id>/reports/… builder.
+export const ExportBar: FC<{
+  kind: ExportKind; period: ReportPeriod; code?: string; exportUrl?: ExportUrlBuilder;
+}> = ({
+  kind, period, code, exportUrl,
 }) => {
   const { exportReport, busy } = useReportExport();
   const [error, setError] = useState<string | null>(null);
 
   const run = async (fmt: ExportFormat) => {
     setError(null);
-    const r = await exportReport(kind, fmt, period, code);
+    const r = await exportReport(kind, fmt, period, code, exportUrl);
     if (!r.ok) setError(r.message);
   };
 
