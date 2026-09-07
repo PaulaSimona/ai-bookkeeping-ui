@@ -21,7 +21,11 @@ export const CounterpartyPicker: FC<{
   value: string; // selected counterparty id ('' = none picked)
   onChange: (id: string) => void;
   disabled?: boolean;
-}> = ({ orgId, value, onChange, disabled }) => {
+  // S69 E8 (O-S69-18): the "+ New" inline create is a WRITE
+  // (POST staff/orgs/<id>/counterparties/). A read-only surface passes false
+  // and the affordance does not render. Default true → existing callers unchanged.
+  allowCreate?: boolean;
+}> = ({ orgId, value, onChange, disabled, allowCreate = true }) => {
   const { counterparties, isLoading, refetch } = useStaffOrgCounterparties(orgId, { archived: false });
   const [showNew, setShowNew] = useState(false);
   const [name, setName] = useState('');
@@ -69,17 +73,19 @@ export const CounterpartyPicker: FC<{
             </option>
           ))}
         </select>
-        <button
-          type="button"
-          onClick={() => setShowNew((v) => !v)}
-          disabled={disabled}
-          className="shrink-0 text-xs font-medium text-[#4DA6FF] hover:text-white disabled:opacity-40"
-        >
-          + New
-        </button>
+        {allowCreate && (
+          <button
+            type="button"
+            onClick={() => setShowNew((v) => !v)}
+            disabled={disabled}
+            className="shrink-0 text-xs font-medium text-[#4DA6FF] hover:text-white disabled:opacity-40"
+          >
+            + New
+          </button>
+        )}
       </div>
 
-      {showNew && (
+      {allowCreate && showNew && (
         <div className="rounded-md border border-white/10 bg-white/5 p-3 space-y-2">
           <div className="flex items-center gap-2">
             <input

@@ -113,8 +113,14 @@ export const staffExportUrl = (orgId: string): ExportUrlBuilder => (kind, code) 
 // JournalEntrySerializer as the owner detail, so the mapping onto the drawer's
 // row type is the owner page's mapping, unchanged.
 
-export const useStaffEntryDetail = (entryId: string | null): EntryState | null => {
+// Returns the drawer state plus a `refetch` so a staff write can re-read the
+// entry (S69 E8 immediate-reflection rule: refetch, never mutate locally).
+export const useStaffEntryDetail = (
+  entryId: string | null,
+): { entry: EntryState | null; refetch: () => void } => {
   const [state, setState] = useState<EntryState | null>(null);
+  const [revision, setRevision] = useState(0);
+  const refetch = useCallback(() => setRevision((r) => r + 1), []);
   useEffect(() => {
     if (!entryId) { setState(null); return; }
     let cancelled = false;
@@ -156,6 +162,6 @@ export const useStaffEntryDetail = (entryId: string | null): EntryState | null =
       }
     });
     return () => { cancelled = true; };
-  }, [entryId]);
-  return state;
+  }, [entryId, revision]);
+  return { entry: state, refetch };
 };

@@ -182,15 +182,23 @@ export const createStaffOrgCounterparty = async (
 
 // ─── Entry attribution ─────────────────────────────────────────────────────────
 
+// S69 E7/E8 (O-S69-1 / O-S69-20 / D-S69-17): the staff lane REPLACES or CLEARS
+// a counterparty. Body key is the ruled `counterparty` (uuid | null → clear);
+// `reason` is optional (≤500). The response carries `changed` — false when the
+// target already equalled the current value (nothing written, nothing audited).
 export const attributeStaffEntry = async (
   entryId: string,
-  counterpartyId: string,
-): Promise<WriteResult> => {
+  counterparty: string | null,
+  reason?: string,
+): Promise<WriteResult<{ changed: boolean }>> => {
   try {
     const res = await api.post(`/api/accounting/staff/entries/${entryId}/attribute/`, {
-      counterparty_id: counterpartyId,
+      counterparty,
+      ...(reason ? { reason } : {}),
     });
-    if (res && res.status === 200) return { ok: true, status: 200 };
+    if (res && res.status === 200) {
+      return { ok: true, status: 200, data: { changed: res.data?.changed !== false } };
+    }
     return { ok: false, status: res?.status, errorDetail: extractDetail(res, 'Attribution failed.') };
   } catch {
     return { ok: false, errorDetail: 'Attribution failed.' };

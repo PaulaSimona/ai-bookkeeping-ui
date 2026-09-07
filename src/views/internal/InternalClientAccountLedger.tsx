@@ -20,6 +20,7 @@ import { PeriodControls } from '@/views/accounting/reports/PeriodControls';
 import { type LedgerLine, type ReportPeriod } from '@/hooks/useReports';
 import { reportPeriodQueryString, useReportPeriod } from '@/hooks/useReportPeriod';
 import { staffExportUrl, useStaffAccountLedger, useStaffEntryDetail } from '@/hooks/useStaffReports';
+import { StaffEntryActions } from '@/components/internal/StaffEntryActions';
 import { StaffBanner, orgLabel } from './InternalClientReports';
 
 const PAGE_SIZE = 100;
@@ -57,7 +58,7 @@ export const InternalClientAccountLedger: FC = () => {
     useStaffAccountLedger(orgId, code, period, page, PAGE_SIZE);
 
   const [openEntryId, setOpenEntryId] = useState<string | null>(null);
-  const entry = useStaffEntryDetail(openEntryId);
+  const { entry, refetch: refetchEntry } = useStaffEntryDetail(openEntryId);
   useEffect(() => { setOpenEntryId(null); }, [code, page, reportPeriodQueryString(period)]);
 
   const linkState = { orgName };
@@ -65,6 +66,11 @@ export const InternalClientAccountLedger: FC = () => {
   const title = data ? `${data.account.code} · ${data.account.name}` : code;
 
   const lines: LedgerLine[] = data?.lines.results ?? [];
+  // The line the drawer is open on: its counterparty is the server's current
+  // value and refreshes with the ledger refetch after a save (no local mutation).
+  const openLine = openEntryId ? lines.find((l) => l.entry_id === openEntryId) ?? null : null;
+  // Immediate reflection (S69 E8): re-read the ledger page AND the open entry.
+  const onEntryChanged = () => { refetch(); refetchEntry(); };
   const count = data?.lines.count ?? 0;
   const first = count === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const last = count === 0 ? 0 : first + lines.length - 1;
@@ -130,7 +136,17 @@ export const InternalClientAccountLedger: FC = () => {
             hasNext={!!data.lines.next}
             onPrevious={() => setPage(page - 1)}
             onNext={() => setPage(page + 1)}
-            drawerActions={null}
+            drawerActions={openLine ? (
+              <StaffEntryActions
+                orgId={orgId}
+                entry={{
+                  id: openLine.entry_id,
+                  entry_number: openLine.entry_number,
+                  counterparty: openLine.counterparty,
+                }}
+                onChanged={onEntryChanged}
+              />
+            ) : null}
             documentUrl={() => null}   // O-S69-17: no owner-lane call from the staff drawer
           />
 
