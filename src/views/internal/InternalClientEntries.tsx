@@ -1,8 +1,11 @@
 import { type FC, Fragment, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useStaffOrgEntries, attributeStaffEntry } from '@/hooks/useStaffResolution';
+import { useStaffOrgEntries } from '@/hooks/useStaffResolution';
 import { type LedgerEntryRow } from '@/hooks/useLedgerEntries';
-import { CounterpartyPicker } from '@/components/internal/CounterpartyPicker';
+// S69 E8 fence 4a (F-S69-9): the expanded row's counterparty control is the
+// shared StaffEntryActions panel (replace / clear / reason, confirm on clear,
+// refetch on success) — the same implementation the staff account ledger uses.
+import { StaffEntryActions } from '@/components/internal/StaffEntryActions';
 import {
   PageContainer,
   SectionCard,
@@ -10,8 +13,6 @@ import {
   CenteredSpinner,
   EmptyState,
   ErrorBanner,
-  Toast,
-  useToast,
   formatMoney,
   humanizeCode,
 } from '@/components/internal/ui';
@@ -28,49 +29,6 @@ const statusTone = (s: string): 'success' | 'warning' | 'neutral' | 'danger' => 
 const entryNo = (e: LedgerEntryRow): string =>
   e.entry_number_display || (e.entry_number != null ? String(e.entry_number) : '—');
 
-const AssignPanel: FC<{
-  orgId: string;
-  entryId: string;
-  onDone: () => void;
-  notify: (m: string, t: 'success' | 'error') => void;
-}> = ({ orgId, entryId, onDone, notify }) => {
-  const [cpId, setCpId] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-
-  const assign = async () => {
-    if (!cpId || submitting) return;
-    setSubmitting(true);
-    const res = await attributeStaffEntry(entryId, cpId);
-    setSubmitting(false);
-    if (res.ok) {
-      notify('Counterparty assigned.', 'success');
-      onDone(); // optimistic refresh
-    } else if (res.status === 409) {
-      notify('Already attributed.', 'error');
-      onDone(); // refresh to show the current attribution
-    } else {
-      notify(res.errorDetail ?? 'Assignment failed.', 'error');
-    }
-  };
-
-  return (
-    <div className="rounded-md border border-white/10 bg-white/5 p-3 space-y-2 max-w-md">
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-white/40">
-        Assign counterparty
-      </div>
-      <CounterpartyPicker orgId={orgId} value={cpId} onChange={setCpId} disabled={submitting} />
-      <button
-        type="button"
-        onClick={assign}
-        disabled={!cpId || submitting}
-        className="rounded-md bg-[#0066FF] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#0052cc] disabled:opacity-50"
-      >
-        {submitting ? 'Assigning…' : 'Assign'}
-      </button>
-    </div>
-  );
-};
-
 export const InternalClientEntries: FC = () => {
   const { orgId = '' } = useParams();
   const [status, setStatus] = useState('');
@@ -79,7 +37,6 @@ export const InternalClientEntries: FC = () => {
     orgId,
     { status: status || undefined, unattributed },
   );
-  const { toast, showToast } = useToast();
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const totalPages = Math.max(1, Math.ceil(count / pageSize));
@@ -97,8 +54,6 @@ export const InternalClientEntries: FC = () => {
         </Link>
       }
     >
-      <Toast toast={toast} />
-
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-4">
         <select
@@ -208,14 +163,11 @@ export const InternalClientEntries: FC = () => {
                                   </tbody>
                                 </table>
                               </div>
-                              {!e.counterparty && (
-                                <AssignPanel
-                                  orgId={orgId}
-                                  entryId={e.id}
-                                  onDone={refetch}
-                                  notify={showToast}
-                                />
-                              )}
+                              {/* Replace / clear on every expanded row, not only
+                                  unassigned ones (F-S69-9). The row's own
+                                  counterparty is the panel's "current"; a save
+                                  refetches the page — no local mutation. */}
+                              <StaffEntryActions orgId={orgId} entry={e} onChanged={refetch} />
                             </div>
                           </td>
                         </tr>
