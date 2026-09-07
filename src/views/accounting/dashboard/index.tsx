@@ -1,5 +1,6 @@
 import { type FC, type ReactNode } from 'react';
 import { useSelector } from 'react-redux';
+import { formatIsoDate } from '@/utils/dates';
 import { type RootState } from '@/store/store';
 import { useDashboardSummary, DashboardSummary } from '@/hooks/useDashboardSummary';
 import { Card } from '@/components/t2/Card';
@@ -29,8 +30,9 @@ const fmtMoney = (value: string, currency: string | null): string =>
     currency: currency ?? 'CAD',
   }).format(Number(value));
 
+// Fiscal-year bounds / as_of are calendar DATES — parsed locally (O-S68-21a).
 const fmtDate = (iso: string): string =>
-  new Date(iso).toLocaleDateString('en-CA', {
+  formatIsoDate(iso, {
     year: 'numeric',
     month: 'long',
     day: 'numeric',

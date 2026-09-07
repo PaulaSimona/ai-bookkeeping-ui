@@ -6,6 +6,7 @@
 // Own data layer; tokens only, no hex.
 import { type FC, type ReactNode, useState } from 'react';
 import { useOrgContext } from '@/context/OrgContext';
+import { formatIsoDate } from '@/utils/dates';
 import { useToast } from '@/hooks/useToast';
 import { PageHeader } from '@/components/t2/PageHeader';
 import { Card } from '@/components/t2/Card';
@@ -13,8 +14,9 @@ import { StatusBadge } from '@/components/t2/StatusBadge';
 import { PageLoader } from '@/components/Loader';
 import { useYearEndClose, postYearEndClose, type Blocker } from './hooks/useYearEndClose';
 
+// Fiscal-year bounds are calendar DATES — parsed locally (O-S68-21a).
 const fmtDate = (iso: string): string =>
-  new Date(iso).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' });
+  formatIsoDate(iso, { year: 'numeric', month: 'long', day: 'numeric' });
 
 const PageShell: FC<{ children: ReactNode }> = ({ children }) => (
   <div className="min-h-screen bg-gray-50 text-gray-900">

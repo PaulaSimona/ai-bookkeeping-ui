@@ -5,6 +5,7 @@
 // and no Excel chip either. Tokens only, no hex; money strings are display-only.
 import { type FC, type ReactNode, useState } from 'react';
 import { useOrgContext } from '@/context/OrgContext';
+import { formatIsoDate } from '@/utils/dates';
 import { Card } from '@/components/t2/Card';
 import { PageHeader } from '@/components/t2/PageHeader';
 import { FilterChip } from '@/components/t2/FilterChip';
@@ -24,8 +25,9 @@ const fmtMoney = (s: string): string => {
   const abs = Math.abs(n).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return n < 0 ? `-$${abs}` : `$${abs}`;
 };
+// as_of / filing deadline are calendar DATES — parsed locally (O-S68-21a).
 const fmtDate = (iso: string | null): string =>
-  iso === null ? '—' : new Date(iso).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' });
+  iso === null ? '—' : formatIsoDate(iso, { year: 'numeric', month: 'long', day: 'numeric' });
 
 const MONO = 'font-[var(--font-family-mono)] tabular-nums';
 

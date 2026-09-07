@@ -4,6 +4,7 @@
 // gradient (O-14C-3). Two shapes: unregistered (calm one-liner, no zeros) and
 // registered (net-owing hero + collected/ITC split + optional next-filing card).
 import { type FC, type ReactNode } from 'react';
+import { formatIsoDate } from '@/utils/dates';
 
 import { Card } from '@/components/t2/Card';
 import { PageHeader } from '@/components/t2/PageHeader';
@@ -19,10 +20,9 @@ const fmtMoney = (s: string): string => {
   return n < 0 ? `-$${abs}` : `$${abs}`;
 };
 
+// Filing-period deadline is a calendar DATE — parsed locally (O-S68-21a).
 const fmtDate = (iso: string): string =>
-  new Date(iso).toLocaleDateString('en-CA', {
-    year: 'numeric', month: 'long', day: 'numeric',
-  });
+  formatIsoDate(iso, { year: 'numeric', month: 'long', day: 'numeric' });
 
 const MONO = 'font-[var(--font-family-mono)] tabular-nums';
 
