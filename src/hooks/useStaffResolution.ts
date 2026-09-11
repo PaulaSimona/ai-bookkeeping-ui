@@ -9,6 +9,7 @@ import { type LedgerEntryRow } from '@/hooks/useLedgerEntries';
  *   GET/POST /api/accounting/staff/orgs/<org_id>/accounts/
  *   GET/POST /api/accounting/staff/orgs/<org_id>/counterparties/
  *   POST     /api/accounting/staff/entries/<id>/attribute/
+ *   POST     /api/accounting/staff/entries/<id>/correct/    (S70 3c, O-S70-6)
  *   GET      /api/accounting/staff/orgs/<org_id>/entries/  (paginated)
  *   GET/POST /api/accounting/staff/orgs/<org_id>/cards/    (paginated; s29)
  *   PATCH    /api/accounting/staff/cards/<pk>/             (s29)
@@ -202,6 +203,59 @@ export const attributeStaffEntry = async (
     return { ok: false, status: res?.status, errorDetail: extractDetail(res, 'Attribution failed.') };
   } catch {
     return { ok: false, errorDetail: 'Attribution failed.' };
+  }
+};
+
+// ─── Posted-entry correction (S70 3c, F-S69-8 / O-S70-6) ──────────────────────
+
+// Body of POST staff/entries/<id>/correct/ — mirrors the backend contract at
+// accounting/staff_resolution_views.py:786-838 exactly: a free-text `reason`
+// (required, non-empty) and >= 2 lines of {account_id, side, amount}. `amount`
+// is a 2-dp STRING (money is never a float; the view parses it to Decimal).
+// No reason_code, no counterparty (the replacement inherits the original's
+// server-side, O-S69-7), no description/tax_code — the view does not read them.
+export interface CorrectedLine {
+  account_id: string;
+  side: 'debit' | 'credit';
+  amount: string;
+}
+
+export interface CorrectPostedPayload {
+  reason: string;
+  lines: CorrectedLine[];
+}
+
+// The 201 body is the REPLACEMENT entry, serialized by JournalEntrySerializer
+// (the same shape the ledger list uses — reuse, do not redefine). The fields the
+// editor reads are pinned here; corrects_entry_id points back at the original.
+export type CorrectedEntry = LedgerEntryRow & { corrects_entry_id: string | null };
+
+export type CorrectPostedResult =
+  | { ok: true; entry: CorrectedEntry }
+  | { ok: false; status?: number; errorDetail: string };
+
+// Error mapping (O-S70-6): 400 → the server `detail` verbatim (engine codes
+// period_locked / unbalanced / invalid_accounts / not_posted /
+// already_reversed arrive as {code, detail, ...} and `detail` is what the
+// reviewer reads); 404 → the §16 IDOR shape; 429 → the staff_write /
+// staff_correction throttle.
+export const correctPostedEntry = async (
+  entryId: string,
+  payload: CorrectPostedPayload,
+): Promise<CorrectPostedResult> => {
+  try {
+    const res = await api.post(`/api/accounting/staff/entries/${entryId}/correct/`, payload);
+    if (res && res.status === 201 && res.data) {
+      return { ok: true, entry: res.data as CorrectedEntry };
+    }
+    const status = res?.status;
+    if (status === 404) return { ok: false, status, errorDetail: 'Not found' };
+    if (status === 429) {
+      return { ok: false, status, errorDetail: 'Rate limit — try again in a minute' };
+    }
+    return { ok: false, status, errorDetail: extractDetail(res, 'Correction failed.') };
+  } catch {
+    return { ok: false, errorDetail: 'Correction failed.' };
   }
 };
 
