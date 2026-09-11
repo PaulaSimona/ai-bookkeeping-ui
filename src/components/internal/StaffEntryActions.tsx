@@ -1,7 +1,10 @@
-// StaffEntryActions (S69 E8, O-S69-1 / O-S69-10a / D-S69-17) — the ONE write
-// reachable from the staff client view: replace or clear an entry's
-// counterparty (POST staff/entries/<id>/attribute/). Rendered in the
-// LedgerTable drawerActions slot on InternalClientAccountLedger only.
+// StaffEntryActions (S69 E8, O-S69-1 / O-S69-10a / D-S69-17; S70 3c, O-S70-8)
+// — the staff writes reachable from the client view: replace or clear an
+// entry's counterparty (POST staff/entries/<id>/attribute/) and, since S70 3c,
+// correct a POSTED entry (PostedCorrectionEditor → POST
+// staff/entries/<id>/correct/). Mounted on BOTH staff pages: the expanded row
+// on InternalClientEntries (F-S69-9) and the LedgerTable drawerActions slot on
+// InternalClientAccountLedger.
 //
 // `entry` is the ledger LINE the drawer is open on (id, number, current
 // counterparty) — the page owns it and refetches it after a save, so what this
@@ -11,6 +14,7 @@
 import { type FC, useEffect, useState } from 'react';
 
 import { CounterpartyPicker } from '@/components/internal/CounterpartyPicker';
+import { PostedCorrectionEditor } from '@/components/internal/PostedCorrectionEditor';
 import {
   ConfirmModal,
   EmptyState,
@@ -41,6 +45,7 @@ export const StaffEntryActions: FC<{
   const [selected, setSelected] = useState(current);
   const [reason, setReason] = useState('');
   const [confirmClear, setConfirmClear] = useState(false);
+  const [correcting, setCorrecting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<{ status?: number; detail: string } | null>(null);
   const { toast, showToast } = useToast();
@@ -121,6 +126,40 @@ export const StaffEntryActions: FC<{
         >
           {saving ? 'Saving…' : 'Save'}
         </button>
+      </div>
+
+      {/* S70 3c (O-S70-8): correct a POSTED entry — reverse + repost through
+          the staff correction endpoint. The editor re-reads the entry and
+          gates on ITS status (O-S70-2); this button only opens it. */}
+      <div className="mt-3 max-w-xl space-y-3 rounded-md border border-white/10 bg-white/5 p-3">
+        {correcting ? (
+          <PostedCorrectionEditor
+            orgId={orgId}
+            entry={{ id: entry.id, entry_number: entry.entry_number }}
+            onClose={() => setCorrecting(false)}
+            onChanged={onChanged}
+            notify={showToast}
+          />
+        ) : (
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-white/40">
+                Posted entry
+              </div>
+              <p className="text-[11px] text-white/40">
+                Reverses {entryNo} and posts a corrected replacement. Audited; cannot be undone.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCorrecting(true)}
+              disabled={saving}
+              className="rounded-md border border-white/15 px-3 py-1.5 text-xs font-medium text-white/70 hover:text-white disabled:opacity-50"
+            >
+              Correct
+            </button>
+          </div>
+        )}
       </div>
 
       {confirmClear && (
