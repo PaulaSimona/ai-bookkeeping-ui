@@ -145,6 +145,15 @@ export const useStaffEntryDetail = (
             source_document_id: d.source_document_id ?? null,
             total_debits: d.total_debits,
             total_credits: d.total_credits,
+            // F-S71-2 / O-S71-6: reversal + correction linkage (UUID-string ids
+            // and their "JE-nnnn" display twins, O-S73-1) — drives the drawer's
+            // derived "Reversed" label and the staff Correct guard.
+            reverses_entry_id: d.reverses_entry_id ?? null,
+            reversed_by_entry_id: d.reversed_by_entry_id ?? null,
+            corrects_entry_id: d.corrects_entry_id ?? null,
+            reverses_entry_number_display: d.reverses_entry_number_display ?? null,
+            reversed_by_entry_number_display: d.reversed_by_entry_number_display ?? null,
+            corrects_entry_number_display: d.corrects_entry_number_display ?? null,
             lines: (d.lines ?? []).map((l: any) => ({
               id: l.id,
               account_id: l.account_id,

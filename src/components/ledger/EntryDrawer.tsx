@@ -14,6 +14,7 @@ import { AdjustmentForm, today } from '@/views/accountant/AdjustmentForm';
 import { voidAdjustment } from '@/views/accountant/hooks/adjustmentApi';
 import { type AccountantLedgerRow } from '@/views/accountant/hooks/useAccountantLedger';
 import { formatIsoDate } from '@/utils/dates';
+import { entryDisplayStatus } from '@/utils/entryStatus';
 
 const CAD = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' });
 const fmtMoney = (v: string | null): string => (v == null || v === '' ? '' : CAD.format(Number(v)));
@@ -171,8 +172,10 @@ export const EntryDrawer: FC<EntryDrawerProps> = ({
         <span className="text-[13px] text-gray-600">{fmtDate(row.entry_date)}</span>
         <span className="text-gray-300">·</span>
         <StatusBadge variant="neutral">{humanizeSource(row.source)}</StatusBadge>
-        <StatusBadge variant={statusVariant(isVoided ? 'voided' : row.status)}>
-          {humanizeSource(isVoided ? 'voided' : row.status)}
+        {/* F-S71-2 / O-S71-3: status derived via entryDisplayStatus so a
+            reversed original shows "Reversed" (info tone) — never "Posted". */}
+        <StatusBadge variant={statusVariant(isVoided ? 'voided' : entryDisplayStatus(row))}>
+          {humanizeSource(isVoided ? 'voided' : entryDisplayStatus(row))}
         </StatusBadge>
       </div>
 

@@ -12,6 +12,7 @@ import { useCounterparties } from '@/hooks/useCounterparties';
 import { Card } from '@/components/t2/Card';
 import { PageHeader } from '@/components/t2/PageHeader';
 import { FilterChip } from '@/components/t2/FilterChip';
+import { entryDisplayStatus } from '@/utils/entryStatus';
 
 // §14 14-C Tier 2 Ledger register (D-14C-3..5), restyled onto the t2/ language
 // (s22 B3). Read-only: tab strip + filters over the org's journal entries, calm
@@ -49,11 +50,13 @@ const PageShell: FC<{ children: ReactNode }> = ({ children }) => (
 // Status badge (D-14C-3): needs_review wins, then the entry status. Unknown
 // status falls back to the calm "Draft" styling. Raw status text never leaks
 // beyond this map. Local pill — t2/StatusBadge is edit-forbidden.
+// F-S71-2 / O-S71-3: the label is derived by entryDisplayStatus (needs_review →
+// reversed_by_entry_id → status), so a posted-but-reversed original renders
+// "Reversed" instead of "Posted". The 'reversed' branch below finally fires.
 const badgeFor = (row: LedgerEntryRow): { label: string; cls: string } => {
-  if (row.needs_review) {
-    return { label: 'Needs review', cls: 'bg-amber-50 text-amber-700' };
-  }
-  switch (row.status) {
+  switch (entryDisplayStatus(row)) {
+    case 'needs_review':
+      return { label: 'Needs review', cls: 'bg-amber-50 text-amber-700' };
     case 'draft':
       return { label: 'Draft', cls: 'bg-gray-100 text-gray-600' };
     case 'posted':

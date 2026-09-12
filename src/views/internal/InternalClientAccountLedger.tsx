@@ -143,6 +143,20 @@ export const InternalClientAccountLedger: FC = () => {
                   id: openLine.entry_id,
                   entry_number: openLine.entry_number,
                   counterparty: openLine.counterparty,
+                  // F-S71-2 / O-S71-5 (A4): the Correct guard reads the entry
+                  // DETAIL (useStaffEntryDetail), never the LedgerLine — the
+                  // line carries no status or linkage. Absent until loaded.
+                  ...(entry?.kind === 'ready'
+                    ? {
+                        entry_number_display: entry.row.entry_number_display,
+                        reverses_entry_id: entry.row.reverses_entry_id ?? null,
+                        reversed_by_entry_id: entry.row.reversed_by_entry_id ?? null,
+                        corrects_entry_id: entry.row.corrects_entry_id ?? null,
+                        reverses_entry_number_display: entry.row.reverses_entry_number_display ?? null,
+                        reversed_by_entry_number_display: entry.row.reversed_by_entry_number_display ?? null,
+                        corrects_entry_number_display: entry.row.corrects_entry_number_display ?? null,
+                      }
+                    : {}),
                 }}
                 onChanged={onEntryChanged}
               />

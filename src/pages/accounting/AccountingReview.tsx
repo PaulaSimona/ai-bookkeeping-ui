@@ -232,6 +232,8 @@ const RightPanel: FC<{
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <ConfidenceBadge value={entry.confidence} />
+          {/* O-S73-4: the review queue shows the COLUMN status; the derived
+              status helper is for posted surfaces only. */}
           <StatusBadge status={entry.status} />
         </div>
       </div>

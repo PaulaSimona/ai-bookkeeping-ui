@@ -18,6 +18,7 @@ import {
 import { useAccountantChart } from './hooks/useAccountantChart';
 import { EntryDrawer } from '@/components/ledger/EntryDrawer';
 import { formatIsoDate } from '@/utils/dates';
+import { entryDisplayStatus } from '@/utils/entryStatus';
 
 const CAD = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' });
 const fmtMoney = (v: string | null): string => (v == null || v === '' ? '' : CAD.format(Number(v)));
@@ -191,7 +192,14 @@ const LedgerInner: FC = () => {
                         {voided ? (
                           <StatusBadge variant="voided">Voided</StatusBadge>
                         ) : (
-                          <StatusBadge variant="neutral">{humanizeSource(row.source)}</StatusBadge>
+                          <>
+                            <StatusBadge variant="neutral">{humanizeSource(row.source)}</StatusBadge>
+                            {/* F-S71-2 / O-S71-3 (A3): a reversed original is
+                                flagged here too — info tone, as the drawer. */}
+                            {entryDisplayStatus(row) === 'reversed' && (
+                              <StatusBadge variant="info">Reversed</StatusBadge>
+                            )}
+                          </>
                         )}
                       </span>
                       <span className="justify-self-end">

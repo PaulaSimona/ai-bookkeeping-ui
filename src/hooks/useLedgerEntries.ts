@@ -49,6 +49,17 @@ export interface LedgerEntryRow {
   lines: LedgerEntryLine[];
   created_at: string;
   updated_at: string;
+  // F-S71-2 / O-S73-2: reversal + correction linkage as the backend serializes
+  // it on every lane (ledger_serializers.py JournalEntrySerializer). Ids are
+  // UUID strings (JournalEntry PK); the *_number_display twins are the linked
+  // entry's "JE-nnnn" (O-S73-1), null when the link is absent. Optional so
+  // older callers/fixtures type-check; the API always sends all six.
+  reverses_entry_id?: string | null;
+  reversed_by_entry_id?: string | null;
+  corrects_entry_id?: string | null;
+  reverses_entry_number_display?: string | null;
+  reversed_by_entry_number_display?: string | null;
+  corrects_entry_number_display?: string | null;
 }
 
 export interface LedgerFilters {
