@@ -23,11 +23,23 @@ import {
   useToast,
 } from '@/components/internal/ui';
 import { attributeStaffEntry } from '@/hooks/useStaffResolution';
+import { formatEntryNumber } from '@/utils/entryStatus';
 
 export interface StaffEntryActionsEntry {
   id: string;
   entry_number: number | null;
   counterparty: { id: string; name: string } | null;
+  // F-S71-2 / O-S71-5 (A4): linkage that gates "Correct" — a reversed original
+  // or a reversal entry is never corrected. Optional: the entries page passes
+  // the full row; the account-ledger page threads them from the entry DETAIL
+  // (useStaffEntryDetail), never from the LedgerLine.
+  entry_number_display?: string | null;
+  reverses_entry_id?: string | null;
+  reversed_by_entry_id?: string | null;
+  corrects_entry_id?: string | null;
+  reverses_entry_number_display?: string | null;
+  reversed_by_entry_number_display?: string | null;
+  corrects_entry_number_display?: string | null;
 }
 
 export const REASON_MAX = 500;
@@ -55,7 +67,24 @@ export const StaffEntryActions: FC<{
   useEffect(() => { setSelected(current); }, [current, entry.id]);
 
   const dirty = selected !== current;
-  const entryNo = entry.entry_number != null ? `#${entry.entry_number}` : 'this entry';
+  // A5: the display form ("JE-0071"), never the bare "#<n>" — prefer the API's
+  // entry_number_display, else format the integer the same way the backend does.
+  const entryNo =
+    entry.entry_number_display ?? formatEntryNumber(entry.entry_number) ?? 'this entry';
+
+  // O-S71-5 / R-S71-B: why "Correct" is unavailable, in plain words; null when
+  // it is available. A reversed original points at its reversal; a reversal
+  // entry points back at what it reversed.
+  const correctBlockedReason: string | null =
+    entry.reversed_by_entry_id != null
+      ? entry.reversed_by_entry_number_display
+        ? `Already reversed by ${entry.reversed_by_entry_number_display}`
+        : 'Already reversed'
+      : entry.reverses_entry_id != null
+        ? entry.reverses_entry_number_display
+          ? `Reversal entries are not corrected — correct ${entry.reverses_entry_number_display} instead`
+          : 'Reversal entry'
+        : null;
 
   const submit = async () => {
     setSaving(true);
@@ -149,11 +178,15 @@ export const StaffEntryActions: FC<{
               <p className="text-[11px] text-white/40">
                 Reverses {entryNo} and posts a corrected replacement. Audited; cannot be undone.
               </p>
+              {correctBlockedReason && (
+                <p className="mt-1 text-[11px] text-amber-200/80">{correctBlockedReason}</p>
+              )}
             </div>
             <button
               type="button"
               onClick={() => setCorrecting(true)}
-              disabled={saving}
+              disabled={saving || correctBlockedReason !== null}
+              title={correctBlockedReason ?? undefined}
               className="rounded-md border border-white/15 px-3 py-1.5 text-xs font-medium text-white/70 hover:text-white disabled:opacity-50"
             >
               Correct

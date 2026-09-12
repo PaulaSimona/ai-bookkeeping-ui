@@ -16,6 +16,7 @@ import {
   formatMoney,
   humanizeCode,
 } from '@/components/internal/ui';
+import { entryDisplayStatus } from '@/utils/entryStatus';
 
 const STATUS_FILTERS = ['', 'draft', 'posted', 'reversed', 'replaced'];
 
@@ -125,7 +126,11 @@ export const InternalClientEntries: FC = () => {
                         <td className="py-2.5 px-3 text-right text-white/80">{formatMoney(e.total_debits)}</td>
                         <td className="py-2.5 px-3 text-right text-white/80">{formatMoney(e.total_credits)}</td>
                         <td className="py-2.5 px-3">
-                          <Pill tone={statusTone(e.status)}>{humanizeCode(e.status)}</Pill>
+                          {/* F-S71-2 / O-S71-3: derived status — a reversed
+                              original shows "Reversed", not "Posted". */}
+                          <Pill tone={statusTone(entryDisplayStatus(e))}>
+                            {humanizeCode(entryDisplayStatus(e))}
+                          </Pill>
                         </td>
                         <td className="py-2.5 px-5">
                           {e.counterparty ? (
