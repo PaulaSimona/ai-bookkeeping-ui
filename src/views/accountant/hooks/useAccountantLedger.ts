@@ -46,6 +46,15 @@ export interface AccountantLedgerRow {
   total_debits: string;
   total_credits: string;
   lines: AccountantLedgerLine[];
+  // F-S71-2 / O-S73-2: reversal + correction linkage (same six fields as
+  // LedgerEntryRow — the backend serializes them on the accountant and staff
+  // detail lanes too). UUID-string ids; "JE-nnnn" display twins (O-S73-1).
+  reverses_entry_id?: string | null;
+  reversed_by_entry_id?: string | null;
+  corrects_entry_id?: string | null;
+  reverses_entry_number_display?: string | null;
+  reversed_by_entry_number_display?: string | null;
+  corrects_entry_number_display?: string | null;
 }
 
 interface Envelope {
