@@ -2,7 +2,6 @@ import { type FC, useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '@/utils/api';
 import { useOrgMe, useAccounts, type Account } from '@/hooks/useAccounts';
-import { entryDisplayStatus } from '@/utils/entryStatus';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -100,9 +99,6 @@ const STATUS_COLORS: Record<string, string> = {
   draft: 'bg-white/5 text-white/50 border-white/10',
   posted: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
   reversed: 'bg-red-500/10 text-red-400 border-red-500/20',
-  // F-S71-2 / O-S71-3: entryDisplayStatus ranks needs_review first, and every
-  // queue row carries it — amber, matching the owner ledger's "Needs review".
-  needs_review: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
 };
 
 const StatusBadge: FC<{ status: string }> = ({ status }) => (
@@ -236,9 +232,9 @@ const RightPanel: FC<{
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <ConfidenceBadge value={entry.confidence} />
-          {/* F-S71-2 / O-S71-3: same derivation as every ledger surface (queue
-              rows are drafts, so no behavioural change is expected here). */}
-          <StatusBadge status={entryDisplayStatus(entry)} />
+          {/* O-S73-4: the review queue shows the COLUMN status; the derived
+              status helper is for posted surfaces only. */}
+          <StatusBadge status={entry.status} />
         </div>
       </div>
 
