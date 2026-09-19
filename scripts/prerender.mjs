@@ -12,7 +12,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { render } from '../dist/server/entry-server.js';
+import { render, renderClient } from '../dist/server/entry-server.js';
 
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -179,24 +179,85 @@ const GUARDS = {
     check: (html) => !/screenshot\s*[—-]\s*extracted receipt record/i.test(html),
     detail: () => 'the dashed placeholder caption is still rendered',
   },
+  // G9 (F-S78-8, O-S79-3). The other guards ask what the prerendered bytes SAY.
+  // This one asks whether those bytes SURVIVE: React keeps prerendered markup
+  // only if the client's first render produces exactly the same string. When it
+  // does not, React logs #418, discards the whole #root and re-renders from
+  // scratch (#423) - the prerender is then dead weight that only a JS-blind
+  // crawler ever benefits from, which is precisely the state "/" shipped in
+  // from S61 until this guard.
+  //
+  // Both sides are real: the left is read back out of the file just written,
+  // the right is the actual client route table rendered by renderClient(). The
+  // comparison is byte-for-byte, because that is React's own test.
+  //
+  // Node runs this with window / document / localStorage UNDEFINED, on purpose.
+  // A component that reaches for a browser global during render cannot hydrate
+  // a prerendered page anyway, so it SHOULD fail here rather than in a browser.
+  G9: {
+    what: 'client first render is byte-identical to the prerendered #root',
+    check: (html, file) => {
+      const pre = rootInnerHtml(html, file);
+      return pre === renderClient(urlOf(file));
+    },
+    detail: (html, file) => {
+      const pre = rootInnerHtml(html, file);
+      const now = renderClient(urlOf(file));
+      let i = 0;
+      while (i < pre.length && i < now.length && pre[i] === now[i]) i += 1;
+      return (
+        `prerendered ${pre.length} B vs client first render ${now.length} B; ` +
+        `first difference at offset ${i}\n` +
+        `    prerendered: ...${pre.slice(i, i + 80).replace(/\n/g, ' ')}...\n` +
+        `    client     : ...${now.slice(i, i + 80).replace(/\n/g, ' ')}...`
+      );
+    },
+  },
+};
+
+// The #root inner HTML of a written file: everything between the opening
+// <div id="root"> and the last </div> before </body>. Anchored on </body>
+// rather than on the module script, because Vite hoists that script into
+// <head> - i.e. it sits BEFORE #root, not after it.
+// Failing to extract is an ERROR, not an empty string: an empty left-hand side
+// would compare nothing against nothing and make G9 silently vacuous.
+const rootInnerHtml = (html, file) => {
+  const open = '<div id="root">';
+  const start = html.indexOf(open);
+  const bodyClose = html.lastIndexOf('</body>');
+  const end = bodyClose === -1 ? -1 : html.lastIndexOf('</div>', bodyClose);
+  if (start === -1 || end === -1 || end <= start) {
+    throw new Error(`prerender: cannot locate #root in dist/prerender/${file}`);
+  }
+  return html.slice(start + open.length, end);
+};
+
+// Recover a written file's url from ROUTES, so G9 encodes no route list of its
+// own: adding a prerendered route extends the guard by itself.
+const urlOf = (file) => {
+  const hit = ROUTES.find(([, f]) => f === file);
+  if (!hit) throw new Error(`prerender: no ROUTES entry for ${file}`);
+  return hit[0];
 };
 
 // "/" carries the full set. /pricing and /faq are public prerendered routes that
-// share the shell and the footer, so they carry the four that are about the shell
-// and the footer — not the ones about landing-page-only content.
+// share the shell and the footer, so they carry the ones about the shell and the
+// footer — not the ones about landing-page-only content. G9 is on ALL THREE: it
+// is the only guard whose passing routes are also the evidence that it can fail
+// for a real reason rather than by construction.
 const GUARD_PLAN = {
-  'index.html': ['G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G7', 'G8'],
-  'pricing.html': ['G1', 'G2', 'G3', 'G6'],
-  'faq.html': ['G1', 'G2', 'G3', 'G6'],
+  'index.html': ['G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G7', 'G8', 'G9'],
+  'pricing.html': ['G1', 'G2', 'G3', 'G6', 'G9'],
+  'faq.html': ['G1', 'G2', 'G3', 'G6', 'G9'],
 };
 
 let failed = 0;
 for (const [file, html] of written) {
   for (const id of GUARD_PLAN[file] || []) {
     const g = GUARDS[id];
-    if (g.check(html)) continue;
+    if (g.check(html, file)) continue;
     failed += 1;
-    console.error(`prerender: GUARD ${id} FAILED on dist/prerender/${file} — ${g.what}: ${g.detail(html)}`);
+    console.error(`prerender: GUARD ${id} FAILED on dist/prerender/${file} — ${g.what}: ${g.detail(html, file)}`);
   }
 }
 

@@ -15,6 +15,7 @@ import { makeStore } from '@/store/store';
 import { LandingPage } from '@/pages/LandingPage';
 import { Pricing } from '@/views/pricing';
 import { FAQ } from '@/views/faq';
+import App from '@/App';
 
 const PublicApp = () => (
   <Routes>
@@ -31,6 +32,33 @@ export function render(url: string): string {
       <Provider store={store}>
         <StaticRouter location={url}>
           <PublicApp />
+        </StaticRouter>
+      </Provider>
+    </StrictMode>,
+  );
+}
+
+// O-S79-3: the SAME tree src/main.tsx mounts on the client, rendered to a
+// string so the build can prove the client's FIRST render of a prerendered
+// route is byte-identical to what was prerendered. BrowserRouter ->
+// StaticRouter is the ONLY difference from main.tsx:20-28; the store is a
+// fresh default one, i.e. an anonymous visitor, which is the only visitor
+// whose first render is knowable at build time.
+//
+// This is a BUILD-TIME ASSERTION HELPER. It is never used to produce
+// prerendered output - render() above still does that - and the bundle it ends
+// up in, dist/server/, is a build-only artifact that the backend image MUST NOT
+// serve. Stated as an obligation rather than a fact on purpose: at the time of
+// writing the backend copies all of dist/ into WHITENOISE_ROOT, so
+// /server/entry-server.js IS reachable in production (F-S79-2). Adding App to
+// this module therefore enlarges that exposure until F-S79-2 is closed.
+export function renderClient(url: string): string {
+  const store = makeStore();
+  return renderToString(
+    <StrictMode>
+      <Provider store={store}>
+        <StaticRouter location={url}>
+          <App />
         </StaticRouter>
       </Provider>
     </StrictMode>,
