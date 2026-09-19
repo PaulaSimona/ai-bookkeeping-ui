@@ -34,6 +34,30 @@ import { LightboxImage } from '@/components/Lightbox';
 // ─── Tokens (lifted from the prototype) ──────────────────────────────────────
 
 const PAGE = '#F9FAFB';
+// O-S78-9: this was built and appended to document.head in a useEffect, so it
+// was absent from the first response - the only response a crawler is
+// guaranteed to parse. Same object, same JSON.stringify, now rendered inside
+// the tree so renderToString emits it into the prerendered HTML. The runtime
+// injection is gone, so the final DOM still carries exactly one.
+const SOFTWARE_APPLICATION_LD = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'AI Bookkeeping',
+  applicationCategory: 'BusinessApplication',
+  operatingSystem: 'Web',
+  url: 'https://www.ai-bookkeeping.ai/',
+  description:
+    'Bookkeeping done for you. Receipt Automation reads and categorizes your documents; the Bookkeeping Service maintains real double-entry books with bank and card connections, financial statements, and human bookkeeper review of every uncertain entry.',
+  offers: [
+    { '@type': 'Offer', name: 'Receipt Automation — Starter', price: '29', priceCurrency: 'CAD' },
+    { '@type': 'Offer', name: 'Receipt Automation — Growth', price: '49', priceCurrency: 'CAD' },
+    { '@type': 'Offer', name: 'Receipt Automation — Pro', price: '69', priceCurrency: 'CAD' },
+    { '@type': 'Offer', name: 'Bookkeeping Service — Starter', price: '99', priceCurrency: 'CAD' },
+    { '@type': 'Offer', name: 'Bookkeeping Service — Growth', price: '199', priceCurrency: 'CAD' },
+    { '@type': 'Offer', name: 'Bookkeeping Service — Pro', price: '399', priceCurrency: 'CAD' },
+  ],
+});
+
 const NAVY = '#1A1F36';
 const INK = '#111827';
 const BLUE = '#0066FF';
@@ -288,32 +312,6 @@ export const LandingPage: FC = () => {
     };
   }, []);
 
-  useEffect(() => {
-    const script = document.createElement('script');
-    script.type = 'application/ld+json';
-    script.text = JSON.stringify({
-      '@context': 'https://schema.org',
-      '@type': 'SoftwareApplication',
-      name: 'AI Bookkeeping',
-      applicationCategory: 'BusinessApplication',
-      operatingSystem: 'Web',
-      url: 'https://www.ai-bookkeeping.ai/',
-      description:
-        'Bookkeeping done for you. Receipt Automation reads and categorizes your documents; the Bookkeeping Service maintains real double-entry books with bank and card connections, financial statements, and human bookkeeper review of every uncertain entry.',
-      offers: [
-        { '@type': 'Offer', name: 'Receipt Automation — Starter', price: '29', priceCurrency: 'CAD' },
-        { '@type': 'Offer', name: 'Receipt Automation — Growth', price: '49', priceCurrency: 'CAD' },
-        { '@type': 'Offer', name: 'Receipt Automation — Pro', price: '69', priceCurrency: 'CAD' },
-        { '@type': 'Offer', name: 'Bookkeeping Service — Starter', price: '99', priceCurrency: 'CAD' },
-        { '@type': 'Offer', name: 'Bookkeeping Service — Growth', price: '199', priceCurrency: 'CAD' },
-        { '@type': 'Offer', name: 'Bookkeeping Service — Pro', price: '399', priceCurrency: 'CAD' },
-      ],
-    });
-    document.head.appendChild(script);
-    return () => {
-      document.head.removeChild(script);
-    };
-  }, []);
 
   const scrollTo = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
@@ -332,6 +330,10 @@ export const LandingPage: FC = () => {
 
   return (
     <div className="min-h-screen font-sans" style={{ background: PAGE, color: INK }}>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: SOFTWARE_APPLICATION_LD }}
+      />
       {/* ── 1 · Header ── */}
       <header
         className="sticky top-0 z-50 border-b backdrop-blur-md"
@@ -404,6 +406,8 @@ export const LandingPage: FC = () => {
           </div>
         )}
       </header>
+
+      <main>
 
       {/* ── 2 · Hero (DR-1) ── */}
       <section className="text-white" style={{ background: NAVY }}>
@@ -1150,6 +1154,8 @@ export const LandingPage: FC = () => {
       </section>
 
       {/* ── 15 · Footer — five columns (DR-11) ── */}
+      </main>
+
       <footer className="mt-14 pb-10 pt-14 sm:mt-[88px]" style={{ background: INK, color: '#9CA3AF' }}>
         <div className={`${SHELL} grid gap-9 sm:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr_1fr_1fr]`}>
           <div>

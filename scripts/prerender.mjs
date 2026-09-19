@@ -17,6 +17,7 @@ import { render } from '../dist/server/entry-server.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ROOT_DIV = '<div id="root"></div>';
+const ROBOTS = '<meta name="robots" content="index, follow" />';
 
 // The footer link list is authored ONCE, in TypeScript, for the components to
 // import. This script cannot import a .ts module, so it reads the same file as
@@ -58,7 +59,15 @@ for (const [url, file] of ROUTES) {
     console.error(`prerender: render failed for ${url}:`, err);
     process.exit(1);
   }
-  const html = template.replace(ROOT_DIV, `<div id="root">${rendered}</div>`);
+  // Robots goes in HERE, not in index.html. index.html is also the shell for
+  // every authenticated route; a global "index, follow" would invite /dashboard
+  // and /settings into the index. Only these three prerendered public routes
+  // get the directive. (Canonical is NOT a precedent to copy: it is injected by
+  // Django at serve time in service/urls.py, which this fence cannot touch.)
+  let html = template.replace(ROOT_DIV, `<div id="root">${rendered}</div>`);
+  if (!/<meta[^>]*name="robots"/.test(html)) {
+    html = html.replace('</head>', `  ${ROBOTS}\n  </head>`);
+  }
   writeFileSync(resolve(outDir, file), html, 'utf-8');
   written.push([file, html]);
   console.log(`prerender: ${url} -> dist/prerender/${file}`);
