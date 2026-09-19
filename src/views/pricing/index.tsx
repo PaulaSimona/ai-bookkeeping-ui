@@ -111,7 +111,7 @@ export const Pricing: FC = () => {
           </NavLink>
         </nav>
 
-        <div className="flex-1 overflow-y-auto px-6 py-10">
+        <main className="flex-1 overflow-y-auto px-6 py-10">
 
           {/* Trial banner */}
           <div className="max-w-6xl mx-auto mb-10">
@@ -261,7 +261,7 @@ export const Pricing: FC = () => {
             <NavLink to="/terms-of-service" className="underline hover:text-gray-600 transition-colors">Terms of Service</NavLink>.
           </p>
 
-        </div>
+        </main>
       </div>
 
       <SiteFooter />
