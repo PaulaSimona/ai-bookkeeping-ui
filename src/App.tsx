@@ -87,9 +87,18 @@ const PrivateLayout: FC = () => (
 // Unauthenticated → landing page; authenticated → Tier 2 owner lands on the
 // Tier 2 dashboard, a Tier 2 accountant on the accountant Ledger, everyone else
 // keeps today's /documents landing (D-14B-7; Session-25 Phase E accountant case).
+//
+// F-S78-8 / O-S79-1: "/" MUST first-render exactly what entry-server prerenders
+// — the landing page — or React finds a mismatch, logs #418, and discards the
+// entire prerendered #root to re-render from scratch (#423). A loader here is
+// what caused that: it is never what was prerendered, so it guaranteed the
+// mismatch on every single visit. Auth still resolves; it just resolves behind
+// the page the visitor is already reading, and an authenticated visitor is
+// redirected a moment later by the branch below rather than a moment earlier.
+// Parity is enforced at build time by G9 in scripts/prerender.mjs. Do NOT
+// reintroduce a loader here — G9 will fail the build, which is the point.
 const HomeRedirect: FC = () => {
-  const { user, inProgress } = useSelector((s: RootState) => s.auth);
-  if (inProgress) return <PageLoader />;
+  const { user } = useSelector((s: RootState) => s.auth);
   if (user) return <Navigate to={staffAwareHomePath(user, '/documents')} replace />;
   return <LandingPage />;
 };
