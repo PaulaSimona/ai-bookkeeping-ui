@@ -30,6 +30,7 @@ import { Link } from 'react-router-dom';
 import logoSvg from '@/assets/logo.svg';
 import dashboardPreview from '@/assets/dashboard-illustrative.webp';
 import { LightboxImage } from '@/components/Lightbox';
+import { FOOTER_SERVICE_LINKS } from '@/constants/footerLinks';
 
 // ─── Tokens (lifted from the prototype) ──────────────────────────────────────
 
@@ -1157,7 +1158,7 @@ export const LandingPage: FC = () => {
       </main>
 
       <footer className="mt-14 pb-10 pt-14 sm:mt-[88px]" style={{ background: INK, color: '#9CA3AF' }}>
-        <div className={`${SHELL} grid gap-9 sm:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr_1fr_1fr]`}>
+        <div className={`${SHELL} grid gap-9 sm:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr_1fr_1fr_1fr]`}>
           <div>
             <div className="mb-3.5">
               <Brand dark />
@@ -1174,6 +1175,20 @@ export const LandingPage: FC = () => {
             <button type="button" onClick={() => scrollTo('bookkeeping')} className="text-left transition hover:text-white" style={{ color: '#D1D5DB' }}>Bookkeeping Service</button>
             <button type="button" onClick={() => scrollTo('how')} className="text-left transition hover:text-white" style={{ color: '#D1D5DB' }}>How it works</button>
             <button type="button" onClick={() => scrollTo('compare')} className="text-left transition hover:text-white" style={{ color: '#D1D5DB' }}>Compare</button>
+          </div>
+
+          {/* O-S78-5. Every one of these is rendered by the Django content app,
+              not by this SPA, so each is a plain <a href> - a <Link to> would
+              push a client route the SPA cannot resolve. Same reason the /blog
+              link below is an <a>. The list is derived, never hand-written:
+              see src/constants/footerLinks.ts. */}
+          <div className="flex flex-col gap-2.5 text-[14px]">
+            <div className="text-[12px] font-semibold uppercase tracking-[0.08em]" style={{ color: '#6B7280' }}>Services</div>
+            {FOOTER_SERVICE_LINKS.map((l) => (
+              <a key={l.path} href={l.path} className="transition hover:text-white" style={{ color: '#D1D5DB' }}>
+                {l.label}
+              </a>
+            ))}
           </div>
 
           <div className="flex flex-col gap-2.5 text-[14px]">

@@ -1,6 +1,8 @@
 import { type FC } from 'react';
 import { NavLink } from 'react-router-dom';
 
+import { FOOTER_SERVICE_LINKS } from '@/constants/footerLinks';
+
 /**
  * Shared public-site footer: copyright + a "Resources" row of crawlable links
  * (Blog, FAQ, Privacy, Terms). Rendered on the marketing/legal SPA-fallback
@@ -8,6 +10,12 @@ import { NavLink } from 'react-router-dom';
  * /terms-of-service (O-S53-8). Markup matches the footer PublicPageShell shipped
  * previously; that component now renders this. /blog is a real Django-rendered
  * route, so it stays a plain <a href>, not a react-router link.
+ *
+ * O-S78-5 adds a Services row on that same principle: every /services URL is
+ * rendered by the Django content app, so all of them are plain <a href> too.
+ * This footer is what /pricing, /privacy-policy and /terms-of-service render,
+ * and what PublicPageShell gives /faq and the 404 - so these links reach every
+ * public page that is not the landing page.
  */
 const SiteFooter: FC = () => (
   <footer className="border-t border-gray-100 bg-white mt-auto">
@@ -21,6 +29,14 @@ const SiteFooter: FC = () => (
         <NavLink to="/privacy-policy" className="hover:text-gray-700 transition-colors">Privacy</NavLink>
         <NavLink to="/terms-of-service" className="hover:text-gray-700 transition-colors">Terms</NavLink>
       </div>
+    </div>
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 pb-8 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm text-gray-400 sm:justify-start">
+      <span className="font-medium text-gray-500">Services</span>
+      {FOOTER_SERVICE_LINKS.map((l) => (
+        <a key={l.path} href={l.path} className="hover:text-gray-700 transition-colors">
+          {l.label}
+        </a>
+      ))}
     </div>
   </footer>
 );
