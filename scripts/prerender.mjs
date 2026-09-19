@@ -179,7 +179,7 @@ const GUARDS = {
     check: (html) => !/screenshot\s*[—-]\s*extracted receipt record/i.test(html),
     detail: () => 'the dashed placeholder caption is still rendered',
   },
-  // G9 (F-S78-8, O-S79-2). The other guards ask what the prerendered bytes SAY.
+  // G9 (F-S78-8, O-S79-3). The other guards ask what the prerendered bytes SAY.
   // This one asks whether those bytes SURVIVE: React keeps prerendered markup
   // only if the client's first render produces exactly the same string. When it
   // does not, React logs #418, discards the whole #root and re-renders from
