@@ -616,13 +616,13 @@ export const LandingPage: FC = () => {
               </p>
               <div className="mt-[26px] grid gap-3.5 sm:grid-cols-2">
                 <div className="rounded-xl p-4" style={{ background: PAGE, border: '1px solid #F3F4F6' }}>
-                  <Mono color="#9CA3AF">YOU UPLOAD</Mono>
+                  <Mono color="#6B7280">YOU UPLOAD</Mono>
                   <div className="mt-2 text-[14px] leading-[1.55]" style={{ color: '#374151' }}>
                     Receipts and supplier invoices as JPEG, PNG, WebP, HEIC, or PDF
                   </div>
                 </div>
                 <div className="rounded-xl p-4" style={{ background: PAGE, border: '1px solid #F3F4F6' }}>
-                  <Mono color="#9CA3AF">YOU RECEIVE</Mono>
+                  <Mono color="#6B7280">YOU RECEIVE</Mono>
                   <div className="mt-2 text-[14px] leading-[1.55]" style={{ color: '#374151' }}>
                     Categorized expense records, tax summaries, and an Excel workbook
                   </div>
@@ -641,16 +641,11 @@ export const LandingPage: FC = () => {
             </div>
 
             <div>
-              {/* Placeholder ships as-is per the OD-S61-1 extension: no fabricated screenshot. */}
-              <div
-                className="flex h-[220px] items-center justify-center rounded-[14px] px-6 text-center sm:h-[280px]"
-                style={{ background: PAGE, border: '1px dashed #D1D5DB' }}
-              >
-                <span className="text-[13px] leading-[1.6]" style={{ color: '#9CA3AF' }}>
-                  Receipt Automation screenshot — extracted receipt record, redacted
-                </span>
-              </div>
-              <div className="mt-3.5 grid gap-3.5 sm:grid-cols-2">
+              {/* O-S78-16: the dashed "screenshot goes here" placeholder is gone.
+                  The owner's screenshot is not supplied, and an empty dashed box
+                  reads worse than no box at all. The six feature cards carry the
+                  column; the grid loses its top margin so nothing is left hanging. */}
+              <div className="grid gap-3.5 sm:grid-cols-2">
                 {T1_FEATURES.map((f) => (
                   <div key={f.title} className="rounded-xl p-[18px]" style={{ background: PAGE, border: '1px solid #F3F4F6' }}>
                     <h3 className="mb-[7px] text-[15px] font-semibold tracking-[-0.01em]">{f.title}</h3>
@@ -696,7 +691,7 @@ export const LandingPage: FC = () => {
                 style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)' }}
               >
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-[12px]" style={{ fontFamily: MONO, color: '#6B7280' }}>{s.n}</span>
+                  <span className="text-[12px]" style={{ fontFamily: MONO, color: '#8C93A8' }}>{s.n}</span>
                   <Pill bg={s.bg} color={s.fg} size="xs">{s.who}</Pill>
                 </div>
                 <h3 className="mb-2.5 mt-4 text-[19px] font-semibold tracking-[-0.02em] sm:text-[20px]">{s.title}</h3>
@@ -1040,7 +1035,7 @@ export const LandingPage: FC = () => {
                   <td className="px-[26px] py-[18px] text-[15px] font-medium" style={{ color: INK }}>{r.label}</td>
                   <td
                     className="px-5 py-[18px] text-[14.5px] leading-[1.5]"
-                    style={{ color: r.aMuted ? '#9CA3AF' : INK, borderLeft: '1px solid #F3F4F6' }}
+                    style={{ color: r.aMuted ? '#6B7280' : INK, borderLeft: '1px solid #F3F4F6' }}
                   >
                     {r.a}
                   </td>
@@ -1170,7 +1165,7 @@ export const LandingPage: FC = () => {
           </div>
 
           <div className="flex flex-col gap-2.5 text-[14px]">
-            <div className="text-[12px] font-semibold uppercase tracking-[0.08em]" style={{ color: '#6B7280' }}>Product</div>
+            <div className="text-[12px] font-semibold uppercase tracking-[0.08em]" style={{ color: '#9CA3AF' }}>Product</div>
             <button type="button" onClick={() => scrollTo('receipts')} className="text-left transition hover:text-white" style={{ color: '#D1D5DB' }}>Receipt Automation</button>
             <button type="button" onClick={() => scrollTo('bookkeeping')} className="text-left transition hover:text-white" style={{ color: '#D1D5DB' }}>Bookkeeping Service</button>
             <button type="button" onClick={() => scrollTo('how')} className="text-left transition hover:text-white" style={{ color: '#D1D5DB' }}>How it works</button>
@@ -1183,7 +1178,7 @@ export const LandingPage: FC = () => {
               link below is an <a>. The list is derived, never hand-written:
               see src/constants/footerLinks.ts. */}
           <div className="flex flex-col gap-2.5 text-[14px]">
-            <div className="text-[12px] font-semibold uppercase tracking-[0.08em]" style={{ color: '#6B7280' }}>Services</div>
+            <div className="text-[12px] font-semibold uppercase tracking-[0.08em]" style={{ color: '#9CA3AF' }}>Services</div>
             {FOOTER_SERVICE_LINKS.map((l) => (
               <a key={l.path} href={l.path} className="transition hover:text-white" style={{ color: '#D1D5DB' }}>
                 {l.label}
@@ -1192,7 +1187,7 @@ export const LandingPage: FC = () => {
           </div>
 
           <div className="flex flex-col gap-2.5 text-[14px]">
-            <div className="text-[12px] font-semibold uppercase tracking-[0.08em]" style={{ color: '#6B7280' }}>Learn</div>
+            <div className="text-[12px] font-semibold uppercase tracking-[0.08em]" style={{ color: '#9CA3AF' }}>Learn</div>
             <Link to="/pricing" className="transition hover:text-white" style={{ color: '#D1D5DB' }}>Pricing</Link>
             <button type="button" onClick={() => scrollTo('security')} className="text-left transition hover:text-white" style={{ color: '#D1D5DB' }}>Security</button>
             <Link to="/faq" className="transition hover:text-white" style={{ color: '#D1D5DB' }}>FAQ</Link>
@@ -1200,14 +1195,14 @@ export const LandingPage: FC = () => {
           </div>
 
           <div className="flex flex-col gap-2.5 text-[14px]">
-            <div className="text-[12px] font-semibold uppercase tracking-[0.08em]" style={{ color: '#6B7280' }}>Company</div>
+            <div className="text-[12px] font-semibold uppercase tracking-[0.08em]" style={{ color: '#9CA3AF' }}>Company</div>
             <a href="mailto:support@ai-bookkeeping.ai" className="transition hover:text-white" style={{ color: '#D1D5DB' }}>Support</a>
             <Link to="/privacy-policy" className="transition hover:text-white" style={{ color: '#D1D5DB' }}>Privacy</Link>
             <Link to="/terms-of-service" className="transition hover:text-white" style={{ color: '#D1D5DB' }}>Terms</Link>
           </div>
 
           <div className="flex flex-col gap-2.5 text-[14px]">
-            <div className="text-[12px] font-semibold uppercase tracking-[0.08em]" style={{ color: '#6B7280' }}>Get started</div>
+            <div className="text-[12px] font-semibold uppercase tracking-[0.08em]" style={{ color: '#9CA3AF' }}>Get started</div>
             <Link to="/login" className="transition hover:text-white" style={{ color: '#D1D5DB' }}>Login</Link>
             <Link
               to="/register"
@@ -1224,6 +1219,34 @@ export const LandingPage: FC = () => {
             provide tax, legal, or financial advice — work with your accountant. Prices in CAD/USD;
             taxes may apply. © 2026 Time2Win Inc.
           </p>
+          {/* O-S78-11: these two shipped in index.html as <a> tags styled
+              width:1px;height:1px;clip:rect(0 0 0 0) - a hidden-link pattern, on
+              every page of the site including the authenticated ones. They are
+              directory listings we are genuinely featured on, so they belong in
+              the open: same href, same rel, now visible at the size the badges
+              are actually drawn. */}
+          <div className="mt-5 flex flex-wrap items-center gap-4">
+            <a href="https://launchbuff.com" target="_blank" rel="noopener noreferrer" title="Featured on LaunchBuff">
+              <img
+                src="https://launchbuff.com/badge-featured-dark.svg"
+                alt="Featured on LaunchBuff"
+                width={128}
+                height={40}
+                loading="lazy"
+                className="h-10 w-auto"
+              />
+            </a>
+            <a href="https://tools.cafe" target="_blank" rel="noopener noreferrer" title="Featured on tools.cafe">
+              <img
+                src="https://tools.cafe/b/dark.svg"
+                alt="Featured on tools.cafe"
+                width={128}
+                height={40}
+                loading="lazy"
+                className="h-10 w-auto"
+              />
+            </a>
+          </div>
         </div>
       </footer>
     </div>
