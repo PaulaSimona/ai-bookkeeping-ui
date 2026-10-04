@@ -14,7 +14,7 @@ import { AdjustmentForm, today } from '@/views/accountant/AdjustmentForm';
 import { voidAdjustment } from '@/views/accountant/hooks/adjustmentApi';
 import { type AccountantLedgerRow } from '@/views/accountant/hooks/useAccountantLedger';
 import { formatIsoDate } from '@/utils/dates';
-import { entryDisplayStatus } from '@/utils/entryStatus';
+import { entryDisplayStatus, entryStatusLabel } from '@/utils/entryStatus';
 
 const CAD = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' });
 const fmtMoney = (v: string | null): string => (v == null || v === '' ? '' : CAD.format(Number(v)));
@@ -76,7 +76,7 @@ export const EntryDrawer: FC<EntryDrawerProps> = ({
 
   // Void state. voidedInfo is set locally on a successful void so the drawer shows
   // the voided state immediately (the list also refetches via onVoided). A row that
-  // is ALREADY voided (viewed under Show voided) is voided from the start.
+  // is ALREADY voided (a detail read can return one) is voided from the start.
   const [voidedInfo, setVoidedInfo] = useState<{ voided_at: string | null; void_reason: string } | null>(null);
   const isVoided = row.status === 'voided' || voidedInfo !== null;
   const voidedAt = voidedInfo?.voided_at ?? row.voided_at ?? null;
@@ -178,10 +178,11 @@ export const EntryDrawer: FC<EntryDrawerProps> = ({
         <span className="text-[13px] text-gray-600">{fmtDate(row.entry_date)}</span>
         <span className="text-gray-300">·</span>
         <StatusBadge variant="neutral">{humanizeSource(row.source)}</StatusBadge>
-        {/* F-S71-2 / O-S71-3: status derived via entryDisplayStatus so a
-            reversed original shows "Reversed" (info tone) — never "Posted". */}
+        {/* D-S84-4: the registry's display status — Posted, Corrected, Reversed
+            (info tone) or Reversal — labelled by the shared rule module. No
+            review flag is ever shown here. */}
         <StatusBadge variant={statusVariant(isVoided ? 'voided' : entryDisplayStatus(row))}>
-          {humanizeSource(isVoided ? 'voided' : entryDisplayStatus(row))}
+          {isVoided ? 'Voided' : entryStatusLabel(row)}
         </StatusBadge>
       </div>
 
@@ -189,7 +190,7 @@ export const EntryDrawer: FC<EntryDrawerProps> = ({
       {isVoided && (
         <div className="mt-3 rounded-xl bg-gray-100 px-4 py-3 text-[12.5px] text-gray-500">
           Voided{voidedAt ? ` on ${fmtDateTime(voidedAt)}` : ''}. Removed from balances
-          and reports; retained in the audit trail and under Show voided.
+          and reports; retained in the audit trail.
           {voidReason ? (
             <span className="mt-1 block text-gray-600">Reason: {voidReason}</span>
           ) : null}
@@ -276,8 +277,8 @@ export const EntryDrawer: FC<EntryDrawerProps> = ({
             Void {row.entry_number_display ?? 'this entry'}
           </div>
           <p className="mt-1 text-[12.5px] leading-relaxed text-gray-600">
-            Voiding removes this entry from balances and reports. It stays in the audit
-            trail and under Show voided. This cannot be undone.
+            Voiding removes this entry from balances and reports and from this
+            list. It stays in the audit trail. This cannot be undone.
           </p>
           <label className="mt-3 block text-[12px] font-medium text-gray-700">Reason</label>
           <textarea

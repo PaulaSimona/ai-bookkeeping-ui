@@ -4,8 +4,9 @@
 // follows the usePaginatedList envelope + api-interceptor contract (res == null =
 // cancelled; res.status === 200 = trust the body; any other status = a resolved
 // error whose `detail` surfaces). Money arrives as two-decimal STRINGS — display
-// only, never arithmetic. Defaults to POSTED entries (the register is the
-// already-clean book the accountant adjusts).
+// only, never arithmetic. The list is POSTED entries only (the register is the
+// already-clean book the accountant adjusts); an optional registry status
+// narrows it (D-S84-4).
 import { useCallback, useEffect, useState } from 'react';
 import api from '@/utils/api';
 import { type RegistryFields } from '@/utils/entryStatus';
@@ -128,7 +129,9 @@ interface Envelope {
 
 const PAGE_SIZE = 50;
 
-export const useAccountantLedger = (includeVoided = false) => {
+// `status` is one of the shared registry filter values (entryStatus
+// REGISTRY_STATUS_OPTIONS); '' is "Posted", the endpoint's default.
+export const useAccountantLedger = (status = '') => {
   const [items, setItems] = useState<AccountantLedgerRow[]>([]);
   const [count, setCount] = useState(0);
   const [page, setPage] = useState(1);
@@ -143,13 +146,11 @@ export const useAccountantLedger = (includeVoided = false) => {
     setIsLoading(true);
     setError(null);
 
-    // includeVoided=true → ask for show_voided=true AND DROP status:'posted'.
-    // The backend applies show_voided FIRST then intersects ?status=; keeping
-    // status:'posted' alongside show_voided would hide the voided rows (semantics
-    // (a) on record). includeVoided=false → params byte-identical to before.
-    const params = includeVoided
-      ? { show_voided: 'true', page, page_size: PAGE_SIZE }
-      : { status: 'posted', page, page_size: PAGE_SIZE };
+    // The only filter sent is ?status=, and only when one is chosen: the list
+    // is posted entries by default, so "Posted" sends nothing. No other filter
+    // param goes out — a voided entry is never listed (D-S85-16).
+    const params: Record<string, string | number> = { page, page_size: PAGE_SIZE };
+    if (status) params.status = status;
 
     api.get('/api/accounting/entries/', { params })
       .then((res) => {
@@ -170,7 +171,7 @@ export const useAccountantLedger = (includeVoided = false) => {
       .finally(() => { if (!cancelled) setIsLoading(false); });
 
     return () => { cancelled = true; };
-  }, [page, revision, includeVoided]);
+  }, [page, revision, status]);
 
   return { items, count, page, setPage, pageSize: PAGE_SIZE, isLoading, error, refetch };
 };

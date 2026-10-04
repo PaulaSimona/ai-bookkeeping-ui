@@ -14,16 +14,14 @@ import {
   EmptyState,
   ErrorBanner,
   formatMoney,
-  humanizeCode,
 } from '@/components/internal/ui';
-import { entryDisplayStatus } from '@/utils/entryStatus';
+import { REGISTRY_STATUS_OPTIONS, entryDisplayStatus, entryStatusLabel } from '@/utils/entryStatus';
 
-const STATUS_FILTERS = ['', 'draft', 'posted', 'reversed', 'replaced'];
-
+// The list is posted entries only (D-S84-4): Posted, Corrected, Reversed or
+// Reversal — never a draft, a replaced draft or a review flag.
 const statusTone = (s: string): 'success' | 'warning' | 'neutral' | 'danger' => {
   if (s === 'posted') return 'success';
-  if (s === 'draft') return 'warning';
-  if (s === 'reversed' || s === 'voided') return 'danger';
+  if (s === 'reversed') return 'danger';
   return 'neutral';
 };
 
@@ -63,11 +61,14 @@ export const InternalClientEntries: FC = () => {
             setStatus(e.target.value);
             setPage(1);
           }}
+          aria-label="Filter by status"
           className="rounded-lg bg-[#0A1628] border border-white/15 px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#0066FF]"
         >
-          {STATUS_FILTERS.map((s) => (
-            <option key={s || 'all'} value={s}>
-              {s ? humanizeCode(s) : 'All statuses'}
+          {/* The shared registry options (D-S84-4). "Posted" is the list's
+              default and sends no status. */}
+          {REGISTRY_STATUS_OPTIONS.map((o) => (
+            <option key={o.value || 'posted'} value={o.value}>
+              {o.label}
             </option>
           ))}
         </select>
@@ -126,10 +127,10 @@ export const InternalClientEntries: FC = () => {
                         <td className="py-2.5 px-3 text-right text-white/80">{formatMoney(e.total_debits)}</td>
                         <td className="py-2.5 px-3 text-right text-white/80">{formatMoney(e.total_credits)}</td>
                         <td className="py-2.5 px-3">
-                          {/* F-S71-2 / O-S71-3: derived status — a reversed
-                              original shows "Reversed", not "Posted". */}
+                          {/* The registry's display status (D-S84-4): Posted,
+                              Corrected, Reversed or Reversal. */}
                           <Pill tone={statusTone(entryDisplayStatus(e))}>
-                            {humanizeCode(entryDisplayStatus(e))}
+                            {entryStatusLabel(e)}
                           </Pill>
                         </td>
                         <td className="py-2.5 px-5">

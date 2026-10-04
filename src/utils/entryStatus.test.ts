@@ -2,6 +2,7 @@
 // within its chain, what each lane may do with it, and the labels it shows.
 import { describe, expect, it } from 'vitest';
 import {
+  REGISTRY_STATUS_OPTIONS,
   allowedActions,
   canAct,
   entryDisplayStatus,
@@ -161,6 +162,21 @@ describe('needs_review', () => {
     expect(entryDisplayStatus({ status: 'posted', needs_review: true })).toBe('posted');
     // …and it does not affect what may be done with the entry either.
     expect(entryKind(flagged)).toBe('live');
+  });
+});
+
+describe('registry filter options (D-S84-4)', () => {
+  it('is the one shared list: Posted sends nothing; Draft and Replaced are not offered', () => {
+    // The values are the ?status= the list endpoints accept
+    // (ledger_chain.registry_entries); anything else is a 400 there.
+    expect(REGISTRY_STATUS_OPTIONS).toEqual([
+      { value: '', label: 'Posted' },
+      { value: 'live', label: 'Live' },
+      { value: 'corrected', label: 'Corrected' },
+      { value: 'reversed', label: 'Reversed' },
+      { value: 'reversals', label: 'Reversal entries' },
+      { value: 'all', label: 'All' },
+    ]);
   });
 });
 

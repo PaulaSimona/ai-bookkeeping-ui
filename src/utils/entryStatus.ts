@@ -87,6 +87,33 @@ export const entryStatusLabel = (row: EntryStatusSource): string => {
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : '—';
 };
 
+// ─── Registry filter (D-S84-4) ─────────────────────────────────────────────────
+// The ONE option list every ledger's status filter offers. `value` is the
+// ?status= the list endpoints accept (ledger_chain.registry_entries); any other
+// value — 'draft' and 'replaced' included — is a 400 there.
+//
+//   Posted            the list's default: posted entries that are not reversal
+//                     entries. Sends NO status at all.
+//   Live              of those, the ones the books stand on
+//   Corrected         of those, the ones a posted entry has corrected
+//   Reversed          of those, the ones reversed and not restored
+//   Reversal entries  the reversal entries only
+//   All               every posted entry, reversal entries included
+
+export interface RegistryStatusOption {
+  value: string;
+  label: string;
+}
+
+export const REGISTRY_STATUS_OPTIONS: RegistryStatusOption[] = [
+  { value: '', label: 'Posted' },
+  { value: 'live', label: 'Live' },
+  { value: 'corrected', label: 'Corrected' },
+  { value: 'reversed', label: 'Reversed' },
+  { value: 'reversals', label: 'Reversal entries' },
+  { value: 'all', label: 'All' },
+];
+
 // ─── Entry kind ────────────────────────────────────────────────────────────────
 
 export type EntryKind = 'live' | 'corrected' | 'reversed' | 'reversal' | 'other';

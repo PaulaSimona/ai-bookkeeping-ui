@@ -10,7 +10,6 @@ import { useOrgContext } from '@/context/OrgContext';
 import { Card } from '@/components/t2/Card';
 import { PageHeader } from '@/components/t2/PageHeader';
 import { StatusBadge } from '@/components/t2/StatusBadge';
-import { FilterChip } from '@/components/t2/FilterChip';
 import {
   useAccountantLedger,
   type AccountantLedgerRow,
@@ -18,7 +17,7 @@ import {
 import { useAccountantChart } from './hooks/useAccountantChart';
 import { EntryDrawer } from '@/components/ledger/EntryDrawer';
 import { formatIsoDate } from '@/utils/dates';
-import { entryDisplayStatus } from '@/utils/entryStatus';
+import { REGISTRY_STATUS_OPTIONS, entryDisplayStatus, entryStatusLabel } from '@/utils/entryStatus';
 
 const CAD = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' });
 const fmtMoney = (v: string | null): string => (v == null || v === '' ? '' : CAD.format(Number(v)));
@@ -73,12 +72,16 @@ const Skeleton: FC = () => (
   </Card>
 );
 
+const selectCls =
+  'rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent transition';
+
 const LedgerInner: FC = () => {
   const { activeOrg } = useOrgContext();
-  // Show-voided filter (W-S25-6): default off (voided hidden). When on, the hook
-  // requests show_voided=true and drops status:'posted' so voided rows return.
-  const [showVoided, setShowVoided] = useState(false);
-  const { items, count, page, setPage, pageSize, isLoading, error, refetch } = useAccountantLedger(showVoided);
+  // Registry status filter (D-S84-4): '' is "Posted", the list's default, and
+  // sends no status. It replaces the old "Show voided" chip (D-S85-16) — the
+  // list is posted entries only, so a voided entry is never in it.
+  const [statusFilter, setStatusFilter] = useState('');
+  const { items, count, page, setPage, pageSize, isLoading, error, refetch } = useAccountantLedger(statusFilter);
   const { revenueExpenseIds } = useAccountantChart();
 
   const clientName = activeOrg?.org_name ?? 'This client';
@@ -123,12 +126,16 @@ const LedgerInner: FC = () => {
         subtitle={`${clientName} · already posted & clean. Post adjustments where needed.`}
         right={
           <div className="flex items-center gap-2">
-            <FilterChip
-              active={showVoided}
-              onClick={() => { setShowVoided((v) => !v); setPage(1); setExpandedId(null); }}
+            <select
+              value={statusFilter}
+              onChange={(e) => { setStatusFilter(e.target.value); setPage(1); setExpandedId(null); }}
+              className={selectCls}
+              aria-label="Filter by status"
             >
-              Show voided
-            </FilterChip>
+              {REGISTRY_STATUS_OPTIONS.map((o) => (
+                <option key={o.value || 'posted'} value={o.value}>{o.label}</option>
+              ))}
+            </select>
             <NewAdjustmentButton />
           </div>
         }
@@ -150,7 +157,9 @@ const LedgerInner: FC = () => {
           </Card>
         ) : count === 0 ? (
           <Card padding className="text-center">
-            <p className="text-sm text-gray-500">No posted entries yet.</p>
+            <p className="text-sm text-gray-500">
+              {statusFilter ? 'No entries match this filter.' : 'No posted entries yet.'}
+            </p>
           </Card>
         ) : (
           <Card>
@@ -194,10 +203,13 @@ const LedgerInner: FC = () => {
                         ) : (
                           <>
                             <StatusBadge variant="neutral">{humanizeSource(row.source)}</StatusBadge>
-                            {/* F-S71-2 / O-S71-3 (A3): a reversed original is
-                                flagged here too — info tone, as the drawer. */}
-                            {entryDisplayStatus(row) === 'reversed' && (
-                              <StatusBadge variant="info">Reversed</StatusBadge>
+                            {/* D-S84-4: an entry that is no longer plain
+                                "Posted" says what it is — Corrected, Reversed
+                                (info tone, as the drawer) or Reversal. */}
+                            {entryDisplayStatus(row) !== 'posted' && (
+                              <StatusBadge variant={entryDisplayStatus(row) === 'reversed' ? 'info' : 'neutral'}>
+                                {entryStatusLabel(row)}
+                              </StatusBadge>
                             )}
                           </>
                         )}

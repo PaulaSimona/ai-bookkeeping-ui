@@ -12,7 +12,7 @@ import { useCounterparties } from '@/hooks/useCounterparties';
 import { Card } from '@/components/t2/Card';
 import { PageHeader } from '@/components/t2/PageHeader';
 import { FilterChip } from '@/components/t2/FilterChip';
-import { entryDisplayStatus } from '@/utils/entryStatus';
+import { REGISTRY_STATUS_OPTIONS, entryDisplayStatus, entryStatusLabel } from '@/utils/entryStatus';
 
 // §14 14-C Tier 2 Ledger register (D-14C-3..5), restyled onto the t2/ language
 // (s22 B3). Read-only: tab strip + filters over the org's journal entries, calm
@@ -33,40 +33,27 @@ const MONO = 'font-[var(--font-family-mono)]';
 const inputCls =
   'rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent transition';
 
-const STATUS_OPTIONS: { value: string; label: string }[] = [
-  { value: '', label: 'All statuses' },
-  { value: 'draft', label: 'Draft' },
-  { value: 'posted', label: 'Posted' },
-  { value: 'reversed', label: 'Reversed' },
-  { value: 'replaced', label: 'Replaced' },
-];
-
 const PageShell: FC<{ children: ReactNode }> = ({ children }) => (
   <div className="min-h-screen bg-gray-50 text-gray-900">
     <div className="mx-auto max-w-5xl px-6 py-8">{children}</div>
   </div>
 );
 
-// Status badge (D-14C-3): needs_review wins, then the entry status. Unknown
-// status falls back to the calm "Draft" styling. Raw status text never leaks
-// beyond this map. Local pill — t2/StatusBadge is edit-forbidden.
-// F-S71-2 / O-S71-3: the label is derived by entryDisplayStatus (needs_review →
-// reversed_by_entry_id → status), so a posted-but-reversed original renders
-// "Reversed" instead of "Posted". The 'reversed' branch below finally fires.
+// Status badge (D-14C-3, D-S84-4): where the entry stands in its chain, as the
+// registry resolved it — Posted, Corrected, Reversed or Reversal. The label
+// comes from the shared rule module; this map only picks the colour. There is
+// no "Needs review" badge: the list shows posted entries only, and a review
+// flag on one is internal (the R6 exposure). Local pill — t2/StatusBadge is
+// edit-forbidden.
 const badgeFor = (row: LedgerEntryRow): { label: string; cls: string } => {
+  const label = entryStatusLabel(row);
   switch (entryDisplayStatus(row)) {
-    case 'needs_review':
-      return { label: 'Needs review', cls: 'bg-amber-50 text-amber-700' };
-    case 'draft':
-      return { label: 'Draft', cls: 'bg-gray-100 text-gray-600' };
     case 'posted':
-      return { label: 'Posted', cls: 'bg-emerald-50 text-emerald-700' };
+      return { label, cls: 'bg-emerald-50 text-emerald-700' };
     case 'reversed':
-      return { label: 'Reversed', cls: 'bg-blue-50 text-blue-700' };
-    case 'replaced':
-      return { label: 'Replaced', cls: 'bg-gray-100 text-gray-600' };
+      return { label, cls: 'bg-blue-50 text-blue-700' };
     default:
-      return { label: 'Draft', cls: 'bg-gray-100 text-gray-600' };
+      return { label, cls: 'bg-gray-100 text-gray-600' };
   }
 };
 
@@ -352,8 +339,10 @@ export const LedgerRegister: FC = () => {
           className={inputCls}
           aria-label="Filter by status"
         >
-          {STATUS_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
+          {/* The shared registry options (D-S84-4). "Posted" is the list's
+              default and sends no status. */}
+          {REGISTRY_STATUS_OPTIONS.map((o) => (
+            <option key={o.value || 'posted'} value={o.value}>{o.label}</option>
           ))}
         </select>
         <label className="flex items-center gap-2 text-sm text-gray-500">
