@@ -5,8 +5,12 @@ import {
   type CorrectedLineInput,
 } from '@/hooks/useInternalReview';
 import { PrimaryButton, SecondaryButton } from '@/components/internal/ui';
-import { useStaffOrgAccounts, createStaffOrgAccount } from '@/hooks/useStaffResolution';
+import { createStaffOrgAccount } from '@/hooks/useStaffResolution';
+import { useAllAccounts } from '@/hooks/useAllAccounts';
+import { AccountPicker } from '@/components/AccountPicker';
+import { accountLabel } from '@/components/AccountPicker/filter';
 import { CounterpartyPicker } from '@/components/internal/CounterpartyPicker';
+import type { CurrentAccount } from '@/types/account';
 
 /**
  * Reject & correct editor (MASTER_T2 §4.2). Editable lines PRE-FILLED from the
@@ -14,10 +18,11 @@ import { CounterpartyPicker } from '@/components/internal/CounterpartyPicker';
  * note, and (new, s28) a counterparty tri-state. Field names match
  * ReviewLineInputSerializer exactly.
  *
- * Account options are the FULL chart for the entry's org (staff accounts endpoint,
- * grouped by type); draft-line accounts stay valid even if inactive. A "+ New
- * account" inline creates one and selects it in the line. The ledger engine
- * re-validates balance + accounts on submit; backend 400s surface verbatim.
+ * Accounts are picked from EVERY active account of the entry's org (the shared
+ * AccountPicker over the staff accounts endpoint, grouped by type); a draft
+ * line's own account stays valid even if inactive. A "+ New account" inline
+ * creates one and selects it in the line. The ledger engine re-validates
+ * balance + accounts on submit; backend 400s surface verbatim.
  */
 
 // Verbatim ReviewDecision.EntryRejectReason choices (accounting/models.py).
@@ -46,8 +51,6 @@ const NORMAL_BALANCE_DEFAULT: Record<string, string> = {
   revenue: 'credit',
   expense: 'debit',
 };
-
-const DRAFT_GROUP = '__draft__';
 
 interface EditLine {
   key: string;
@@ -131,13 +134,11 @@ const NewAccountForm: FC<{
         </select>
         <select value={parent} onChange={(e) => setParent(e.target.value)} className={`${inputCls} col-span-2`}>
           <option value="">No parent (optional)</option>
-          {parentOptions
-            .filter((o) => o.type !== DRAFT_GROUP)
-            .map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
+          {parentOptions.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
         </select>
       </div>
       {err && <p className="text-xs text-red-300">{err}</p>}
@@ -172,31 +173,35 @@ export const RejectCorrectEditor: FC<{
   onCancel: () => void;
 }> = ({ entry, submitting, errorDetail, onSubmit, onCancel }) => {
   const orgId = entry.org_id ?? '';
-  const { accounts, refetch: refetchAccounts } = useStaffOrgAccounts(orgId);
+  // Every active account of the entry's org, all pages (D-S84-6).
+  const {
+    accounts,
+    loading: accountsLoading,
+    error: accountsError,
+    refetch: refetchAccounts,
+  } = useAllAccounts('staff', orgId || null);
 
-  // Full chart options grouped by type, unioned with any draft-line accounts not
-  // in the active chart (inactive accounts on the draft stay selectable).
-  const accountOptions = useMemo<AccountOption[]>(() => {
-    const opts: AccountOption[] = accounts.map((a) => ({
-      value: a.id,
-      label: a.full_name || `${a.code} — ${a.name}`,
-      type: a.type,
-    }));
-    const known = new Set(accounts.map((a) => a.id));
-    for (const l of entry.lines) {
-      if (l.account_id && !known.has(l.account_id)) {
-        known.add(l.account_id);
-        opts.push({
-          value: l.account_id,
-          label: `${l.account_code ?? '—'} — ${l.account_name ?? ''}`.trim(),
-          type: DRAFT_GROUP,
-        });
-      }
-    }
-    return opts;
-  }, [accounts, entry.lines]);
+  // Parent choices for the inline new-account form.
+  const accountOptions = useMemo<AccountOption[]>(
+    () => accounts.map((a) => ({ value: a.id, label: accountLabel(a), type: a.type })),
+    [accounts],
+  );
 
-  const draftOnly = accountOptions.filter((o) => o.type === DRAFT_GROUP);
+  // A draft line's own account may be inactive (absent from the active chart).
+  // Each prefilled line hands it to its picker as the current account, keyed
+  // like the seeded lines below, so it stays selectable.
+  const draftAccounts = useMemo(() => {
+    const byKey = new Map<string, CurrentAccount>();
+    entry.lines.forEach((l, i) => {
+      if (!l.account_id) return;
+      byKey.set(`orig-${l.id ?? i}`, {
+        id: l.account_id,
+        code: l.account_code ?? '—',
+        name: l.account_name ?? '',
+      });
+    });
+    return byKey;
+  }, [entry.lines]);
 
   const [reasonCode, setReasonCode] = useState('');
   const [note, setNote] = useState('');
@@ -264,38 +269,20 @@ export const RejectCorrectEditor: FC<{
     onSubmit(payload);
   };
 
-  const renderAccountSelect = (l: EditLine) => (
-    <select
+  const renderAccountPicker = (l: EditLine) => (
+    <AccountPicker
+      id={`reject-account-${l.key}`}
+      ariaLabel="Account"
+      tone="dark"
+      required
       value={l.account_id}
-      onChange={(e) => updateLine(l.key, { account_id: e.target.value })}
-      className={inputCls}
-    >
-      <option value="" disabled>
-        Select…
-      </option>
-      {TYPE_GROUPS.map((g) => {
-        const groupOpts = accountOptions.filter((o) => o.type === g.type);
-        if (!groupOpts.length) return null;
-        return (
-          <optgroup key={g.type} label={g.label}>
-            {groupOpts.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </optgroup>
-        );
-      })}
-      {draftOnly.length > 0 && (
-        <optgroup label="On draft">
-          {draftOnly.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </optgroup>
-      )}
-    </select>
+      onChange={(next) => updateLine(l.key, { account_id: next })}
+      accounts={accounts}
+      loading={accountsLoading}
+      error={accountsError}
+      currentAccount={draftAccounts.get(l.key) ?? null}
+      placeholder="Select…"
+    />
   );
 
   return (
@@ -354,7 +341,7 @@ export const RejectCorrectEditor: FC<{
               {lines.map((l) => (
                 <tr key={l.key} className="border-t border-white/5 align-top">
                   <td className="py-1.5 pr-2 min-w-[11rem]">
-                    {renderAccountSelect(l)}
+                    {renderAccountPicker(l)}
                     <button
                       type="button"
                       onClick={() => setNewAcctForKey(newAcctForKey === l.key ? null : l.key)}

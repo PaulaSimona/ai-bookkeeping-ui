@@ -20,6 +20,7 @@
 // strings — never a float.
 import { type FC, useEffect, useMemo, useState } from 'react';
 
+import { AccountPicker } from '@/components/AccountPicker';
 import {
   ConfirmModal,
   EmptyState,
@@ -29,12 +30,10 @@ import {
   SecondaryButton,
   Spinner,
 } from '@/components/internal/ui';
+import { useAllAccounts } from '@/hooks/useAllAccounts';
 import { useStaffEntryDetail } from '@/hooks/useStaffReports';
-import {
-  type CorrectedLine,
-  correctPostedEntry,
-  useStaffOrgAccounts,
-} from '@/hooks/useStaffResolution';
+import { type CorrectedLine, correctPostedEntry } from '@/hooks/useStaffResolution';
+import type { CurrentAccount } from '@/types/account';
 
 type Side = 'debit' | 'credit';
 
@@ -76,11 +75,12 @@ export const PostedCorrectionEditor: FC<{
   notify: (message: string, type: 'success' | 'error') => void;
 }> = ({ orgId, entry, onClose, onChanged, notify }) => {
   const { entry: detail } = useStaffEntryDetail(entry.id);
+  // Every active account of the client org, all pages (D-S84-6).
   const {
     accounts,
-    isLoading: accountsLoading,
+    loading: accountsLoading,
     error: accountsError,
-  } = useStaffOrgAccounts(orgId);
+  } = useAllAccounts('staff', orgId);
 
   const [lines, setLines] = useState<EditLine[]>([]);
   const [seededFor, setSeededFor] = useState<string | null>(null);
@@ -144,27 +144,24 @@ export const PostedCorrectionEditor: FC<{
       ? `Only posted entries can be corrected (status: ${detail.row.status})`
       : undefined;
 
-  const accountOptions = useMemo(() => {
-    const opts = accounts.map((a) => ({
-      value: a.id,
-      label: a.full_name || `${a.code} — ${a.name}`,
-    }));
-    // A line's current account may be inactive (absent from the active
-    // chart): keep it selectable so the prefilled set is representable.
-    const known = new Set(opts.map((o) => o.value));
+  // A line's own account may be inactive (absent from the active chart). Each
+  // prefilled line hands it to its picker as the current account, keyed like
+  // the seeded lines above, so the prefilled set stays representable and the
+  // line can be put back to it.
+  const originalAccounts = useMemo(() => {
+    const byKey = new Map<string, CurrentAccount>();
     if (detail?.kind === 'ready') {
-      for (const l of detail.row.lines) {
-        if (l.account_id && !known.has(l.account_id)) {
-          known.add(l.account_id);
-          opts.push({
-            value: l.account_id,
-            label: `${l.account_code ?? '—'} — ${l.account_name ?? ''}`.trim(),
-          });
-        }
-      }
+      detail.row.lines.forEach((l, i) => {
+        if (!l.account_id) return;
+        byKey.set(`orig-${l.id ?? i}`, {
+          id: l.account_id,
+          code: l.account_code ?? '—',
+          name: l.account_name ?? '',
+        });
+      });
     }
-    return opts;
-  }, [accounts, detail]);
+    return byKey;
+  }, [detail]);
 
   const updateLine = (key: string, patch: Partial<EditLine>) =>
     setLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)));
@@ -307,21 +304,20 @@ export const PostedCorrectionEditor: FC<{
                   {lines.map((l) => (
                     <tr key={l.key} className="border-t border-white/5 align-top">
                       <td className="py-1.5 pr-2 min-w-[14rem]">
-                        <select
+                        <AccountPicker
+                          id={`correction-account-${l.key}`}
+                          ariaLabel="Account"
+                          tone="dark"
+                          required
                           value={l.account_id}
-                          onChange={(e) => updateLine(l.key, { account_id: e.target.value })}
+                          onChange={(next) => updateLine(l.key, { account_id: next })}
+                          accounts={accounts}
+                          loading={accountsLoading}
+                          error={accountsError}
+                          currentAccount={originalAccounts.get(l.key) ?? null}
                           disabled={submitting}
-                          className={fieldCls}
-                        >
-                          <option value="" disabled>
-                            {accountsLoading ? 'Loading accounts…' : 'Select…'}
-                          </option>
-                          {accountOptions.map((o) => (
-                            <option key={o.value} value={o.value}>
-                              {o.label}
-                            </option>
-                          ))}
-                        </select>
+                          placeholder="Select…"
+                        />
                       </td>
                       <td className="py-1.5 px-2">{sideToggle(l)}</td>
                       <td className="py-1.5 px-2 w-32">

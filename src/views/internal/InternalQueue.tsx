@@ -311,7 +311,11 @@ export const InternalQueue: FC = () => {
           {/* Detail pane */}
           {selected && (
             <div className="lg:col-span-3">
+              {/* Keyed by entry: opening another entry remounts the pane, so
+                  its mode and the reject-correct editor's lines start fresh
+                  instead of carrying over from the previous entry. */}
               <DetailPane
+                key={selected.id}
                 entry={selected}
                 onResolved={onResolved}
                 onClose={() => setSelectedId(null)}
