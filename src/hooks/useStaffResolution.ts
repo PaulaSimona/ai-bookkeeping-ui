@@ -48,8 +48,15 @@ export interface WriteResult<T = unknown> {
   ok: boolean;
   data?: T;
   status?: number;
+  // The server's refusal code ({code, detail, ...}) when it sent one.
+  code?: string;
   errorDetail?: string;
 }
+
+const refusalCode = (res: unknown): string | undefined => {
+  const code = (res as { data?: { code?: unknown } } | null | undefined)?.data?.code;
+  return typeof code === 'string' && code ? code : undefined;
+};
 
 const extractDetail = (res: unknown, fallback: string): string => {
   const data = (res as { data?: unknown } | null | undefined)?.data;
@@ -187,6 +194,7 @@ export const createStaffOrgCounterparty = async (
 // a counterparty. Body key is the ruled `counterparty` (uuid | null → clear);
 // `reason` is optional (≤500). The response carries `changed` — false when the
 // target already equalled the current value (nothing written, nothing audited).
+// A refusal carries the server's `code` (409 not_editable) and its `detail`.
 export const attributeStaffEntry = async (
   entryId: string,
   counterparty: string | null,
@@ -200,24 +208,35 @@ export const attributeStaffEntry = async (
     if (res && res.status === 200) {
       return { ok: true, status: 200, data: { changed: res.data?.changed !== false } };
     }
-    return { ok: false, status: res?.status, errorDetail: extractDetail(res, 'Attribution failed.') };
+    return {
+      ok: false,
+      status: res?.status,
+      code: refusalCode(res),
+      errorDetail: extractDetail(res, 'Attribution failed.'),
+    };
   } catch {
     return { ok: false, errorDetail: 'Attribution failed.' };
   }
 };
 
-// ─── Posted-entry correction (S70 3c, F-S69-8 / O-S70-6) ──────────────────────
+// ─── Posted-entry correction (S70 3c, F-S69-8 / O-S70-6; S84 CW2) ─────────────
 
-// Body of POST staff/entries/<id>/correct/ — mirrors the backend contract at
-// accounting/staff_resolution_views.py:786-838 exactly: a free-text `reason`
-// (required, non-empty) and >= 2 lines of {account_id, side, amount}. `amount`
-// is a 2-dp STRING (money is never a float; the view parses it to Decimal).
-// No reason_code, no counterparty (the replacement inherits the original's
-// server-side, O-S69-7), no description/tax_code — the view does not read them.
+// Body of POST staff/entries/<id>/correct/ — mirrors the backend contract
+// (accounting/staff_serializers.py StaffCorrectionSerializer /
+// StaffCorrectionLineSerializer) exactly: a free-text `reason` (required,
+// ≤500) and the corrected lines {account_id, side, amount, description,
+// tax_code}. `amount` is a 2-dp STRING (money is never a float; the server
+// parses it to Decimal). description (≤500) and tax_code (≤20) are carried
+// onto the new line as given (D-S85-17); both may be blank. The body is
+// STRICT — an unknown key is a 400 — and every account must be ACTIVE. No
+// counterparty key is sent: the correction inherits the entry's (the server's
+// default counterparty_mode).
 export interface CorrectedLine {
   account_id: string;
   side: 'debit' | 'credit';
   amount: string;
+  description: string;
+  tax_code: string;
 }
 
 export interface CorrectPostedPayload {
@@ -225,19 +244,20 @@ export interface CorrectPostedPayload {
   lines: CorrectedLine[];
 }
 
-// The 201 body is the REPLACEMENT entry, serialized by JournalEntrySerializer
-// (the same shape the ledger list uses — reuse, do not redefine). The fields the
-// editor reads are pinned here; corrects_entry_id points back at the original.
+// The 201 body is the ONE new correction entry, serialized by
+// JournalEntrySerializer (the same shape the ledger list uses — reuse, do not
+// redefine; it carries no chain fields). The fields the editor reads are
+// pinned here; corrects_entry_id points back at the entry it corrects.
 export type CorrectedEntry = LedgerEntryRow & { corrects_entry_id: string | null };
 
 export type CorrectPostedResult =
   | { ok: true; entry: CorrectedEntry }
-  | { ok: false; status?: number; errorDetail: string };
+  | { ok: false; status?: number; code?: string; errorDetail: string };
 
-// Error mapping (O-S70-6): 400 → the server `detail` verbatim (engine codes
-// period_locked / unbalanced / invalid_accounts / not_posted /
-// already_reversed arrive as {code, detail, ...} and `detail` is what the
-// reviewer reads); 404 → the §16 IDOR shape; 429 → the staff_write /
+// Error mapping (O-S70-6): a refusal arrives as {code, detail, ...} — `code`
+// is handed back so the editor can tell them apart (409 already_corrected /
+// already_reversed: the entry is no longer live) and `detail` is what the
+// reviewer reads, verbatim; 404 → the §16 IDOR shape; 429 → the staff_write /
 // staff_correction throttle.
 export const correctPostedEntry = async (
   entryId: string,
@@ -253,7 +273,12 @@ export const correctPostedEntry = async (
     if (status === 429) {
       return { ok: false, status, errorDetail: 'Rate limit — try again in a minute' };
     }
-    return { ok: false, status, errorDetail: extractDetail(res, 'Correction failed.') };
+    return {
+      ok: false,
+      status,
+      code: refusalCode(res),
+      errorDetail: extractDetail(res, 'Correction failed.'),
+    };
   } catch {
     return { ok: false, errorDetail: 'Correction failed.' };
   }

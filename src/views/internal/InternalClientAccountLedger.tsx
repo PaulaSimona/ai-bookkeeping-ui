@@ -151,18 +151,12 @@ export const InternalClientAccountLedger: FC = () => {
               <StaffEntryActions
                 orgId={orgId}
                 entry={{
-                  id: shown.id,
+                  ...shown,
                   entry_number: shown.entry_number ?? null,
                   counterparty: shown.counterparty ?? null,
-                  entry_number_display: shown.entry_number_display,
-                  reverses_entry_id: shown.reverses_entry_id ?? null,
-                  reversed_by_entry_id: shown.reversed_by_entry_id ?? null,
-                  corrects_entry_id: shown.corrects_entry_id ?? null,
-                  reverses_entry_number_display: shown.reverses_entry_number_display ?? null,
-                  reversed_by_entry_number_display: shown.reversed_by_entry_number_display ?? null,
-                  corrects_entry_number_display: shown.corrects_entry_number_display ?? null,
                 }}
                 onChanged={onEntryChanged}
+                onOpenEntry={(ref) => setTargetId(ref.id)}
               />
             ) : null}
             documentUrl={() => null}   // O-S69-17: no owner-lane call from the staff drawer

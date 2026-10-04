@@ -4,7 +4,7 @@ import {
   type RejectCorrectPayload,
   type CorrectedLineInput,
 } from '@/hooks/useInternalReview';
-import { PrimaryButton, SecondaryButton } from '@/components/internal/ui';
+import { ConfirmModal, PrimaryButton, SecondaryButton } from '@/components/internal/ui';
 import { createStaffOrgAccount } from '@/hooks/useStaffResolution';
 import { useAllAccounts } from '@/hooks/useAllAccounts';
 import { AccountPicker } from '@/components/AccountPicker';
@@ -22,6 +22,10 @@ import type { CurrentAccount } from '@/types/account';
  * line's own account stays valid even if inactive. A "+ New account" inline
  * creates one and selects it in the line. The ledger engine re-validates
  * balance + accounts on submit; backend 400s surface verbatim.
+ *
+ * One save: "Post correction" opens a confirm pop-up, and nothing is sent until
+ * it is confirmed (D-S85-12). The draft is posted in place with the corrected
+ * lines — there is no replacement entry.
  */
 
 // Verbatim ReviewDecision.EntryRejectReason choices (accounting/models.py).
@@ -194,6 +198,7 @@ export const RejectCorrectEditor: FC<{
     })),
   );
   const [newAcctForKey, setNewAcctForKey] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
   // Counterparty tri-state (§14 14-C-2b). 'keep' = inherit the original's (payload
   // omits counterparty_id); 'clear' = null; 'set' = a picked UUID.
@@ -430,13 +435,33 @@ export const RejectCorrectEditor: FC<{
       )}
 
       <div className="flex items-center gap-3">
-        <PrimaryButton onClick={submit} disabled={!canSubmit} busy={submitting}>
+        <PrimaryButton onClick={() => setConfirming(true)} disabled={!canSubmit} busy={submitting}>
           Post correction
         </PrimaryButton>
         <SecondaryButton onClick={onCancel} disabled={submitting}>
           Cancel
         </SecondaryButton>
       </div>
+
+      {/* D-S85-12: nothing is posted until this is confirmed. */}
+      {confirming && (
+        <ConfirmModal title="Post correction?" onClose={() => setConfirming(false)}>
+          <p className="text-sm text-white/70">
+            Posts this entry with your corrected lines. Audited; cannot be undone.
+          </p>
+          <div className="mt-5 flex justify-end gap-2">
+            <SecondaryButton onClick={() => setConfirming(false)}>Cancel</SecondaryButton>
+            <PrimaryButton
+              onClick={() => {
+                setConfirming(false);
+                submit();
+              }}
+            >
+              Confirm
+            </PrimaryButton>
+          </div>
+        </ConfirmModal>
+      )}
     </div>
   );
 };

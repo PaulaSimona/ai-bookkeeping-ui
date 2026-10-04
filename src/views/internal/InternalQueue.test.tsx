@@ -162,12 +162,17 @@ describe('InternalQueue reject & correct', () => {
     await user.click(pickers()[0]);
     await user.keyboard('5100{Enter}');
     await user.click(screen.getByRole('button', { name: 'Post correction' }));
+    // D-S85-12: nothing is posted until the pop-up is confirmed.
+    expect(post).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Confirm' }));
 
     await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
     expect(post).toHaveBeenCalledWith(
       `/api/accounting/review/${ENTRY_A}/reject-correct/`,
       EXPECTED_BODY,
     );
+    // The draft is posted in place: the message names no replacement.
+    expect(await screen.findByText('Entry posted with your corrections.')).toBeInTheDocument();
   });
 
   it('starts the editor fresh when another queue entry is opened', async () => {

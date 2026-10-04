@@ -158,8 +158,34 @@ describe('RejectCorrectEditor account picker', () => {
     expect(pickers()[0]).toHaveValue(L('5100', 'Office Supplies'));
 
     await user.click(screen.getByRole('button', { name: 'Post correction' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm' }));
     expect(onSubmit).toHaveBeenCalledTimes(1);
     expect(onSubmit).toHaveBeenCalledWith(EXPECTED_PAYLOAD);
+  });
+
+  it('asks for a confirm before posting, and posts nothing until it is given (D-S85-12)', async () => {
+    const user = userEvent.setup();
+    const onSubmit = renderEditor();
+    await ready();
+    await user.selectOptions(screen.getByDisplayValue('Select a reason…'), 'wrong_account');
+
+    await user.click(screen.getByRole('button', { name: 'Post correction' }));
+    // The pop-up says what the action does; nothing has been submitted.
+    expect(screen.getByText('Post correction?')).toBeInTheDocument();
+    expect(
+      screen.getByText('Posts this entry with your corrected lines. Audited; cannot be undone.'),
+    ).toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    // Cancelling the pop-up submits nothing and leaves the editor as it was.
+    const popup = screen.getByText('Post correction?').closest('div')!.parentElement!;
+    await user.click(within(popup).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByText('Post correction?')).not.toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Post correction' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm' }));
+    expect(onSubmit).toHaveBeenCalledTimes(1);
   });
 
   it('loads the accounts of the org on the entry from the staff endpoint', async () => {
@@ -210,6 +236,7 @@ describe('RejectCorrectEditor account picker', () => {
     // Left on the draft's own account, that is what is submitted.
     await user.selectOptions(screen.getByDisplayValue('Select a reason…'), 'other');
     await user.click(screen.getByRole('button', { name: 'Post correction' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm' }));
     expect(onSubmit.mock.calls[0][0].lines[0].account_id).toBe('acc-1999');
   });
 

@@ -55,10 +55,6 @@ interface PanelEntry extends EntryLinkSource {
   entry_number?: number | null;
   entry_number_display?: string | null;
   counterparty?: { id: string; name: string } | null;
-  reverses_entry_id?: string | null;
-  reversed_by_entry_id?: string | null;
-  corrects_entry_id?: string | null;
-  corrects_entry_number_display?: string | null;
   lines: PanelLine[];
 }
 
@@ -110,24 +106,18 @@ const EntryPanel: FC<{
       />
 
       {isLiveEntry(entry) ? (
-        // Replace / clear the counterparty and correct the entry. The panel's
-        // own counterparty is the "current"; a save refetches — no local
-        // mutation.
+        // Correct the entry or change its counterparty — each behind its own
+        // button. The panel's own counterparty is the "current"; a save
+        // refetches — no local mutation.
         <StaffEntryActions
           orgId={orgId}
           entry={{
-            id: entry.id,
+            ...entry,
             entry_number: entry.entry_number ?? null,
             counterparty: entry.counterparty ?? null,
-            entry_number_display: entry.entry_number_display ?? null,
-            reverses_entry_id: entry.reverses_entry_id ?? null,
-            reversed_by_entry_id: entry.reversed_by_entry_id ?? null,
-            corrects_entry_id: entry.corrects_entry_id ?? null,
-            reverses_entry_number_display: entry.reverses_entry_number_display ?? null,
-            reversed_by_entry_number_display: entry.reversed_by_entry_number_display ?? null,
-            corrects_entry_number_display: entry.corrects_entry_number_display ?? null,
           }}
           onChanged={onChanged}
+          onOpenEntry={onOpenEntry}
         />
       ) : (
         note && <p className="text-xs text-amber-200/80">{note}</p>

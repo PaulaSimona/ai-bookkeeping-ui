@@ -160,6 +160,10 @@ describe('labels', () => {
     expect(entryStatusLabel({ status: 'accountant_hold' })).toBe('Accountant hold');
   });
 
+  it('labels a payload with no status at all as a dash instead of throwing', () => {
+    expect(entryStatusLabel({} as { status: string })).toBe('—');
+  });
+
   it('falls back to the status column when a payload has no display_status', () => {
     expect(entryDisplayStatus({ status: 'draft' })).toBe('draft');
     expect(entryDisplayStatus({ status: 'posted', display_status: 'corrected' })).toBe('corrected');

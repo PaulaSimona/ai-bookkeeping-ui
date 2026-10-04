@@ -65,7 +65,7 @@ const DetailPane: FC<{
     const res = await rejectCorrect(entry.id, payload);
     setSubmitting(false);
     if (res.ok) {
-      notify('Correction posted; original replaced.', 'success');
+      notify('Entry posted with your corrections.', 'success');
       onResolved();
     } else {
       setErrorDetail(res.errorDetail ?? 'Reject & correct failed.');

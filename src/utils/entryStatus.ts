@@ -81,7 +81,8 @@ const STATUS_LABELS: Record<string, string> = {
 
 // "Posted" / "Corrected" / "Reversed" / "Reversal"; any other value humanized.
 export const entryStatusLabel = (row: EntryStatusSource): string => {
-  const status = entryDisplayStatus(row);
+  // A payload with neither field (a malformed read) labels as "—", never a throw.
+  const status = String(entryDisplayStatus(row) ?? '');
   if (STATUS_LABELS[status]) return STATUS_LABELS[status];
   const text = status.replace(/_/g, ' ').trim();
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : '—';
