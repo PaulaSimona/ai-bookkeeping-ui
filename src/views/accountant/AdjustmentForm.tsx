@@ -10,8 +10,11 @@
 // its stable { detail } 4xx bodies surface verbatim. Tokens only, no hex.
 import { type FC, useMemo, useState } from 'react';
 import { useToast } from '@/hooks/useToast';
+import { useAllAccounts } from '@/hooks/useAllAccounts';
+import { useOrgContext } from '@/context/OrgContext';
 import { Card } from '@/components/t2/Card';
-import { useAccountantChart } from './hooks/useAccountantChart';
+import { AccountPicker } from '@/components/AccountPicker';
+import type { CurrentAccount } from '@/types/account';
 import { postAdjustment } from './hooks/adjustmentApi';
 
 const CAD = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' });
@@ -55,9 +58,10 @@ const lineComplete = (l: DraftLine): boolean => {
 
 // Build the initial lines: one row per seeded account (amounts ALWAYS blank),
 // padded to at least two rows. Unseeded → two empty rows (the standalone page).
-const seedLines = (seedAccountIds?: string[]): DraftLine[] => {
-  const base: DraftLine[] = (seedAccountIds ?? []).map((account_id, i) => ({
-    key: i, account_id, debit: '', credit: '',
+// A seeded row's key is its index into seedAccounts.
+const seedLines = (seedAccounts?: CurrentAccount[]): DraftLine[] => {
+  const base: DraftLine[] = (seedAccounts ?? []).map((account, i) => ({
+    key: i, account_id: account.id, debit: '', credit: '',
   }));
   while (base.length < 2) {
     base.push({ key: base.length, account_id: '', debit: '', credit: '' });
@@ -66,9 +70,10 @@ const seedLines = (seedAccountIds?: string[]): DraftLine[] => {
 };
 
 export interface AdjustmentFormProps {
-  // Seed the line rows with these account ids in order (amounts blank). Absent →
-  // two empty rows.
-  seedAccountIds?: string[];
+  // Seed the line rows with these accounts in order (amounts blank). Absent →
+  // two empty rows. Code and name come along so a seeded account that is no
+  // longer active (absent from the loaded list) still shows in its row.
+  seedAccounts?: CurrentAccount[];
   initialMemo?: string;
   initialDate?: string;
   // Called after a successful 201 post (the toast has already shown). The page
@@ -78,14 +83,17 @@ export interface AdjustmentFormProps {
 }
 
 export const AdjustmentForm: FC<AdjustmentFormProps> = ({
-  seedAccountIds, initialMemo, initialDate, onPosted, onCancel,
+  seedAccounts, initialMemo, initialDate, onPosted, onCancel,
 }) => {
   const { showToast } = useToast();
-  const { activeAccounts, isLoading, error } = useAccountantChart();
+  // Every active account of the active client org, all pages, each once
+  // (D-S84-6). Both hosts of this form remount it when the client changes.
+  const { activeOrgId } = useOrgContext();
+  const { accounts, loading: isLoading, error } = useAllAccounts('accountant', activeOrgId);
 
   const [date, setDate] = useState<string>(initialDate ?? today());
   const [memo, setMemo] = useState(initialMemo ?? '');
-  const initial = useMemo(() => seedLines(seedAccountIds), [seedAccountIds]);
+  const initial = useMemo(() => seedLines(seedAccounts), [seedAccounts]);
   const [lines, setLines] = useState<DraftLine[]>(initial);
   const [nextKey, setNextKey] = useState(initial.length);
   const [submitting, setSubmitting] = useState(false);
@@ -201,17 +209,17 @@ export const AdjustmentForm: FC<AdjustmentFormProps> = ({
           <div className="space-y-2">
             {lines.map((l) => (
               <div key={l.key} className="grid grid-cols-[1fr_140px_140px_36px] items-center gap-3">
-                <select
+                <AccountPicker
+                  id={`adjustment-account-${l.key}`}
+                  ariaLabel="Account"
+                  required
                   value={l.account_id}
-                  onChange={(e) => setLine(l.key, { account_id: e.target.value })}
-                  className={inputCls}
-                  aria-label="Account"
-                >
-                  <option value="">Select account…</option>
-                  {activeAccounts.map((a) => (
-                    <option key={a.id} value={a.id}>{a.code} — {a.name}</option>
-                  ))}
-                </select>
+                  onChange={(next) => setLine(l.key, { account_id: next })}
+                  accounts={accounts}
+                  error={error}
+                  currentAccount={seedAccounts?.[l.key] ?? null}
+                  placeholder="Select account…"
+                />
                 <input
                   inputMode="decimal"
                   value={l.debit}

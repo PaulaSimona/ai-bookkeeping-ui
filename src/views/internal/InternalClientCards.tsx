@@ -14,13 +14,14 @@ import { type FC, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   useStaffOrgCards,
-  useStaffOrgAccounts,
   createStaffCard,
   patchStaffCard,
   resendCardNotification,
-  type StaffAccount,
   type StaffCard,
 } from '@/hooks/useStaffResolution';
+import { useAllAccounts } from '@/hooks/useAllAccounts';
+import { AccountPicker } from '@/components/AccountPicker';
+import type { AccountType, PickerAccount } from '@/types/account';
 import {
   PageContainer,
   SectionCard,
@@ -58,7 +59,7 @@ const CHIP: Record<StaffCard['classification'], { label: string; tone: 'warning'
 // This staff console KEEPS the picker. O-S33-4 removed it from the client lane
 // only: an owner cannot be expected to choose a ledger account, but staff can,
 // and staff also handle the cases the client lane refuses.
-const ALLOWED_TYPES: Record<'business' | 'personal', string[]> = {
+const ALLOWED_TYPES: Record<'business' | 'personal', AccountType[]> = {
   business: ['liability'],
   personal: ['liability', 'equity'],
 };
@@ -95,12 +96,13 @@ const inputCls = selectCls;
 
 const ClassifyPanel: FC<{
   card: StaffCard;
-  accounts: StaffAccount[];
+  accounts: PickerAccount[];
   accountsLoading: boolean;
+  accountsError: string | null;
   onDone: () => void;
   onCancel: () => void;
   notify: (m: string, t: 'success' | 'error') => void;
-}> = ({ card, accounts, accountsLoading, onDone, onCancel, notify }) => {
+}> = ({ card, accounts, accountsLoading, accountsError, onDone, onCancel, notify }) => {
   const [choice, setChoice] = useState<'business' | 'personal' | null>(null);
   const [accountId, setAccountId] = useState('');
   const [saving, setSaving] = useState(false);
@@ -167,22 +169,28 @@ const ClassifyPanel: FC<{
         <div className="space-y-1.5">
           {accountsLoading ? (
             <p className="text-xs text-white/40">Loading accounts…</p>
+          ) : accountsError ? (
+            // A failed load is not an empty chart: say so, rather than
+            // claiming the org has no suitable account.
+            <p className="text-xs text-red-300">{accountsError}</p>
           ) : options.length === 0 ? (
             <p className="text-xs text-amber-300">
               This org’s chart has no suitable {choice === 'business' ? 'liability' : 'liability or equity'} account.
             </p>
           ) : (
-            <select
+            // `options` is already narrowed by the mapping rule above, so the
+            // picker is handed exactly the accounts a card may map to.
+            <AccountPicker
+              id={`card-account-${card.id}`}
+              ariaLabel="Account"
+              tone="dark"
+              required
               value={accountId}
-              onChange={(e) => setAccountId(e.target.value)}
+              onChange={(next) => setAccountId(next)}
+              accounts={options}
               disabled={saving}
-              className={selectCls}
-            >
-              <option value="">Select an account…</option>
-              {options.map((a) => (
-                <option key={a.id} value={a.id}>{a.code} — {a.name}</option>
-              ))}
-            </select>
+              placeholder="Select an account…"
+            />
           )}
           <p className="text-[11px] text-white/40">{PICKER_NOTE[choice]}</p>
         </div>
@@ -299,11 +307,12 @@ const AddCardForm: FC<{
 
 const CardRow: FC<{
   card: StaffCard;
-  accounts: StaffAccount[];
+  accounts: PickerAccount[];
   accountsLoading: boolean;
+  accountsError: string | null;
   onChanged: () => void;
   notify: (m: string, t: 'success' | 'error') => void;
-}> = ({ card, accounts, accountsLoading, onChanged, notify }) => {
+}> = ({ card, accounts, accountsLoading, accountsError, onChanged, notify }) => {
   const [classifying, setClassifying] = useState(false);
   const [resending, setResending] = useState(false);
   // 429 is not an error — it is the cooldown working. Rendered inline and calm,
@@ -413,6 +422,7 @@ const CardRow: FC<{
           card={card}
           accounts={accounts}
           accountsLoading={accountsLoading}
+          accountsError={accountsError}
           onDone={() => { setClassifying(false); onChanged(); }}
           onCancel={() => setClassifying(false)}
           notify={notify}
@@ -427,7 +437,12 @@ const CardRow: FC<{
 export const InternalClientCards: FC = () => {
   const { orgId = '' } = useParams();
   const { items, count, page, setPage, pageSize, isLoading, error, refetch } = useStaffOrgCards(orgId);
-  const { accounts, isLoading: accountsLoading } = useStaffOrgAccounts(orgId);
+  // Every active account of the client org, all pages (D-S84-6).
+  const {
+    accounts,
+    loading: accountsLoading,
+    error: accountsError,
+  } = useAllAccounts('staff', orgId || null);
   const { toast, showToast } = useToast();
   const [adding, setAdding] = useState(false);
 
@@ -494,6 +509,7 @@ export const InternalClientCards: FC = () => {
                 card={card}
                 accounts={accounts}
                 accountsLoading={accountsLoading}
+                accountsError={accountsError}
                 onChanged={refetch}
                 notify={showToast}
               />

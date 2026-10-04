@@ -158,7 +158,13 @@ export const EntryDrawer: FC<EntryDrawerProps> = ({
     }
   };
 
-  const seedAccountIds = orderedLines.map((l) => l.account_id);
+  // Code and name ride along so an account that is no longer active still shows
+  // in the seeded adjustment row.
+  const seedAccounts = orderedLines.map((l) => ({
+    id: l.account_id,
+    code: l.account_code ?? '—',
+    name: l.account_name ?? '',
+  }));
   const seedMemo = `Adjustment re ${row.entry_number_display ?? 'entry'}`;
 
   return (
@@ -315,7 +321,7 @@ export const EntryDrawer: FC<EntryDrawerProps> = ({
           </div>
           <AdjustmentForm
             key={row.id}
-            seedAccountIds={seedAccountIds}
+            seedAccounts={seedAccounts}
             initialMemo={seedMemo}
             initialDate={today()}
             onPosted={onPosted}
