@@ -1,7 +1,7 @@
 // AccountPicker behaviour (D-S84-6, D-S85-3): filtering, keyboard, the form
 // guarantee, Escape, restore-on-leave, and the portalled list.
 import { type FC, type FormEvent, useState } from 'react';
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { CurrentAccount, PickerAccount } from '@/types/account';
@@ -215,6 +215,20 @@ describe('leaving the field without a commit', () => {
     expect(field()).toHaveValue('21');
     await user.tab();
 
+    expect(onChange).not.toHaveBeenCalled();
+    expect(field()).toHaveValue(L('1000', 'Cash'));
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+  });
+
+  it('blur without a commit restores the previous value', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<Harness initialValue="id-1000" onChange={onChange} />);
+    await user.click(field());
+    await user.keyboard('rent');
+    expect(field()).toHaveValue('rent');
+
+    fireEvent.blur(field());
     expect(onChange).not.toHaveBeenCalled();
     expect(field()).toHaveValue(L('1000', 'Cash'));
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
@@ -599,9 +613,7 @@ describe('the list popup', () => {
 
     placeInput(200);
     act(() => {
-      // The viewport-size event; see VIEWPORT_SIZE_EVENT in ./index for why
-      // its name is not written as a plain lowercase literal.
-      window.dispatchEvent(new Event('RESIZE'.toLowerCase()));
+      window.dispatchEvent(new Event('resize'));
     });
     expect(list).toHaveStyle({ top: '234px' });
   });

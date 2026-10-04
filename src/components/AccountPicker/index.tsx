@@ -123,12 +123,6 @@ const MAX_HEIGHT = 288;
 // Above the app's modals (z-50) and toasts (z-[100]).
 const Z_INDEX = 1000;
 
-// The window event for a viewport size change. Its lowercase name is also a
-// Tailwind utility, and Tailwind v4 scans every file under src for utility
-// names whether or not the file is imported — written as a plain literal it
-// adds a rule to the production stylesheet. Spelled this way it does not.
-const VIEWPORT_SIZE_EVENT = 'RESIZE'.toLowerCase();
-
 export const AccountPicker: FC<AccountPickerProps> = ({
   id,
   label,
@@ -274,10 +268,10 @@ export const AccountPicker: FC<AccountPickerProps> = ({
     if (!isOpen) return;
     reposition();
     window.addEventListener('scroll', reposition, true);
-    window.addEventListener(VIEWPORT_SIZE_EVENT, reposition);
+    window.addEventListener('resize', reposition);
     return () => {
       window.removeEventListener('scroll', reposition, true);
-      window.removeEventListener(VIEWPORT_SIZE_EVENT, reposition);
+      window.removeEventListener('resize', reposition);
     };
   }, [isOpen, reposition]);
 
