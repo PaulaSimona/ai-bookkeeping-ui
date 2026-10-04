@@ -4,9 +4,12 @@ import {
   type RejectCorrectPayload,
   type CorrectedLineInput,
 } from '@/hooks/useInternalReview';
-import { PrimaryButton, SecondaryButton } from '@/components/internal/ui';
-import { useStaffOrgAccounts, createStaffOrgAccount } from '@/hooks/useStaffResolution';
+import { ConfirmModal, PrimaryButton, SecondaryButton } from '@/components/internal/ui';
+import { createStaffOrgAccount } from '@/hooks/useStaffResolution';
+import { useAllAccounts } from '@/hooks/useAllAccounts';
+import { AccountPicker } from '@/components/AccountPicker';
 import { CounterpartyPicker } from '@/components/internal/CounterpartyPicker';
+import type { CurrentAccount } from '@/types/account';
 
 /**
  * Reject & correct editor (MASTER_T2 §4.2). Editable lines PRE-FILLED from the
@@ -14,10 +17,17 @@ import { CounterpartyPicker } from '@/components/internal/CounterpartyPicker';
  * note, and (new, s28) a counterparty tri-state. Field names match
  * ReviewLineInputSerializer exactly.
  *
- * Account options are the FULL chart for the entry's org (staff accounts endpoint,
- * grouped by type); draft-line accounts stay valid even if inactive. A "+ New
- * account" inline creates one and selects it in the line. The ledger engine
- * re-validates balance + accounts on submit; backend 400s surface verbatim.
+ * Accounts are picked from EVERY active account of the entry's org (the shared
+ * AccountPicker over the staff accounts endpoint, grouped by type); a draft
+ * line's own account still shows if it is inactive, tagged "inactive", and
+ * posting waits until every line has an active account (D-S85-19 — the engine
+ * refuses an inactive one). A "+ New account" inline
+ * creates one and selects it in the line. The ledger engine re-validates
+ * balance + accounts on submit; backend 400s surface verbatim.
+ *
+ * One save: "Post correction" opens a confirm pop-up, and nothing is sent until
+ * it is confirmed (D-S85-12). The draft is posted in place with the corrected
+ * lines — there is no replacement entry.
  */
 
 // Verbatim ReviewDecision.EntryRejectReason choices (accounting/models.py).
@@ -47,8 +57,6 @@ const NORMAL_BALANCE_DEFAULT: Record<string, string> = {
   expense: 'debit',
 };
 
-const DRAFT_GROUP = '__draft__';
-
 interface EditLine {
   key: string;
   account_id: string;
@@ -60,29 +68,23 @@ interface EditLine {
 
 type CpMode = 'keep' | 'clear' | 'set';
 
-interface AccountOption {
-  value: string;
-  label: string;
-  type: string;
-}
-
 const inputCls =
   'w-full rounded-md bg-[#0f172a] border border-white/15 px-2 py-1.5 text-sm text-white ' +
   'placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-[#0066FF]';
 
 // ─── Inline new-account form ───────────────────────────────────────────────────
+// No parent-account field (D-S85-8): the server treats parent_account_id as
+// read-only on this endpoint, so a parent chosen here was never saved (F-S85-7).
 
 const NewAccountForm: FC<{
   orgId: string;
-  parentOptions: AccountOption[];
   onCreated: (accountId: string) => void;
   onCancel: () => void;
-}> = ({ orgId, parentOptions, onCreated, onCancel }) => {
+}> = ({ orgId, onCreated, onCancel }) => {
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [type, setType] = useState('expense');
   const [normalBalance, setNormalBalance] = useState(NORMAL_BALANCE_DEFAULT.expense);
-  const [parent, setParent] = useState('');
   const [creating, setCreating] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -100,7 +102,6 @@ const NewAccountForm: FC<{
       name: name.trim(),
       type,
       normal_balance: normalBalance,
-      parent_account_id: parent || null,
     });
     setCreating(false);
     if (res.ok && res.data) {
@@ -128,16 +129,6 @@ const NewAccountForm: FC<{
         <select value={normalBalance} onChange={(e) => setNormalBalance(e.target.value)} className={inputCls}>
           <option value="debit">Debit</option>
           <option value="credit">Credit</option>
-        </select>
-        <select value={parent} onChange={(e) => setParent(e.target.value)} className={`${inputCls} col-span-2`}>
-          <option value="">No parent (optional)</option>
-          {parentOptions
-            .filter((o) => o.type !== DRAFT_GROUP)
-            .map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
         </select>
       </div>
       {err && <p className="text-xs text-red-300">{err}</p>}
@@ -172,31 +163,29 @@ export const RejectCorrectEditor: FC<{
   onCancel: () => void;
 }> = ({ entry, submitting, errorDetail, onSubmit, onCancel }) => {
   const orgId = entry.org_id ?? '';
-  const { accounts, refetch: refetchAccounts } = useStaffOrgAccounts(orgId);
+  // Every active account of the entry's org, all pages (D-S84-6).
+  const {
+    accounts,
+    loading: accountsLoading,
+    error: accountsError,
+    refetch: refetchAccounts,
+  } = useAllAccounts('staff', orgId || null);
 
-  // Full chart options grouped by type, unioned with any draft-line accounts not
-  // in the active chart (inactive accounts on the draft stay selectable).
-  const accountOptions = useMemo<AccountOption[]>(() => {
-    const opts: AccountOption[] = accounts.map((a) => ({
-      value: a.id,
-      label: a.full_name || `${a.code} — ${a.name}`,
-      type: a.type,
-    }));
-    const known = new Set(accounts.map((a) => a.id));
-    for (const l of entry.lines) {
-      if (l.account_id && !known.has(l.account_id)) {
-        known.add(l.account_id);
-        opts.push({
-          value: l.account_id,
-          label: `${l.account_code ?? '—'} — ${l.account_name ?? ''}`.trim(),
-          type: DRAFT_GROUP,
-        });
-      }
-    }
-    return opts;
-  }, [accounts, entry.lines]);
-
-  const draftOnly = accountOptions.filter((o) => o.type === DRAFT_GROUP);
+  // A draft line's own account may be inactive (absent from the active chart).
+  // Each prefilled line hands it to its picker as the current account, keyed
+  // like the seeded lines below, so it stays selectable.
+  const draftAccounts = useMemo(() => {
+    const byKey = new Map<string, CurrentAccount>();
+    entry.lines.forEach((l, i) => {
+      if (!l.account_id) return;
+      byKey.set(`orig-${l.id ?? i}`, {
+        id: l.account_id,
+        code: l.account_code ?? '—',
+        name: l.account_name ?? '',
+      });
+    });
+    return byKey;
+  }, [entry.lines]);
 
   const [reasonCode, setReasonCode] = useState('');
   const [note, setNote] = useState('');
@@ -211,6 +200,7 @@ export const RejectCorrectEditor: FC<{
     })),
   );
   const [newAcctForKey, setNewAcctForKey] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
   // Counterparty tri-state (§14 14-C-2b). 'keep' = inherit the original's (payload
   // omits counterparty_id); 'clear' = null; 'set' = a picked UUID.
@@ -240,11 +230,24 @@ export const RejectCorrectEditor: FC<{
     const hasCredit = l.credit.trim() !== '';
     return !!l.account_id && hasDebit !== hasCredit; // exactly one side
   };
+  // D-S85-19: the draft posts through the ledger engine, which refuses a line
+  // on an inactive account (invalid_accounts). The staff chart is active-only,
+  // so an account missing from it is inactive: the line is tagged, and posting
+  // waits until every line has an active account. Unknown while the chart is
+  // loading or failed to load — the engine still decides on submit.
+  const activeIds = useMemo(() => new Set(accounts.map((a) => a.id)), [accounts]);
+  const chartReady = !accountsLoading && !accountsError;
+  const isInactive = (l: EditLine): boolean =>
+    chartReady && !!l.account_id && !activeIds.has(l.account_id);
+  const anyInactive = lines.some(isInactive);
+
   const canSubmit =
     !!reasonCode &&
     lines.length >= 2 &&
     lines.every(lineValid) &&
     (cpMode !== 'set' || !!cpId) &&
+    !accountsLoading &&
+    !anyInactive &&
     !submitting;
 
   const submit = () => {
@@ -264,38 +267,20 @@ export const RejectCorrectEditor: FC<{
     onSubmit(payload);
   };
 
-  const renderAccountSelect = (l: EditLine) => (
-    <select
+  const renderAccountPicker = (l: EditLine) => (
+    <AccountPicker
+      id={`reject-account-${l.key}`}
+      ariaLabel="Account"
+      tone="dark"
+      required
       value={l.account_id}
-      onChange={(e) => updateLine(l.key, { account_id: e.target.value })}
-      className={inputCls}
-    >
-      <option value="" disabled>
-        Select…
-      </option>
-      {TYPE_GROUPS.map((g) => {
-        const groupOpts = accountOptions.filter((o) => o.type === g.type);
-        if (!groupOpts.length) return null;
-        return (
-          <optgroup key={g.type} label={g.label}>
-            {groupOpts.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </optgroup>
-        );
-      })}
-      {draftOnly.length > 0 && (
-        <optgroup label="On draft">
-          {draftOnly.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </optgroup>
-      )}
-    </select>
+      onChange={(next) => updateLine(l.key, { account_id: next })}
+      accounts={accounts}
+      loading={accountsLoading}
+      error={accountsError}
+      currentAccount={draftAccounts.get(l.key) ?? null}
+      placeholder="Select…"
+    />
   );
 
   return (
@@ -354,7 +339,12 @@ export const RejectCorrectEditor: FC<{
               {lines.map((l) => (
                 <tr key={l.key} className="border-t border-white/5 align-top">
                   <td className="py-1.5 pr-2 min-w-[11rem]">
-                    {renderAccountSelect(l)}
+                    {renderAccountPicker(l)}
+                    {isInactive(l) && (
+                      <span className="mt-1 mr-2 inline-block rounded bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-medium text-amber-200">
+                        inactive
+                      </span>
+                    )}
                     <button
                       type="button"
                       onClick={() => setNewAcctForKey(newAcctForKey === l.key ? null : l.key)}
@@ -420,7 +410,6 @@ export const RejectCorrectEditor: FC<{
           <div className="mt-2">
             <NewAccountForm
               orgId={orgId}
-              parentOptions={accountOptions}
               onCreated={(id) => {
                 updateLine(newAcctForKey, { account_id: id });
                 setNewAcctForKey(null);
@@ -435,6 +424,11 @@ export const RejectCorrectEditor: FC<{
           Each line takes exactly one of debit / credit. The ledger engine validates the
           accounts and balance on submit.
         </p>
+        {anyInactive && (
+          <p className="mt-1 text-[11px] text-amber-200/70">
+            A line uses an inactive account — choose an active account to post.
+          </p>
+        )}
       </div>
 
       {/* Counterparty (§14 14-C-2b) — tri-state */}
@@ -466,13 +460,33 @@ export const RejectCorrectEditor: FC<{
       )}
 
       <div className="flex items-center gap-3">
-        <PrimaryButton onClick={submit} disabled={!canSubmit} busy={submitting}>
+        <PrimaryButton onClick={() => setConfirming(true)} disabled={!canSubmit} busy={submitting}>
           Post correction
         </PrimaryButton>
         <SecondaryButton onClick={onCancel} disabled={submitting}>
           Cancel
         </SecondaryButton>
       </div>
+
+      {/* D-S85-12: nothing is posted until this is confirmed. */}
+      {confirming && (
+        <ConfirmModal title="Post correction?" onClose={() => setConfirming(false)}>
+          <p className="text-sm text-white/70">
+            Posts this entry with your corrected lines. Audited; cannot be undone.
+          </p>
+          <div className="mt-5 flex justify-end gap-2">
+            <SecondaryButton onClick={() => setConfirming(false)}>Cancel</SecondaryButton>
+            <PrimaryButton
+              onClick={() => {
+                setConfirming(false);
+                submit();
+              }}
+            >
+              Confirm
+            </PrimaryButton>
+          </div>
+        </ConfirmModal>
+      )}
     </div>
   );
 };

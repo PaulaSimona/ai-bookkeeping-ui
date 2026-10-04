@@ -1,0 +1,368 @@
+// EntryDrawer — the shared entry panel (accountant ledger and both
+// account-ledger drill-downs).
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import api from '@/utils/api';
+import { type AccountantLedgerRow } from '@/views/accountant/hooks/useAccountantLedger';
+import { EntryDrawer } from './EntryDrawer';
+
+vi.mock('@/utils/api', () => ({ default: { get: vi.fn(), post: vi.fn() } }));
+const get = api.get as unknown as Mock<(url: string, config?: unknown) => Promise<unknown>>;
+
+beforeEach(() => {
+  get.mockReset();
+  // The adjustment form (when open) loads the chart of accounts.
+  get.mockResolvedValue({ status: 200, data: { count: 0, next: null, previous: null, results: [] } });
+});
+vi.mock('@/context/OrgContext', () => ({
+  useOrgContext: () => ({ activeOrgId: '11111111-1111-4111-8111-111111111111' }),
+}));
+// The drawer reads the current user from the store and toasts through it.
+vi.mock('react-redux', () => ({ useSelector: () => 'user-1', useDispatch: () => vi.fn() }));
+vi.mock('@/hooks/useToast', () => ({ useToast: () => ({ showToast: vi.fn() }) }));
+
+const row = (over: Partial<AccountantLedgerRow> = {}): AccountantLedgerRow => ({
+  id: 'e-68',
+  entry_number: 68,
+  entry_number_display: 'JE-0068',
+  entry_date: '2026-09-30',
+  description: 'September rent',
+  source: 'accountant_adjustment',
+  status: 'posted',
+  created_by: 'user-1',
+  voided_at: null,
+  voided_by: null,
+  void_reason: '',
+  source_document_id: null,
+  total_debits: '100.00',
+  total_credits: '100.00',
+  lines: [
+    {
+      id: 'line-1',
+      account_id: 'acc-5000',
+      account_code: '5000',
+      account_name: 'Rent Expense',
+      debit: '100.00',
+      credit: null,
+      description: '',
+      tax_code: '',
+      line_order: 0,
+      reverses_line_id: null,
+    },
+  ],
+  display_status: 'posted',
+  corrected_by: null,
+  live_entry: { id: 'e-68', number: 'JE-0068' },
+  chain_root: { id: 'e-68', number: 'JE-0068' },
+  chain: [{ id: 'e-68', number: 'JE-0068', date: '2026-09-30', role: 'original', display_status: 'posted' }],
+  chain_truncated: false,
+  ...over,
+});
+
+const renderDrawer = (
+  r: AccountantLedgerRow,
+  opts: { readOnly?: boolean; adjustOpen?: boolean; onOpenEntry?: (ref: { id: string; number: string | null }) => void } = {},
+) =>
+  render(
+    <EntryDrawer
+      row={r}
+      adjustOpen={opts.adjustOpen ?? false}
+      onToggleAdjust={vi.fn()}
+      onPosted={vi.fn()}
+      readOnly={opts.readOnly ?? false}
+      onOpenEntry={opts.onOpenEntry}
+    />,
+  );
+
+// JE-0068 was corrected by JE-0102, which is the chain's live entry.
+const CORRECTED_CHAIN = [
+  { id: 'e-68', number: 'JE-0068', date: '2026-09-30', role: 'original', display_status: 'corrected' },
+  { id: 'e-102', number: 'JE-0102', date: '2026-10-02', role: 'correction', display_status: 'posted' },
+];
+// JE-0070 was reversed by JE-0103: the chain has no live entry.
+const REVERSED_CHAIN = [
+  { id: 'e-70', number: 'JE-0070', date: '2026-09-01', role: 'original', display_status: 'reversed' },
+  { id: 'e-103', number: 'JE-0103', date: '2026-09-02', role: 'reversal', display_status: 'reversal' },
+];
+
+// Every row below is a posted accountant adjustment written by the current
+// user — the one entry Void is ever offered on — so only the entry KIND decides
+// what shows.
+const LIVE = row();
+const NON_LIVE: Record<'corrected' | 'reversed' | 'reversal', AccountantLedgerRow> = {
+  corrected: row({
+    display_status: 'corrected',
+    corrected_by: { id: 'e-102', number: 'JE-0102' },
+    live_entry: { id: 'e-102', number: 'JE-0102' },
+    chain: CORRECTED_CHAIN,
+  }),
+  reversed: row({
+    id: 'e-70',
+    entry_number_display: 'JE-0070',
+    display_status: 'reversed',
+    reversed_by_entry_id: 'e-103',
+    reversed_by_entry_number_display: 'JE-0103',
+    live_entry: null,
+    chain_root: { id: 'e-70', number: 'JE-0070' },
+    chain: REVERSED_CHAIN,
+  }),
+  reversal: row({
+    id: 'e-103',
+    entry_number_display: 'JE-0103',
+    display_status: 'reversal',
+    reverses_entry_id: 'e-70',
+    reverses_entry_number_display: 'JE-0070',
+    live_entry: null,
+    chain_root: { id: 'e-70', number: 'JE-0070' },
+    chain: REVERSED_CHAIN,
+  }),
+};
+
+const NOTES = {
+  corrected: 'Corrected by JE-0102. Changes are made on the live entry, JE-0102.',
+  reversed: 'Reversed by JE-0103.',
+  reversal: 'Reversal of JE-0070.',
+};
+
+describe('EntryDrawer — actions by entry kind (D-S85-13)', () => {
+  it('offers Adjust this entry and Void on the live entry', () => {
+    renderDrawer(LIVE);
+    expect(screen.getByRole('button', { name: 'Adjust this entry' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Void entry' })).toBeInTheDocument();
+    // A live entry that was never corrected has no note and no chain panel.
+    expect(screen.queryByRole('region', { name: 'Entry history' })).not.toBeInTheDocument();
+  });
+
+  it.each(['corrected', 'reversed', 'reversal'] as const)(
+    'offers neither on a %s entry, and says how it is linked instead',
+    (kind) => {
+      renderDrawer(NON_LIVE[kind]);
+      expect(screen.queryByRole('button', { name: 'Adjust this entry' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Void entry' })).not.toBeInTheDocument();
+      expect(screen.getByText(NOTES[kind])).toBeInTheDocument();
+      expect(screen.getByRole('region', { name: 'Entry history' })).toBeInTheDocument();
+    },
+  );
+
+  it('does not open the adjustment form on a non-live entry', () => {
+    // Control: the same request on the live entry opens the form.
+    const { unmount } = renderDrawer(LIVE, { adjustOpen: true });
+    expect(screen.getByText('New adjusting entry')).toBeInTheDocument();
+    unmount();
+
+    renderDrawer(NON_LIVE.corrected, { adjustOpen: true });
+    expect(screen.queryByText('New adjusting entry')).not.toBeInTheDocument();
+  });
+
+  it('offers no writes on a read-only surface, even on the live entry', () => {
+    renderDrawer(LIVE, { readOnly: true });
+    expect(screen.queryByRole('button', { name: 'Adjust this entry' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Void entry' })).not.toBeInTheDocument();
+  });
+});
+
+describe('EntryDrawer — effective total (D-S85-18)', () => {
+  const line = (
+    id: string,
+    code: string,
+    name: string,
+    debit: string | null,
+    credit: string | null,
+    order: number,
+    reverses: string | null,
+  ) => ({
+    id,
+    account_id: `acc-${code}`,
+    account_code: code,
+    account_name: name,
+    debit,
+    credit,
+    description: '',
+    tax_code: '',
+    line_order: order,
+    reverses_line_id: reverses,
+  });
+
+  // A one-entry correction: two lines reversing the corrected entry, then the
+  // two corrected lines. The served totals sum all four.
+  const CORRECTION = row({
+    source: 'staff_correction',
+    total_debits: '200.00',
+    total_credits: '200.00',
+    lines: [
+      line('l1', '5000', 'Rent Expense', null, '100.00', 0, 'old-1'),
+      line('l2', '1000', 'Cash', '100.00', null, 1, 'old-2'),
+      line('l3', '5100', 'Office Supplies', '100.00', null, 2, null),
+      line('l4', '1000', 'Cash', null, '100.00', 3, null),
+    ],
+  });
+
+  const totalRow = (label: string) => screen.getByText(label).parentElement as HTMLElement;
+
+  it('totals a correction on its corrected lines and marks the reversing ones', () => {
+    renderDrawer(CORRECTION);
+
+    const total = totalRow('Total (excluding reversing lines)');
+    expect(total).toHaveTextContent('$100.00');
+    expect(total).not.toHaveTextContent('$200.00');
+    expect(screen.getAllByText('reversing')).toHaveLength(2);
+  });
+
+  it('leaves an ordinary entry on the totals the server sent', () => {
+    renderDrawer(row({ total_debits: '100.00', total_credits: '100.00' }));
+
+    expect(totalRow('Total')).toHaveTextContent('$100.00');
+    expect(screen.queryByText('Total (excluding reversing lines)')).not.toBeInTheDocument();
+    expect(screen.queryByText('reversing')).not.toBeInTheDocument();
+  });
+
+  it('leaves a reversal entry — every line reversing — on its served totals', () => {
+    renderDrawer(
+      row({
+        source: 'reversal',
+        display_status: 'reversal',
+        live_entry: null,
+        total_debits: '100.00',
+        total_credits: '100.00',
+        lines: [
+          line('l1', '5000', 'Rent Expense', null, '100.00', 0, 'old-1'),
+          line('l2', '1000', 'Cash', '100.00', null, 1, 'old-2'),
+        ],
+      }),
+    );
+    expect(totalRow('Total')).toHaveTextContent('$100.00');
+  });
+});
+
+describe('EntryDrawer — chain panel (O-S84-1)', () => {
+  it('opens the live entry through the page\'s handler', async () => {
+    const onOpenEntry = vi.fn();
+    renderDrawer(NON_LIVE.corrected, { onOpenEntry });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Open JE-0102' }));
+    expect(onOpenEntry).toHaveBeenCalledTimes(1);
+    expect(onOpenEntry).toHaveBeenCalledWith({ id: 'e-102', number: 'JE-0102' });
+  });
+
+  it('has no link to open when the chain has no live entry', () => {
+    renderDrawer(NON_LIVE.reversed, { onOpenEntry: vi.fn() });
+    expect(screen.getByText('This chain has no live entry.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Open JE-/ })).not.toBeInTheDocument();
+  });
+
+  it('shows the chain on a read-only surface too', () => {
+    renderDrawer(NON_LIVE.corrected, { readOnly: true, onOpenEntry: vi.fn() });
+    expect(screen.getByRole('region', { name: 'Entry history' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open JE-0102' })).toBeInTheDocument();
+  });
+});
+
+describe('EntryDrawer — status badge (UI2-U2)', () => {
+  it('shows the registry status, labelled by the rule module', () => {
+    const { unmount } = renderDrawer(row());
+    expect(screen.getByText('Posted')).toBeInTheDocument();
+    unmount();
+
+    renderDrawer(
+      row({
+        display_status: 'corrected',
+        corrected_by: { id: 'e-102', number: 'JE-0102' },
+        live_entry: { id: 'e-102', number: 'JE-0102' },
+      }),
+    );
+    expect(screen.getByText('Corrected')).toBeInTheDocument();
+  });
+
+  it('never shows "Needs review"', () => {
+    // The flag is not part of the drawer's row type; a payload carrying it
+    // must still not surface.
+    renderDrawer({ ...row(), needs_review: true } as AccountantLedgerRow);
+    expect(screen.getByText('Posted')).toBeInTheDocument();
+    expect(screen.queryByText(/needs review/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('EntryDrawer — voided text (D-S85-16)', () => {
+  it('does not point at a "Show voided" filter that no longer exists', () => {
+    renderDrawer(
+      row({ status: 'voided', display_status: 'voided', voided_at: '2026-10-01T15:00:00Z', void_reason: 'Duplicate' }),
+    );
+    // Control: the voided notice is on screen.
+    expect(screen.getByText(/Removed from balances/)).toBeInTheDocument();
+    expect(screen.getByText(/retained in the audit trail\./)).toBeInTheDocument();
+    expect(screen.queryByText(/show voided/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('EntryDrawer — "Adjust this entry" seed rows (UI2-U8, F-S85-15)', () => {
+  const line = (
+    id: string,
+    code: string,
+    name: string,
+    debit: string | null,
+    credit: string | null,
+    order: number,
+    reverses: string | null,
+  ) => ({
+    id,
+    account_id: `acc-${code}`,
+    account_code: code,
+    account_name: name,
+    debit,
+    credit,
+    description: '',
+    tax_code: '',
+    line_order: order,
+    reverses_line_id: reverses,
+  });
+
+  // The seeded rows, as the adjustment form's account pickers show them. The
+  // chart served here is empty, so each picker shows exactly its seeded account.
+  const seededAccounts = async () =>
+    (await screen.findAllByRole('combobox', { name: 'Account' })).map(
+      (picker) => (picker as HTMLInputElement).value,
+    );
+
+  it('on a correction with two reversing and two corrected lines, seeds the two corrected ones', async () => {
+    // A live one-entry correction: Cr 5000 / Dr 1000 reverse the entry it
+    // corrected; Dr 5100 / Cr 1000 are its own content.
+    renderDrawer(
+      row({
+        source: 'staff_correction',
+        total_debits: '200.00',
+        total_credits: '200.00',
+        lines: [
+          line('l1', '5000', 'Rent Expense', null, '100.00', 0, 'old-1'),
+          line('l2', '1000', 'Cash', '100.00', null, 1, 'old-2'),
+          line('l3', '5100', 'Office Supplies', '100.00', null, 2, null),
+          line('l4', '1000', 'Cash', null, '100.00', 3, null),
+        ],
+      }),
+      { adjustOpen: true },
+    );
+
+    expect(await seededAccounts()).toEqual(['5100 — Office Supplies', '1000 — Cash']);
+    // The reversing half — the Cr 5000 line — is not offered as a row.
+    expect(await seededAccounts()).not.toContain('5000 — Rent Expense');
+  });
+
+  it('on an ordinary entry, seeds every line, as before', async () => {
+    renderDrawer(
+      row({
+        lines: [
+          line('l1', '5000', 'Rent Expense', '60.00', null, 0, null),
+          line('l2', '5100', 'Office Supplies', '40.00', null, 1, null),
+          line('l3', '1000', 'Cash', null, '100.00', 2, null),
+        ],
+      }),
+      { adjustOpen: true },
+    );
+
+    expect(await seededAccounts()).toEqual([
+      '5000 — Rent Expense',
+      '5100 — Office Supplies',
+      '1000 — Cash',
+    ]);
+  });
+});

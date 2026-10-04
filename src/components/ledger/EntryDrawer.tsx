@@ -14,7 +14,17 @@ import { AdjustmentForm, today } from '@/views/accountant/AdjustmentForm';
 import { voidAdjustment } from '@/views/accountant/hooks/adjustmentApi';
 import { type AccountantLedgerRow } from '@/views/accountant/hooks/useAccountantLedger';
 import { formatIsoDate } from '@/utils/dates';
-import { entryDisplayStatus } from '@/utils/entryStatus';
+import { EntryChain } from '@/components/ledger/EntryChain';
+import {
+  canAct,
+  effectiveTotals,
+  entryDisplayStatus,
+  entryStatusLabel,
+  isOwnLine,
+  isReversingLine,
+  nonLiveNote,
+  type EntryRef,
+} from '@/utils/entryStatus';
 
 const CAD = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' });
 const fmtMoney = (v: string | null): string => (v == null || v === '' ? '' : CAD.format(Number(v)));
@@ -56,6 +66,10 @@ interface EntryDrawerProps {
   // whose caller cannot use the owner lane (the staff ledger) passes a builder
   // that returns null, and the button does not render at all.
   documentUrl?: (docId: string) => string | null;
+  // UI2-U3 (O-S84-1): "Open JE-xxxx" in the chain panel. The PAGE owns the
+  // read — it re-targets this drawer through its lane's detail endpoint.
+  // Absent → the live entry is named but not linked.
+  onOpenEntry?: (entry: EntryRef) => void;
 }
 
 const defaultDocumentUrl = (docId: string): string =>
@@ -63,7 +77,7 @@ const defaultDocumentUrl = (docId: string): string =>
 
 export const EntryDrawer: FC<EntryDrawerProps> = ({
   row, adjustOpen, onToggleAdjust, onPosted, onVoided, readOnly = false,
-  documentUrl = defaultDocumentUrl,
+  documentUrl = defaultDocumentUrl, onOpenEntry,
 }) => {
   const docUrl = row.source_document_id == null ? null : documentUrl(String(row.source_document_id));
   const { showToast } = useToast();
@@ -73,14 +87,24 @@ export const EntryDrawer: FC<EntryDrawerProps> = ({
     (s: RootState) => s.auth.user?.user?.id ?? s.auth.user?.id ?? null,
   );
   const orderedLines = [...row.lines].sort((a, b) => a.line_order - b.line_order);
+  // D-S85-18: an entry holding both reversing and corrected lines (a one-entry
+  // correction) is totalled on its corrected lines; any other entry keeps the
+  // totals the server sent.
+  const totals = effectiveTotals(row);
 
   // Void state. voidedInfo is set locally on a successful void so the drawer shows
   // the voided state immediately (the list also refetches via onVoided). A row that
-  // is ALREADY voided (viewed under Show voided) is voided from the start.
+  // is ALREADY voided (a detail read can return one) is voided from the start.
   const [voidedInfo, setVoidedInfo] = useState<{ voided_at: string | null; void_reason: string } | null>(null);
   const isVoided = row.status === 'voided' || voidedInfo !== null;
   const voidedAt = voidedInfo?.voided_at ?? row.voided_at ?? null;
   const voidReason = voidedInfo?.void_reason ?? row.void_reason ?? '';
+
+  // D-S85-13: Adjust and Void are offered on the chain's LIVE entry only. An
+  // entry that was corrected or reversed, and a reversal entry, say how they
+  // are linked instead, and the chain panel links to the live entry.
+  const canAdjust = !readOnly && !isVoided && canAct('accountant', row, 'adjust');
+  const standingNote = isVoided ? null : nonLiveNote(row);
 
   // Author-gated Void affordance (O-S26-2) — mirrors, never replaces, the backend
   // author-equality fence. Shown ONLY when the entry is a posted accountant
@@ -88,6 +112,7 @@ export const EntryDrawer: FC<EntryDrawerProps> = ({
   const canVoid =
     !readOnly &&
     !isVoided &&
+    canAct('accountant', row, 'void') &&
     row.status === 'posted' &&
     row.source === 'accountant_adjustment' &&
     currentUserId != null &&
@@ -158,7 +183,17 @@ export const EntryDrawer: FC<EntryDrawerProps> = ({
     }
   };
 
-  const seedAccountIds = orderedLines.map((l) => l.account_id);
+  // The adjustment form is seeded from the entry's OWN lines only — the ones
+  // whose reverses_line_id is null (D-S85-18). A correction also holds the
+  // lines reversing the entry it corrected; those are not its content and are
+  // never offered as rows. An ordinary entry seeds every line.
+  // Code and name ride along so an account that is no longer active still shows
+  // in the seeded adjustment row.
+  const seedAccounts = orderedLines.filter(isOwnLine).map((l) => ({
+    id: l.account_id,
+    code: l.account_code ?? '—',
+    name: l.account_name ?? '',
+  }));
   const seedMemo = `Adjustment re ${row.entry_number_display ?? 'entry'}`;
 
   return (
@@ -172,10 +207,11 @@ export const EntryDrawer: FC<EntryDrawerProps> = ({
         <span className="text-[13px] text-gray-600">{fmtDate(row.entry_date)}</span>
         <span className="text-gray-300">·</span>
         <StatusBadge variant="neutral">{humanizeSource(row.source)}</StatusBadge>
-        {/* F-S71-2 / O-S71-3: status derived via entryDisplayStatus so a
-            reversed original shows "Reversed" (info tone) — never "Posted". */}
+        {/* D-S84-4: the registry's display status — Posted, Corrected, Reversed
+            (info tone) or Reversal — labelled by the shared rule module. No
+            review flag is ever shown here. */}
         <StatusBadge variant={statusVariant(isVoided ? 'voided' : entryDisplayStatus(row))}>
-          {humanizeSource(isVoided ? 'voided' : entryDisplayStatus(row))}
+          {isVoided ? 'Voided' : entryStatusLabel(row)}
         </StatusBadge>
       </div>
 
@@ -183,7 +219,7 @@ export const EntryDrawer: FC<EntryDrawerProps> = ({
       {isVoided && (
         <div className="mt-3 rounded-xl bg-gray-100 px-4 py-3 text-[12.5px] text-gray-500">
           Voided{voidedAt ? ` on ${fmtDateTime(voidedAt)}` : ''}. Removed from balances
-          and reports; retained in the audit trail and under Show voided.
+          and reports; retained in the audit trail.
           {voidReason ? (
             <span className="mt-1 block text-gray-600">Reason: {voidReason}</span>
           ) : null}
@@ -204,6 +240,13 @@ export const EntryDrawer: FC<EntryDrawerProps> = ({
                 <span className={`text-gray-500 ${MONO}`}>{l.account_code ?? ''}</span>
                 {l.account_code ? ' · ' : ''}
                 {l.account_name ?? ''}
+                {/* A line that reverses a line of the corrected entry — not
+                    part of this entry's own total. */}
+                {isReversingLine(l) && (
+                  <span className="ml-2 rounded-full bg-gray-100 px-1.5 py-0.5 text-[10.5px] font-medium text-gray-500">
+                    reversing
+                  </span>
+                )}
                 {l.description ? (
                   <span className="mt-0.5 block text-[11.5px] text-gray-400">{l.description}</span>
                 ) : null}
@@ -213,11 +256,14 @@ export const EntryDrawer: FC<EntryDrawerProps> = ({
             </div>
           ))}
         </div>
-        {/* Totals row — is_balanced is a backend invariant; not recomputed here. */}
+        {/* Totals row — is_balanced is a backend invariant; not recomputed here.
+            A correction shows the totals of its corrected lines (D-S85-18). */}
         <div className="grid grid-cols-[1fr_140px_140px] gap-3 border-t border-gray-100 bg-gray-50 px-4 py-2.5 text-[12px] font-semibold text-gray-600">
-          <span className="justify-self-start">Total</span>
-          <span className={`justify-self-end text-gray-900 ${MONO}`}>{fmtMoney(row.total_debits)}</span>
-          <span className={`justify-self-end text-gray-900 ${MONO}`}>{fmtMoney(row.total_credits)}</span>
+          <span className="justify-self-start">
+            {totals.effective ? 'Total (excluding reversing lines)' : 'Total'}
+          </span>
+          <span className={`justify-self-end text-gray-900 ${MONO}`}>{fmtMoney(totals.debits)}</span>
+          <span className={`justify-self-end text-gray-900 ${MONO}`}>{fmtMoney(totals.credits)}</span>
         </div>
       </div>
 
@@ -226,9 +272,25 @@ export const EntryDrawer: FC<EntryDrawerProps> = ({
         <p className="mt-2 text-[13px] text-gray-600">{row.description}</p>
       ) : null}
 
+      {/* D-S85-13: a non-live entry says how it is linked and where changes
+          are made, in place of the actions it does not offer. */}
+      {standingNote && <p className="mt-2 text-[12.5px] text-gray-500">{standingNote}</p>}
+
+      {/* O-S84-1: the entry's chain — the original and everything that later
+          corrected, reversed or restored it — with a link to the live entry.
+          Nothing renders for an entry that was never corrected or reversed. */}
+      <EntryChain
+        className="mt-3"
+        chain={row.chain}
+        currentId={row.id}
+        liveEntry={row.live_entry}
+        truncated={row.chain_truncated}
+        onOpenEntry={onOpenEntry}
+      />
+
       {/* Actions — View document whenever the documentUrl builder yields a
-          path (O-S69-17); Adjust/Void only on a non-voided entry (Void only for
-          the author of a posted adjustment). */}
+          path (O-S69-17); Adjust/Void only on a non-voided LIVE entry (Void
+          only for the author of a posted adjustment). */}
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {docUrl != null && (
           <button
@@ -243,7 +305,7 @@ export const EntryDrawer: FC<EntryDrawerProps> = ({
             View document
           </button>
         )}
-        {!isVoided && !readOnly && (
+        {canAdjust && (
           <button
             type="button"
             onClick={onToggleAdjust}
@@ -270,8 +332,8 @@ export const EntryDrawer: FC<EntryDrawerProps> = ({
             Void {row.entry_number_display ?? 'this entry'}
           </div>
           <p className="mt-1 text-[12.5px] leading-relaxed text-gray-600">
-            Voiding removes this entry from balances and reports. It stays in the audit
-            trail and under Show voided. This cannot be undone.
+            Voiding removes this entry from balances and reports and from this
+            list. It stays in the audit trail. This cannot be undone.
           </p>
           <label className="mt-3 block text-[12px] font-medium text-gray-700">Reason</label>
           <textarea
@@ -307,15 +369,16 @@ export const EntryDrawer: FC<EntryDrawerProps> = ({
       )}
 
       {/* In-context adjust — the shared form, seeded from this entry's accounts
-          (amounts blank). Absent once the entry is voided. */}
-      {adjustOpen && !isVoided && !readOnly && (
+          (amounts blank). Absent once the entry is voided, and on any entry
+          that is not the live one. */}
+      {adjustOpen && canAdjust && (
         <div className="mt-4">
           <div className="mb-2 text-[11.5px] font-semibold uppercase tracking-wider text-gray-500">
             New adjusting entry
           </div>
           <AdjustmentForm
             key={row.id}
-            seedAccountIds={seedAccountIds}
+            seedAccounts={seedAccounts}
             initialMemo={seedMemo}
             initialDate={today()}
             onPosted={onPosted}

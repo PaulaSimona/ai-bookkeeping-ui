@@ -1,25 +1,38 @@
-// PostedCorrectionEditor (S70 3c, F-S69-8 / O-S70-1..7) — supersede a POSTED
-// journal entry through the staff correction endpoint
-// (POST staff/entries/<id>/correct/, backend S63). A posted entry is never
-// edited: the server reverses it and posts the corrected line set in its
-// place, atomically, and the replacement points back via corrects_entry.
+// PostedCorrectionEditor (S70 3c, F-S69-8 / O-S70-1..7; S84 CW2, O-S84-1/-2) —
+// correct a POSTED journal entry through the staff correction endpoint
+// (POST staff/entries/<id>/correct/). A posted entry is never edited: the
+// server posts ONE new entry that corrects it — a line reversing each of its
+// lines, then the corrected lines — atomically, and the new entry points back
+// via corrects_entry. The corrected entry stays in the books as "Corrected by
+// JE-x"; the new entry becomes the chain's live entry.
 //
 // NOT derived from RejectCorrectEditor — that one speaks the review-queue
 // contract (reason_code enum, debit/credit strings, counterparty tri-state,
 // DRAFT entries). This one speaks the correction contract: a free-text
-// reason, {account_id, side, amount} lines, no counterparty (the replacement
-// inherits the original's server-side, O-S69-7), POSTED entries only.
+// reason, {account_id, side, amount, description, tax_code} lines, no
+// counterparty (the correction inherits the entry's server-side), the chain's
+// LIVE entry only.
 //
-// Gate (O-S70-2): on open the entry is RE-READ (useStaffEntryDetail) and the
-// primary action is enabled only when that detail row's status is 'posted'.
-// The list/ledger row's status is never the gate — it can be stale.
+// Gate (O-S70-2, D-S85-13): on open the entry is RE-READ (useStaffEntryDetail)
+// and the editor is offered only when that detail row is the chain's live
+// entry — the same rule the panel's Correct button uses (entryStatus). The
+// list/ledger row is never the gate — it can be stale.
+//
+// Prefill (D-S85-18): only the entry's OWN lines — the ones whose
+// reverses_line_id is null. An entry that is itself a correction also holds
+// the lines reversing the entry it corrected; those are never prefilled and
+// never sent, so a second correction cannot re-post the reversing half.
+// reverses_line_id is read-only: the request never carries it.
+//
+// One save (O-S84-2): "Post correction", then a confirm pop-up (D-S85-12).
 //
 // Client-side balance check mirrors the server (sum debits == sum credits,
-// > 0) as a fast fail; the server stays authoritative and its 400 detail is
-// shown verbatim. Money is handled as integer cents derived from 2-dp
+// > 0) as a fast fail; the server stays authoritative and its refusal detail
+// is shown verbatim. Money is handled as integer cents derived from 2-dp
 // strings — never a float.
 import { type FC, useEffect, useMemo, useState } from 'react';
 
+import { AccountPicker } from '@/components/AccountPicker';
 import {
   ConfirmModal,
   EmptyState,
@@ -29,12 +42,19 @@ import {
   SecondaryButton,
   Spinner,
 } from '@/components/internal/ui';
+import { useAllAccounts } from '@/hooks/useAllAccounts';
 import { useStaffEntryDetail } from '@/hooks/useStaffReports';
+import { type CorrectedLine, correctPostedEntry } from '@/hooks/useStaffResolution';
+import type { CurrentAccount } from '@/types/account';
 import {
-  type CorrectedLine,
-  correctPostedEntry,
-  useStaffOrgAccounts,
-} from '@/hooks/useStaffResolution';
+  entryStatusLabel,
+  formatEntryNumber,
+  isLiveEntry,
+  isOwnLine,
+  liveEntryLink,
+  nonLiveNote,
+  type EntryRef,
+} from '@/utils/entryStatus';
 
 type Side = 'debit' | 'credit';
 
@@ -43,6 +63,10 @@ interface EditLine {
   account_id: string;
   side: Side;
   amount: string; // 2-dp string while valid; raw input otherwise
+  // D-S85-17: carried from the entry's own line and sent back as they are; a
+  // line added here starts with both empty. Shown, not edited.
+  description: string;
+  tax_code: string;
 }
 
 const AMOUNT_RE = /^\d+(\.\d{1,2})?$/;
@@ -62,6 +86,10 @@ const fromCents = (cents: number): string =>
 const lineKey = (l: { account_id: string; side: Side; amount: string }) =>
   `${l.account_id}|${l.side}|${l.amount}`;
 
+// The refusals that mean "this entry is no longer the live one" — someone
+// corrected or reversed it since the editor opened.
+const NOT_LIVE_CODES = new Set(['already_corrected', 'already_reversed']);
+
 const fieldCls =
   'w-full rounded-md bg-[#0f172a] border border-white/15 px-2 py-1.5 text-sm text-white ' +
   'placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-[#0066FF]';
@@ -74,31 +102,45 @@ export const PostedCorrectionEditor: FC<{
   // The page's toast (InternalQueue.tsx `notify` precedent): the editor closes
   // on success, so the confirmation must outlive it.
   notify: (message: string, type: 'success' | 'error') => void;
-}> = ({ orgId, entry, onClose, onChanged, notify }) => {
-  const { entry: detail } = useStaffEntryDetail(entry.id);
+  // Opens the chain's live entry in the page's panel — offered when this entry
+  // turns out not to be the live one. Absent → the live entry is only named.
+  onOpenEntry?: (entry: EntryRef) => void;
+}> = ({ orgId, entry, onClose, onChanged, notify, onOpenEntry }) => {
+  const { entry: detail, refetch: refetchDetail } = useStaffEntryDetail(entry.id);
+  // Every active account of the client org, all pages (D-S84-6).
   const {
     accounts,
-    isLoading: accountsLoading,
+    loading: accountsLoading,
     error: accountsError,
-  } = useStaffOrgAccounts(orgId);
+  } = useAllAccounts('staff', orgId);
 
   const [lines, setLines] = useState<EditLine[]>([]);
   const [seededFor, setSeededFor] = useState<string | null>(null);
   const [reason, setReason] = useState('');
   const [confirming, setConfirming] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<{ status?: number; detail: string } | null>(null);
+  const [error, setError] = useState<{ status?: number; code?: string; detail: string } | null>(null);
 
+  const row = detail?.kind === 'ready' ? detail.row : null;
   const entryLabel =
-    (detail?.kind === 'ready' && detail.row.entry_number_display) ||
-    (entry.entry_number != null ? `JE-${entry.entry_number}` : 'this entry');
+    row?.entry_number_display ?? formatEntryNumber(entry.entry_number) ?? 'this entry';
 
-  // O-S70-3: prefill ONCE from the re-read detail lines (account, side from
-  // whichever figure is non-zero, amount as a 2-dp string). Description and
-  // tax_code are not carried — the endpoint does not read them.
+  // D-S85-18: the lines a correction starts from are the entry's OWN lines —
+  // the ones whose reverses_line_id is null. An entry that is itself a
+  // correction also holds the lines reversing the entry it corrected; the
+  // server reverses the own lines itself, so carrying the reversing ones into
+  // the corrected set would post them a second time. They are never prefilled.
+  const ownLines = useMemo(
+    () => (detail?.kind === 'ready' ? detail.row.lines.filter(isOwnLine) : []),
+    [detail],
+  );
+
+  // O-S70-3: prefill ONCE from the re-read detail's own lines (account, side
+  // from whichever figure is non-zero, amount as a 2-dp string, and the line's
+  // own description and tax code — D-S85-17).
   const original = useMemo<string[]>(() => {
     if (detail?.kind !== 'ready') return [];
-    return detail.row.lines
+    return ownLines
       .map((l) => {
         const debit = toCents(l.debit ?? '') ?? 0;
         const credit = toCents(l.credit ?? '') ?? 0;
@@ -107,12 +149,12 @@ export const PostedCorrectionEditor: FC<{
         return lineKey({ account_id: l.account_id, side, amount });
       })
       .sort();
-  }, [detail]);
+  }, [detail, ownLines]);
 
   useEffect(() => {
     if (detail?.kind !== 'ready' || seededFor === detail.row.id) return;
     setLines(
-      detail.row.lines.map((l, i) => {
+      ownLines.map((l, i) => {
         const debit = toCents(l.debit ?? '') ?? 0;
         const credit = toCents(l.credit ?? '') ?? 0;
         const side: Side = debit > 0 ? 'debit' : 'credit';
@@ -121,11 +163,13 @@ export const PostedCorrectionEditor: FC<{
           account_id: l.account_id,
           side,
           amount: fromCents(side === 'debit' ? debit : credit),
+          description: l.description ?? '',
+          tax_code: l.tax_code ?? '',
         };
       }),
     );
     setSeededFor(detail.row.id);
-  }, [detail, seededFor]);
+  }, [detail, ownLines, seededFor]);
 
   // Esc closes when nothing is in flight (the confirm first, then the editor).
   useEffect(() => {
@@ -138,40 +182,58 @@ export const PostedCorrectionEditor: FC<{
     return () => window.removeEventListener('keydown', onKey);
   }, [confirming, submitting, onClose]);
 
-  const isPosted = detail?.kind === 'ready' && detail.row.status === 'posted';
-  const statusTitle =
-    detail?.kind === 'ready' && !isPosted
-      ? `Only posted entries can be corrected (status: ${detail.row.status})`
-      : undefined;
+  // D-S85-13: the editor is offered on the chain's LIVE entry only — the rule
+  // module's answer for the row just re-read.
+  const isLive = row !== null && isLiveEntry(row);
+  const liveLink = row !== null ? liveEntryLink(row) : null;
+  const notLiveText =
+    row === null || isLive
+      ? null
+      : nonLiveNote(row) ??
+        `Only the live entry of a chain can be corrected (status: ${entryStatusLabel(row)}).`;
 
-  const accountOptions = useMemo(() => {
-    const opts = accounts.map((a) => ({
-      value: a.id,
-      label: a.full_name || `${a.code} — ${a.name}`,
-    }));
-    // A line's current account may be inactive (absent from the active
-    // chart): keep it selectable so the prefilled set is representable.
-    const known = new Set(opts.map((o) => o.value));
+  // A line's own account may be inactive (absent from the active chart). Each
+  // prefilled line hands it to its picker as the current account, keyed like
+  // the seeded lines above, so the prefilled set stays representable and the
+  // line can be put back to it.
+  const originalAccounts = useMemo(() => {
+    const byKey = new Map<string, CurrentAccount>();
     if (detail?.kind === 'ready') {
-      for (const l of detail.row.lines) {
-        if (l.account_id && !known.has(l.account_id)) {
-          known.add(l.account_id);
-          opts.push({
-            value: l.account_id,
-            label: `${l.account_code ?? '—'} — ${l.account_name ?? ''}`.trim(),
-          });
-        }
-      }
+      detail.row.lines.forEach((l, i) => {
+        if (!l.account_id) return;
+        byKey.set(`orig-${l.id ?? i}`, {
+          id: l.account_id,
+          code: l.account_code ?? '—',
+          name: l.account_name ?? '',
+        });
+      });
     }
-    return opts;
-  }, [accounts, detail]);
+    return byKey;
+  }, [detail]);
+
+  // D-S85-15: corrected lines need ACTIVE accounts (the server refuses the set
+  // otherwise). The staff chart is active-only, so an account missing from it
+  // is inactive: it is tagged, and posting waits until every line has an
+  // active account. Unknown while the chart is loading or failed to load.
+  const activeIds = useMemo(() => new Set(accounts.map((a) => a.id)), [accounts]);
+  const chartReady = !accountsLoading && !accountsError;
+  const isInactive = (l: EditLine): boolean =>
+    chartReady && !!l.account_id && !activeIds.has(l.account_id);
+  const anyInactive = lines.some(isInactive);
 
   const updateLine = (key: string, patch: Partial<EditLine>) =>
     setLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)));
   const addLine = () =>
     setLines((prev) => [
       ...prev,
-      { key: `new-${Date.now()}-${prev.length}`, account_id: '', side: 'debit', amount: '' },
+      {
+        key: `new-${Date.now()}-${prev.length}`,
+        account_id: '',
+        side: 'debit',
+        amount: '',
+        description: '',
+        tax_code: '',
+      },
     ]);
   const removeLine = (key: string) => setLines((prev) => prev.filter((l) => l.key !== key));
   const normaliseAmount = (key: string, raw: string) => {
@@ -196,7 +258,13 @@ export const PostedCorrectionEditor: FC<{
   const differs =
     current.length !== original.length || current.some((k, i) => k !== original[i]);
   const canSubmit =
-    isPosted && !!reason.trim() && balanced && differs && !submitting && !accountsLoading;
+    isLive &&
+    !!reason.trim() &&
+    balanced &&
+    differs &&
+    !submitting &&
+    chartReady &&
+    !anyInactive;
 
   const submit = async () => {
     setSubmitting(true);
@@ -205,20 +273,32 @@ export const PostedCorrectionEditor: FC<{
       account_id: l.account_id,
       side: l.side,
       amount: fromCents(toCents(l.amount) as number),
+      description: l.description,
+      tax_code: l.tax_code,
     }));
     const res = await correctPostedEntry(entry.id, { reason: reason.trim(), lines: payload });
     setSubmitting(false);
     setConfirming(false);
     if (res.ok) {
-      const replacement =
+      const correction =
         res.entry.entry_number_display ??
-        (res.entry.entry_number != null ? `JE-${res.entry.entry_number}` : 'a new entry');
-      notify(`Correction posted — ${replacement} replaces ${entryLabel}`, 'success');
+        formatEntryNumber(res.entry.entry_number) ??
+        'a new entry';
+      notify(`Correction posted — ${correction} corrects ${entryLabel}.`, 'success');
       onChanged(); // the page refetches — never a local mutation
       onClose();
     } else {
-      setError({ status: res.status, detail: res.errorDetail });
+      setError({ status: res.status, code: res.code, detail: res.errorDetail });
+      // The entry stopped being the live one: re-read it, so the gate closes
+      // and the link to the live entry appears next to the server's message.
+      if (res.code && NOT_LIVE_CODES.has(res.code)) refetchDetail();
     }
+  };
+
+  const openLive = () => {
+    if (!liveLink || !onOpenEntry) return;
+    onChanged(); // the page's own row is stale too
+    onOpenEntry(liveLink);
   };
 
   const sideToggle = (l: EditLine) => (
@@ -245,9 +325,7 @@ export const PostedCorrectionEditor: FC<{
         <div className="text-[11px] font-semibold uppercase tracking-wide text-white/40">
           Correct {entryLabel}
         </div>
-        {detail?.kind === 'ready' && (
-          <Pill tone={isPosted ? 'success' : 'warning'}>{detail.row.status}</Pill>
-        )}
+        {row && <Pill tone={isLive ? 'success' : 'warning'}>{entryStatusLabel(row)}</Pill>}
       </div>
 
       {detail?.kind === 'loading' && (
@@ -260,14 +338,30 @@ export const PostedCorrectionEditor: FC<{
       )}
       {accountsError && <ErrorBanner message={accountsError} />}
 
-      {detail?.kind === 'ready' && (
-        <>
-          {!isPosted && (
-            <p className="text-sm text-amber-200/80">
-              Only posted entries can be corrected (status: {detail.row.status}).
-            </p>
-          )}
+      {/* A server refusal, by code, with the server's own words. */}
+      {error &&
+        (error.status === 404 ? (
+          <EmptyState
+            title="Not found"
+            description="This entry is not on a client assigned to you, or it no longer exists."
+          />
+        ) : (
+          <ErrorBanner message={error.detail} />
+        ))}
 
+      {row && !isLive && (
+        <div className="space-y-2">
+          <p className="text-sm text-amber-200/80">{notLiveText}</p>
+          {liveLink && onOpenEntry && (
+            <SecondaryButton onClick={openLive}>
+              Open {liveLink.number ?? 'the live entry'}
+            </SecondaryButton>
+          )}
+        </div>
+      )}
+
+      {row && isLive && (
+        <>
           <div>
             <label className="block text-xs font-medium text-white/60 mb-1">
               Reason <span className="text-red-400">*</span>
@@ -276,6 +370,7 @@ export const PostedCorrectionEditor: FC<{
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               disabled={submitting}
+              maxLength={500}
               placeholder="Why this entry is wrong (carried into the correction's description)"
               className={fieldCls}
             />
@@ -300,6 +395,8 @@ export const PostedCorrectionEditor: FC<{
                     <th className="py-1 pr-2 font-medium">Account</th>
                     <th className="py-1 px-2 font-medium">Side</th>
                     <th className="py-1 px-2 font-medium text-right">Amount</th>
+                    <th className="py-1 px-2 font-medium">Description</th>
+                    <th className="py-1 px-2 font-medium">Tax</th>
                     <th className="py-1 pl-2" />
                   </tr>
                 </thead>
@@ -307,21 +404,29 @@ export const PostedCorrectionEditor: FC<{
                   {lines.map((l) => (
                     <tr key={l.key} className="border-t border-white/5 align-top">
                       <td className="py-1.5 pr-2 min-w-[14rem]">
-                        <select
+                        <AccountPicker
+                          id={`correction-account-${l.key}`}
+                          ariaLabel="Account"
+                          tone="dark"
+                          required
                           value={l.account_id}
-                          onChange={(e) => updateLine(l.key, { account_id: e.target.value })}
-                          disabled={submitting}
-                          className={fieldCls}
-                        >
-                          <option value="" disabled>
-                            {accountsLoading ? 'Loading accounts…' : 'Select…'}
-                          </option>
-                          {accountOptions.map((o) => (
-                            <option key={o.value} value={o.value}>
-                              {o.label}
-                            </option>
-                          ))}
-                        </select>
+                          onChange={(next) => updateLine(l.key, { account_id: next })}
+                          accounts={accounts}
+                          loading={accountsLoading}
+                          // A chart that failed to load is said ONCE, in the
+                          // banner above; the pickers are disabled and do
+                          // not repeat it.
+                          error={accountsError}
+                          hideError
+                          currentAccount={originalAccounts.get(l.key) ?? null}
+                          disabled={submitting || !!accountsError}
+                          placeholder="Select…"
+                        />
+                        {isInactive(l) && (
+                          <span className="mt-1 inline-block rounded bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-medium text-amber-200">
+                            inactive
+                          </span>
+                        )}
                       </td>
                       <td className="py-1.5 px-2">{sideToggle(l)}</td>
                       <td className="py-1.5 px-2 w-32">
@@ -336,6 +441,13 @@ export const PostedCorrectionEditor: FC<{
                           }`}
                           placeholder="0.00"
                         />
+                      </td>
+                      {/* D-S85-17: carried from the entry's line, shown, not edited. */}
+                      <td className="py-1.5 px-2 min-w-[8rem] pt-3 text-xs text-white/60">
+                        {l.description || '—'}
+                      </td>
+                      <td className="py-1.5 px-2 w-16 pt-3 text-xs text-white/60">
+                        {l.tax_code || '—'}
                       </td>
                       <td className="py-1.5 pl-2 text-right">
                         <button
@@ -365,40 +477,37 @@ export const PostedCorrectionEditor: FC<{
               {allValid && balanced && !differs && (
                 <span className="text-amber-200/70">Identical to the original — nothing to correct.</span>
               )}
+              {anyInactive && (
+                <span className="text-amber-200/70">
+                  A line uses an inactive account — choose an active account to post.
+                </span>
+              )}
             </div>
           </div>
-
-          {error &&
-            (error.status === 404 ? (
-              <EmptyState
-                title="Not found"
-                description="This entry is not on a client assigned to you, or it no longer exists."
-              />
-            ) : (
-              <ErrorBanner message={error.detail} />
-            ))}
-
-          <div className="flex items-center gap-3">
-            <span title={statusTitle}>
-              <PrimaryButton
-                onClick={() => setConfirming(true)}
-                disabled={!canSubmit}
-                busy={submitting}
-              >
-                Post correction
-              </PrimaryButton>
-            </span>
-            <SecondaryButton onClick={onClose} disabled={submitting}>
-              Cancel
-            </SecondaryButton>
-          </div>
         </>
+      )}
+
+      {(row || detail?.kind === 'error') && (
+        <div className="flex items-center gap-3">
+          {isLive && (
+            <PrimaryButton
+              onClick={() => setConfirming(true)}
+              disabled={!canSubmit}
+              busy={submitting}
+            >
+              Post correction
+            </PrimaryButton>
+          )}
+          <SecondaryButton onClick={onClose} disabled={submitting}>
+            {isLive ? 'Cancel' : 'Close'}
+          </SecondaryButton>
+        </div>
       )}
 
       {confirming && (
         <ConfirmModal title="Post correction?" onClose={() => !submitting && setConfirming(false)}>
           <p className="text-sm text-white/70">
-            This reverses {entryLabel} and posts a replacement. Cannot be undone.
+            Posts one new entry that corrects {entryLabel}. Audited; cannot be undone.
           </p>
           <div className="mt-5 flex justify-end gap-2">
             <SecondaryButton onClick={() => setConfirming(false)} disabled={submitting}>

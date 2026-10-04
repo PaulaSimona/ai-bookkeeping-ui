@@ -465,7 +465,7 @@ export const CardsPage: FC = () => {
   };
 
   // Redirect members without accounting access — same structural pattern as
-  // DocumentsPage/AccountingReview (effect, never a navigate() during render).
+  // DocumentsPage (effect, never a navigate() during render).
   useEffect(() => {
     if (!orgLoading && !canView) navigate('/dashboard', { replace: true });
   }, [orgLoading, canView, navigate]);

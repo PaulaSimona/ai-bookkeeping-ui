@@ -1,43 +1,302 @@
-// entryDisplayStatus (F-S71-2, O-S71-3, O-S73-2) — the ONE place a journal
-// entry's status column is turned into the status a person should see.
+// entryStatus — the ONE place a ledger entry's registry fields are turned into
+// what a person sees and what they may do (S84 CW5 registry, D-S84-4 / D-S84-5,
+// D-S85-13).
 //
-// Why a derivation: the ledger engine never mutates a reversed original — it
-// stays status='posted' and reversed_by_entry is the only marker (backend
-// O-S71-2). Reading row.status alone therefore renders "Posted" for an entry
-// that has been offset, and the "Reversed" branches every renderer already
-// carries never fire. This helper closes that gap without any backend status
-// mutation, using the linkage the API ships on every lane (O-S73-1).
+// A posted entry is never edited. What changes is which entry of its chain is
+// LIVE — the one the books currently stand on. The backend resolves that for
+// every entry it lists or returns (accounting/ledger_chain.py resolve_chains)
+// and ships it on every lane as six fields; nothing here re-derives a chain.
 //
-// Precedence (O-S71-3):
-//   1. needs_review          → 'needs_review'   (the queue badge always wins)
-//   2. reversed_by_entry_id  → 'reversed'       (posted-but-offset original)
-//   3. otherwise             → row.status as sent (draft / posted / replaced /
-//                              voided / anything future — passed through)
+//   display_status   reversal | corrected | reversed | posted (an unposted
+//                    entry, which only a detail read returns, shows its own
+//                    status)
+//   corrected_by     {id, number} of the entry that corrected it, or null
+//   live_entry       {id, number} of the chain's live entry, or null
+//   chain_root       {id, number} of the chain's original
+//   chain            every member, in entry-number order
+//   chain_truncated  true when the chain is deeper than the server walks
 //
-// Structurally typed on purpose: LedgerEntryRow, AccountantLedgerRow (no
-// needs_review) and ReviewEntry (no link fields) all satisfy it unchanged.
-// Pure; no I/O; the backend stays authoritative for the underlying column.
+// needs_review is NOT read here any more: the ledger lists show posted entries
+// only, and a review flag on one must never surface as a label (the R6 gap).
+// Pure; no I/O.
 
-export type EntryDisplayStatus =
-  | 'needs_review'
-  | 'reversed'
-  | 'draft'
-  | 'posted'
-  | 'replaced'
-  | 'voided'
-  | (string & NonNullable<unknown>); // future/unknown column values pass through untouched
-
-export interface EntryStatusSource {
-  status: string;
-  needs_review?: boolean;
-  reversed_by_entry_id?: string | null;
+export interface EntryRef {
+  id: string;
+  number: string | null; // the display number, e.g. "JE-0068"
 }
 
-export const entryDisplayStatus = (row: EntryStatusSource): EntryDisplayStatus => {
-  if (row.needs_review) return 'needs_review';
-  if (row.reversed_by_entry_id != null) return 'reversed';
-  return row.status;
+export type ChainRole = 'original' | 'correction' | 'reversal' | 'restore';
+
+export interface ChainMember {
+  id: string;
+  number: string | null;
+  date: string; // YYYY-MM-DD
+  role: ChainRole | (string & NonNullable<unknown>);
+  display_status: string;
+}
+
+// Optional on purpose: the write endpoints answer with the plain entry shape
+// (no chain), and older fixtures carry none. A row without them is never
+// treated as live.
+export interface RegistryFields {
+  display_status?: string;
+  corrected_by?: EntryRef | null;
+  live_entry?: EntryRef | null;
+  chain_root?: EntryRef | null;
+  chain?: ChainMember[];
+  chain_truncated?: boolean;
+}
+
+export type EntryDisplayStatus =
+  | 'posted'
+  | 'corrected'
+  | 'reversed'
+  | 'reversal'
+  | 'draft'
+  | 'replaced'
+  | 'voided'
+  | (string & NonNullable<unknown>); // future/unknown values pass through untouched
+
+export interface EntryStatusSource extends RegistryFields {
+  status: string;
+  // Accepted and ignored — see the header. Kept on the type so every row
+  // shape still satisfies it.
+  needs_review?: boolean;
+}
+
+// The status a person should see: the server's display_status, else (a payload
+// without registry fields) the entry's own status column.
+export const entryDisplayStatus = (row: EntryStatusSource): EntryDisplayStatus =>
+  row.display_status ?? row.status;
+
+const STATUS_LABELS: Record<string, string> = {
+  posted: 'Posted',
+  corrected: 'Corrected',
+  reversed: 'Reversed',
+  reversal: 'Reversal',
+  draft: 'Draft',
+  replaced: 'Replaced',
+  voided: 'Voided',
 };
+
+// "Posted" / "Corrected" / "Reversed" / "Reversal"; any other value humanized.
+export const entryStatusLabel = (row: EntryStatusSource): string => {
+  // A payload with neither field (a malformed read) labels as "—", never a throw.
+  const status = String(entryDisplayStatus(row) ?? '');
+  if (STATUS_LABELS[status]) return STATUS_LABELS[status];
+  const text = status.replace(/_/g, ' ').trim();
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : '—';
+};
+
+// ─── Registry filter (D-S84-4) ─────────────────────────────────────────────────
+// The ONE option list every ledger's status filter offers. `value` is the
+// ?status= the list endpoints accept (ledger_chain.registry_entries); any other
+// value — 'draft' and 'replaced' included — is a 400 there.
+//
+//   Posted            the list's default: posted entries that are not reversal
+//                     entries. Sends NO status at all.
+//   Live              of those, the ones the books stand on
+//   Corrected         of those, the ones a posted entry has corrected
+//   Reversed          of those, the ones reversed and not restored
+//   Reversal entries  the reversal entries only
+//   All               every posted entry, reversal entries included
+
+export interface RegistryStatusOption {
+  value: string;
+  label: string;
+}
+
+export const REGISTRY_STATUS_OPTIONS: RegistryStatusOption[] = [
+  { value: '', label: 'Posted' },
+  { value: 'live', label: 'Live' },
+  { value: 'corrected', label: 'Corrected' },
+  { value: 'reversed', label: 'Reversed' },
+  { value: 'reversals', label: 'Reversal entries' },
+  { value: 'all', label: 'All' },
+];
+
+// ─── Entry kind ────────────────────────────────────────────────────────────────
+
+export type EntryKind = 'live' | 'corrected' | 'reversed' | 'reversal' | 'other';
+
+export interface EntryKindSource extends RegistryFields {
+  id: string;
+}
+
+// What an entry IS within its chain.
+//   live       posted, and the chain's live entry is this very entry
+//   corrected  a later posted entry corrected it
+//   reversed   reversed and not restored
+//   reversal   a reversal entry
+//   other      anything else: unposted, no registry fields, or posted but not
+//              the live entry (a chain cut short by the server's depth cap)
+export const entryKind = (row: EntryKindSource): EntryKind => {
+  switch (row.display_status) {
+    case 'reversal':
+      return 'reversal';
+    case 'corrected':
+      return 'corrected';
+    case 'reversed':
+      return 'reversed';
+    case 'posted':
+      return row.live_entry != null && row.live_entry.id === row.id ? 'live' : 'other';
+    default:
+      return 'other';
+  }
+};
+
+export const isLiveEntry = (row: EntryKindSource): boolean => entryKind(row) === 'live';
+
+// ─── Allowed actions (D-S85-13) ────────────────────────────────────────────────
+// Every write, in every lane, is offered on the LIVE entry only. A non-live
+// entry shows its status and a link to the live entry instead. Conditions that
+// are about something other than the chain (the owner's entry already has a
+// counterparty; only its author may void an adjustment) stay with the screen.
+
+export type Lane = 'owner' | 'staff' | 'accountant';
+
+export type EntryAction =
+  | 'assign_counterparty'
+  | 'correct'
+  | 'change_counterparty'
+  | 'reverse'
+  | 'merge'
+  | 'attach_document'
+  | 'adjust'
+  | 'void';
+
+const LANE_ACTIONS: Record<Lane, EntryAction[]> = {
+  owner: ['assign_counterparty'],
+  staff: ['correct', 'change_counterparty', 'reverse', 'merge', 'attach_document'],
+  accountant: ['adjust', 'void'],
+};
+
+export const allowedActions = (lane: Lane, row: EntryKindSource): EntryAction[] =>
+  isLiveEntry(row) ? [...LANE_ACTIONS[lane]] : [];
+
+export const canAct = (lane: Lane, row: EntryKindSource, action: EntryAction): boolean =>
+  allowedActions(lane, row).includes(action);
+
+// ─── Link labels ───────────────────────────────────────────────────────────────
+
+export interface EntryLinkSource extends EntryKindSource {
+  reverses_entry_number_display?: string | null;
+  reversed_by_entry_number_display?: string | null;
+}
+
+// "Corrected by JE-0102" / "Reversed by JE-0103" / "Reversal of JE-0068"; null
+// for a live entry and for anything that is not part of such a link.
+export const entryLinkLabel = (row: EntryLinkSource): string | null => {
+  switch (entryKind(row)) {
+    case 'corrected':
+      return `Corrected by ${row.corrected_by?.number ?? 'a later entry'}`;
+    case 'reversed':
+      return `Reversed by ${row.reversed_by_entry_number_display ?? 'a reversal entry'}`;
+    case 'reversal':
+      return `Reversal of ${row.reverses_entry_number_display ?? 'an earlier entry'}`;
+    default:
+      return null;
+  }
+};
+
+// The live entry to link to from a non-live one; null when the entry IS the
+// live entry or the chain has none (reversed and not restored).
+export const liveEntryLink = (row: EntryKindSource): EntryRef | null =>
+  row.live_entry != null && row.live_entry.id !== row.id ? row.live_entry : null;
+
+// What a non-live entry says where its actions would be (D-S85-13): how it is
+// linked, and where changes are made instead. null for the live entry, and for
+// an entry with nothing to say (no registry fields; an unposted entry).
+export const nonLiveNote = (row: EntryLinkSource): string | null => {
+  if (isLiveEntry(row)) return null;
+  const parts: string[] = [];
+  const label = entryLinkLabel(row);
+  if (label) parts.push(`${label}.`);
+  const live = liveEntryLink(row);
+  if (live) {
+    parts.push(`Changes are made on the live entry${live.number ? `, ${live.number}` : ''}.`);
+  }
+  return parts.length > 0 ? parts.join(' ') : null;
+};
+
+// ─── Effective lines and totals (D-S84-10, D-S85-18) ───────────────────────────
+// Every line of an entry read carries reverses_line_id: the id of the line it
+// REVERSES, or null. A one-entry correction holds two sets of lines — the ones
+// reversing the entry it corrects, then its corrected lines — and only the
+// lines that reverse nothing are the entry's own content. Those are the lines a
+// further correction starts from, and their debits are the total the entry
+// stands for.
+
+export interface EntryLineAmounts {
+  debit: string | null;
+  credit: string | null;
+  reverses_line_id?: string | null;
+}
+
+// A line that reverses another line.
+export const isReversingLine = (line: { reverses_line_id?: string | null }): boolean =>
+  typeof line.reverses_line_id === 'string' && line.reverses_line_id !== '';
+
+// A line KNOWN to reverse nothing: reverses_line_id is null. A read that does
+// not carry the field (undefined) says nothing either way, so such a line is
+// neither reversing nor known to be the entry's own — never assumed.
+export const isOwnLine = (line: { reverses_line_id?: string | null }): boolean =>
+  line.reverses_line_id === null;
+
+export interface EntryTotalsSource {
+  total_debits?: string | null;
+  total_credits?: string | null;
+  lines?: EntryLineAmounts[] | null;
+}
+
+const MONEY_RE = /^(\d+)(?:\.(\d{1,2}))?$/;
+
+// "100.5" → 10050 (integer cents, exact); '' / null → 0; anything else → null.
+const moneyToCents = (value: string | null | undefined): number | null => {
+  if (value == null || value === '') return 0;
+  const match = MONEY_RE.exec(String(value).trim());
+  if (!match) return null;
+  const cents = Number(match[1]) * 100 + Number((match[2] ?? '').padEnd(2, '0') || '0');
+  return Number.isSafeInteger(cents) ? cents : null;
+};
+
+const centsToMoney = (cents: number): string =>
+  `${Math.floor(cents / 100)}.${String(cents % 100).padStart(2, '0')}`;
+
+// The totals an entry is shown with. An entry with BOTH reversing and
+// non-reversing lines shows the totals of its non-reversing lines; every other
+// entry — an ordinary one, a reversal entry (all lines reversing), a row whose
+// lines are not loaded — keeps the totals the server sent. `effective` says
+// which of the two it is. Display only: summed in integer cents, never floats,
+// and any amount that does not parse leaves the served totals in place.
+export const effectiveTotals = (
+  entry: EntryTotalsSource,
+): { debits: string | null; credits: string | null; effective: boolean } => {
+  const served = {
+    debits: entry.total_debits ?? null,
+    credits: entry.total_credits ?? null,
+    effective: false,
+  };
+  const lines = entry.lines ?? [];
+  const own = lines.filter((line) => !isReversingLine(line));
+  if (own.length === 0 || own.length === lines.length) return served;
+
+  let debits = 0;
+  let credits = 0;
+  for (const line of own) {
+    const debit = moneyToCents(line.debit);
+    const credit = moneyToCents(line.credit);
+    if (debit === null || credit === null) return served;
+    debits += debit;
+    credits += credit;
+  }
+  if (!Number.isSafeInteger(debits) || !Number.isSafeInteger(credits)) return served;
+  return { debits: centsToMoney(debits), credits: centsToMoney(credits), effective: true };
+};
+
+// The one figure an entry "is for": the debit total of its own lines.
+export const effectiveTotal = (entry: EntryTotalsSource): string | null =>
+  effectiveTotals(entry).debits;
 
 // "JE-0071" for 71 — mirrors the backend's _format_entry_number (ledger_serializers.py)
 // for the rare caller that has only the integer. Prefer the API's *_number_display

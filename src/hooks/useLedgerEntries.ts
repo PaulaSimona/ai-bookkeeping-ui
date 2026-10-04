@@ -5,6 +5,7 @@
 // ?tab= (present-but-empty is invalid), so we never send blank values.
 import { usePaginatedList } from '@/hooks/usePaginatedList';
 import api from '@/utils/api';
+import { type RegistryFields } from '@/utils/entryStatus';
 
 export type LedgerTab = 'revenue' | 'expenses' | 'payable' | 'receivable' | 'cash';
 
@@ -28,10 +29,17 @@ export interface LedgerEntryLine {
   description: string;
   tax_code: string;
   line_order: number;
+  // The id of the line this one REVERSES, or null (S84 CW7, D-S85-18). Set on
+  // the reversing half of a one-entry correction and on every line of a
+  // reversal entry. Read-only: never sent back.
+  reverses_line_id: string | null;
 }
 
 // Typed per JournalEntrySerializer (the C2 read contract, incl. needs_review).
-export interface LedgerEntryRow {
+// The registry fields (display_status, corrected_by, live_entry, chain_root,
+// chain, chain_truncated — S84 CW5) come from RegistryFields: every list row
+// and detail read carries them; the plain entry a write returns does not.
+export interface LedgerEntryRow extends RegistryFields {
   id: string;
   entry_number: number | null;
   entry_number_display: string | null;

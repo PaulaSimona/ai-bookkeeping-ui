@@ -23,6 +23,7 @@ import {
 } from '@/hooks/useReports';
 import { type ExportUrlBuilder, KIND_PATH } from '@/hooks/useReportExport';
 import { type EntryState } from '@/components/ledger/LedgerTable';
+import { toLedgerRow } from '@/views/accountant/hooks/useAccountantLedger';
 
 const STAFF_ORG = (orgId: string) => `/api/accounting/staff/orgs/${encodeURIComponent(orgId)}`;
 
@@ -109,9 +110,9 @@ export const staffExportUrl = (orgId: string): ExportUrlBuilder => (kind, code) 
     : `${STAFF_ORG(orgId)}/reports/${KIND_PATH[kind]}/export/`;
 
 // ─── Entry detail for the drawer (F-S69-5) ───────────────────────────────────
-// GET /api/accounting/staff/entries/<id>/ serializes the SAME
-// JournalEntrySerializer as the owner detail, so the mapping onto the drawer's
-// row type is the owner page's mapping, unchanged.
+// GET /api/accounting/staff/entries/<id>/ serializes the SAME registry payload
+// as the owner detail (S84 CW5), so the mapping onto the drawer's row type is
+// the one shared mapper.
 
 // Returns the drawer state plus a `refetch` so a staff write can re-read the
 // entry (S69 E8 immediate-reflection rule: refetch, never mutate locally).
@@ -128,44 +129,11 @@ export const useStaffEntryDetail = (
     api.get(`/api/accounting/staff/entries/${encodeURIComponent(entryId)}/`).then((res) => {
       if (cancelled) return;
       if (res?.status === 200 && res.data) {
-        const d = res.data;
-        setState({
-          kind: 'ready',
-          row: {
-            id: d.id,
-            entry_number_display: d.entry_number_display ?? null,
-            entry_date: d.entry_date,
-            description: d.description ?? '',
-            source: d.source,
-            status: d.status,
-            created_by: d.created_by,
-            voided_at: d.voided_at ?? null,
-            voided_by: d.voided_by ?? null,
-            void_reason: d.void_reason ?? '',
-            source_document_id: d.source_document_id ?? null,
-            total_debits: d.total_debits,
-            total_credits: d.total_credits,
-            // F-S71-2 / O-S71-6: reversal + correction linkage (UUID-string ids
-            // and their "JE-nnnn" display twins, O-S73-1) — drives the drawer's
-            // derived "Reversed" label and the staff Correct guard.
-            reverses_entry_id: d.reverses_entry_id ?? null,
-            reversed_by_entry_id: d.reversed_by_entry_id ?? null,
-            corrects_entry_id: d.corrects_entry_id ?? null,
-            reverses_entry_number_display: d.reverses_entry_number_display ?? null,
-            reversed_by_entry_number_display: d.reversed_by_entry_number_display ?? null,
-            corrects_entry_number_display: d.corrects_entry_number_display ?? null,
-            lines: (d.lines ?? []).map((l: any) => ({
-              id: l.id,
-              account_id: l.account_id,
-              account_code: l.account_code ?? null,
-              account_name: l.account_name ?? null,
-              debit: l.debit ?? null,
-              credit: l.credit ?? null,
-              description: l.description ?? '',
-              line_order: l.line_order,
-            })),
-          },
-        });
+        // The shared mapper (toLedgerRow) carries the linkage AND the six
+        // registry fields (display_status, corrected_by, live_entry,
+        // chain_root, chain, chain_truncated) — the staff Correct guard and
+        // the chain panel read them from here.
+        setState({ kind: 'ready', row: toLedgerRow(res.data) });
       } else {
         setState({ kind: 'error', message: res?.data?.detail ?? 'Could not load this entry.' });
       }

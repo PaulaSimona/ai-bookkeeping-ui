@@ -1,11 +1,16 @@
 import { type FC, Fragment, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useStaffOrgEntries } from '@/hooks/useStaffResolution';
-import { type LedgerEntryRow } from '@/hooks/useLedgerEntries';
-// S69 E8 fence 4a (F-S69-9): the expanded row's counterparty control is the
-// shared StaffEntryActions panel (replace / clear / reason, confirm on clear,
-// refetch on success) — the same implementation the staff account ledger uses.
-import { StaffEntryActions } from '@/components/internal/StaffEntryActions';
+import { useStaffEntryDetail } from '@/hooks/useStaffReports';
+// S69 E8 fence 4a (F-S69-9): the expanded row's staff writes are the shared
+// StaffEntryActions panel — the same implementation the staff account ledger
+// uses. Offered on the chain's LIVE entry only (D-S85-13).
+import {
+  MergeEditor,
+  StaffEntryActions,
+  type MergeParty,
+} from '@/components/internal/StaffEntryActions';
+import { EntryChain } from '@/components/ledger/EntryChain';
 import {
   PageContainer,
   SectionCard,
@@ -13,22 +18,141 @@ import {
   CenteredSpinner,
   EmptyState,
   ErrorBanner,
+  Toast,
   formatMoney,
-  humanizeCode,
+  useToast,
 } from '@/components/internal/ui';
-import { entryDisplayStatus } from '@/utils/entryStatus';
+import {
+  REGISTRY_STATUS_OPTIONS,
+  effectiveTotal,
+  effectiveTotals,
+  entryDisplayStatus,
+  entryStatusLabel,
+  formatEntryNumber,
+  isLiveEntry,
+  nonLiveNote,
+  type EntryLinkSource,
+  type EntryRef,
+} from '@/utils/entryStatus';
 
-const STATUS_FILTERS = ['', 'draft', 'posted', 'reversed', 'replaced'];
-
+// The list is posted entries only (D-S84-4): Posted, Corrected, Reversed or
+// Reversal — never a draft, a replaced draft or a review flag.
 const statusTone = (s: string): 'success' | 'warning' | 'neutral' | 'danger' => {
   if (s === 'posted') return 'success';
-  if (s === 'draft') return 'warning';
-  if (s === 'reversed' || s === 'voided') return 'danger';
+  if (s === 'reversed') return 'danger';
   return 'neutral';
 };
 
-const entryNo = (e: LedgerEntryRow): string =>
-  e.entry_number_display || (e.entry_number != null ? String(e.entry_number) : '—');
+const entryNo = (e: { entry_number_display?: string | null; entry_number?: number | null }): string =>
+  e.entry_number_display || formatEntryNumber(e.entry_number) || '—';
+
+// What the expanded panel renders from: a list row, or — after "Open JE-xxxx"
+// in the chain panel — the entry read by id from the staff detail endpoint.
+// Both shapes satisfy it.
+interface PanelLine {
+  id: string;
+  account_code: string | null;
+  account_name: string | null;
+  debit: string | null;
+  credit: string | null;
+  description?: string;
+  reverses_line_id?: string | null;
+}
+
+interface PanelEntry extends EntryLinkSource {
+  status: string;
+  entry_number?: number | null;
+  entry_number_display?: string | null;
+  counterparty?: { id: string; name: string } | null;
+  total_debits?: string | null;
+  total_credits?: string | null;
+  lines: PanelLine[];
+}
+
+// Whether an entry came with its lines — its effective total needs them.
+const hasLines = (e: PanelEntry): boolean => Array.isArray(e.lines) && e.lines.length > 0;
+
+// One side of a merge, as the confirm names it: the number and the EFFECTIVE
+// total (D-S85-18) — a correction's corrected lines, any other entry's own
+// total. Shown only: the merge is never blocked on it; the server's
+// amount_mismatch decides.
+const mergeParty = (e: PanelEntry): MergeParty => ({
+  id: e.id,
+  number: entryNo(e),
+  total: effectiveTotal(e),
+});
+
+// The expanded panel of one entry (O-S84-1, D-S85-13): its lines, its chain
+// with "Open JE-xxxx" for the live entry, and — on the chain's LIVE entry only
+// — the staff writes. Any other entry says how it is linked and where changes
+// are made instead.
+const EntryPanel: FC<{
+  orgId: string;
+  entry: PanelEntry;
+  onChanged: () => void;
+  onOpenEntry: (ref: EntryRef) => void;
+  onStartMerge: (duplicate: MergeParty) => void;
+  notify: (message: string, type: 'success' | 'error') => void;
+}> = ({ orgId, entry, onChanged, onOpenEntry, onStartMerge, notify }) => {
+  const note = nonLiveNote(entry);
+  return (
+    <div className="space-y-3">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-[11px] uppercase tracking-wide text-white/30">
+              <th className="py-1 pr-3 font-medium">Code</th>
+              <th className="py-1 pr-3 font-medium">Account</th>
+              <th className="py-1 px-3 font-medium text-right">Debit</th>
+              <th className="py-1 px-3 font-medium text-right">Credit</th>
+              <th className="py-1 pl-3 font-medium">Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            {entry.lines.map((l) => (
+              <tr key={l.id} className="border-t border-white/5">
+                <td className="py-1 pr-3 font-mono text-white/70">{l.account_code ?? '—'}</td>
+                <td className="py-1 pr-3 text-white/70">{l.account_name ?? '—'}</td>
+                <td className="py-1 px-3 text-right text-white/80">{formatMoney(l.debit)}</td>
+                <td className="py-1 px-3 text-right text-white/80">{formatMoney(l.credit)}</td>
+                <td className="py-1 pl-3 text-white/60">{l.description || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <EntryChain
+        tone="dark"
+        chain={entry.chain}
+        currentId={entry.id}
+        liveEntry={entry.live_entry}
+        truncated={entry.chain_truncated}
+        onOpenEntry={onOpenEntry}
+      />
+
+      {isLiveEntry(entry) ? (
+        // Correct the entry or change its counterparty — each behind its own
+        // button. The panel's own counterparty is the "current"; a save
+        // refetches — no local mutation.
+        <StaffEntryActions
+          orgId={orgId}
+          entry={{
+            ...entry,
+            entry_number: entry.entry_number ?? null,
+            counterparty: entry.counterparty ?? null,
+          }}
+          onChanged={onChanged}
+          onOpenEntry={onOpenEntry}
+          onStartMerge={() => onStartMerge(mergeParty(entry))}
+          notify={notify}
+        />
+      ) : (
+        note && <p className="text-xs text-amber-200/80">{note}</p>
+      )}
+    </div>
+  );
+};
 
 export const InternalClientEntries: FC = () => {
   const { orgId = '' } = useParams();
@@ -38,7 +162,61 @@ export const InternalClientEntries: FC = () => {
     orgId,
     { status: status || undefined, unattributed },
   );
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedId, setExpandedRowId] = useState<string | null>(null);
+  // "Open JE-xxxx" in the chain panel re-targets the expanded panel: it then
+  // shows that entry, read by id from the staff detail endpoint (O-S84-1).
+  // Expanding or collapsing a row goes back to the row's own entry.
+  const [targetId, setTargetId] = useState<string | null>(null);
+  const { entry: target, refetch: refetchTarget } = useStaffEntryDetail(targetId);
+  const setExpandedId = (id: string | null) => { setExpandedRowId(id); setTargetId(null); };
+  // Immediate reflection: a staff write re-reads the page and the open entry.
+  const onEntryChanged = () => { refetch(); refetchTarget(); };
+  // The page's toast: a save reloads the list, which unmounts the entry's
+  // panel, so the confirmation lives here.
+  const { toast, showToast } = useToast();
+
+  // Merge pick mode (D-S85-14): "Merge into…" on a duplicate's panel starts
+  // it; while it is on, clicking a row picks the surviving entry instead of
+  // expanding it. Only another LIVE entry can be picked — the server refuses
+  // anything else.
+  // `survivorNeedsLines`: the picked row came without its lines, so its
+  // effective total is read from the entry's detail (below).
+  const [merge, setMerge] = useState<{
+    duplicate: MergeParty;
+    survivor: MergeParty | null;
+    survivorNeedsLines: boolean;
+  } | null>(null);
+  const { entry: survivorDetail } = useStaffEntryDetail(
+    merge?.survivor && merge.survivorNeedsLines ? merge.survivor.id : null,
+  );
+  // The survivor as the confirm shows it. Read by id when its row had no
+  // lines; until that read lands the row's own total stands in.
+  const mergeSurvivor: MergeParty | null =
+    merge?.survivor &&
+    merge.survivorNeedsLines &&
+    survivorDetail?.kind === 'ready' &&
+    survivorDetail.row.id === merge.survivor.id
+      ? { ...merge.survivor, total: effectiveTotal(survivorDetail.row) }
+      : merge?.survivor ?? null;
+  const startMerge = (duplicate: MergeParty) => {
+    setMerge({ duplicate, survivor: null, survivorNeedsLines: false });
+    setExpandedId(null);
+  };
+  const canSurvive = (e: PanelEntry): boolean =>
+    merge !== null && e.id !== merge.duplicate.id && isLiveEntry(e);
+  const onMerged = (summary: string) => {
+    showToast(summary, 'success');
+    setMerge(null);
+    onEntryChanged();
+  };
+  // A merge refusal can name another entry (the ITC adjustment that blocks
+  // it): leave pick mode and show that entry in the duplicate's panel.
+  const openFromMerge = (ref: EntryRef) => {
+    if (!merge) return;
+    setExpandedRowId(merge.duplicate.id);
+    setTargetId(ref.id);
+    setMerge(null);
+  };
 
   const totalPages = Math.max(1, Math.ceil(count / pageSize));
 
@@ -62,12 +240,16 @@ export const InternalClientEntries: FC = () => {
           onChange={(e) => {
             setStatus(e.target.value);
             setPage(1);
+            setExpandedId(null);
           }}
+          aria-label="Filter by status"
           className="rounded-lg bg-[#0A1628] border border-white/15 px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#0066FF]"
         >
-          {STATUS_FILTERS.map((s) => (
-            <option key={s || 'all'} value={s}>
-              {s ? humanizeCode(s) : 'All statuses'}
+          {/* The shared registry options (D-S84-4). "Posted" is the list's
+              default and sends no status. */}
+          {REGISTRY_STATUS_OPTIONS.map((o) => (
+            <option key={o.value || 'posted'} value={o.value}>
+              {o.label}
             </option>
           ))}
         </select>
@@ -85,6 +267,16 @@ export const InternalClientEntries: FC = () => {
       </div>
 
       {error && <ErrorBanner message={error} onRetry={refetch} />}
+
+      {merge && (
+        <MergeEditor
+          duplicate={merge.duplicate}
+          survivor={mergeSurvivor}
+          onCancel={() => setMerge(null)}
+          onMerged={onMerged}
+          onOpenEntry={openFromMerge}
+        />
+      )}
 
       {isLoading ? (
         <SectionCard>
@@ -112,24 +304,42 @@ export const InternalClientEntries: FC = () => {
               <tbody>
                 {items.map((e) => {
                   const expanded = expandedId === e.id;
+                  // Pick mode: a click picks the survivor; the duplicate and
+                  // any entry that is not live cannot be picked.
+                  const pickable = canSurvive(e);
+                  const picked = merge?.survivor?.id === e.id;
+                  // D-S85-18: a correction is totalled on its corrected
+                  // lines; any other entry keeps the served totals.
+                  const totals = effectiveTotals(e);
+                  const rowCls = merge
+                    ? `${pickable ? 'cursor-pointer hover:bg-[#0066FF]/10' : 'opacity-40'} ${
+                        picked ? 'bg-[#0066FF]/20' : ''
+                      }`
+                    : 'cursor-pointer hover:bg-white/5';
                   return (
                     <Fragment key={e.id}>
                       <tr
-                        onClick={() => setExpandedId(expanded ? null : e.id)}
-                        className="border-b border-white/5 cursor-pointer hover:bg-white/5 transition-colors align-top"
+                        onClick={() => {
+                          if (!merge) setExpandedId(expanded ? null : e.id);
+                          else if (pickable) {
+                            setMerge({ ...merge, survivor: mergeParty(e), survivorNeedsLines: !hasLines(e) });
+                          }
+                        }}
+                        aria-selected={merge ? picked : undefined}
+                        className={`border-b border-white/5 transition-colors align-top ${rowCls}`}
                       >
                         <td className="py-2.5 px-5 text-white/70 whitespace-nowrap">{e.entry_date}</td>
                         <td className="py-2.5 px-3 text-white/60">{entryNo(e)}</td>
                         <td className="py-2.5 px-3 text-white/90 max-w-[16rem] truncate">
                           {e.description || '—'}
                         </td>
-                        <td className="py-2.5 px-3 text-right text-white/80">{formatMoney(e.total_debits)}</td>
-                        <td className="py-2.5 px-3 text-right text-white/80">{formatMoney(e.total_credits)}</td>
+                        <td className="py-2.5 px-3 text-right text-white/80">{formatMoney(totals.debits)}</td>
+                        <td className="py-2.5 px-3 text-right text-white/80">{formatMoney(totals.credits)}</td>
                         <td className="py-2.5 px-3">
-                          {/* F-S71-2 / O-S71-3: derived status — a reversed
-                              original shows "Reversed", not "Posted". */}
+                          {/* The registry's display status (D-S84-4): Posted,
+                              Corrected, Reversed or Reversal. */}
                           <Pill tone={statusTone(entryDisplayStatus(e))}>
-                            {humanizeCode(entryDisplayStatus(e))}
+                            {entryStatusLabel(e)}
                           </Pill>
                         </td>
                         <td className="py-2.5 px-5">
@@ -143,37 +353,55 @@ export const InternalClientEntries: FC = () => {
                       {expanded && (
                         <tr className="border-b border-white/5 bg-white/[0.02]">
                           <td colSpan={7} className="px-5 py-3">
-                            <div className="space-y-3">
-                              <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
-                                  <thead>
-                                    <tr className="text-left text-[11px] uppercase tracking-wide text-white/30">
-                                      <th className="py-1 pr-3 font-medium">Code</th>
-                                      <th className="py-1 pr-3 font-medium">Account</th>
-                                      <th className="py-1 px-3 font-medium text-right">Debit</th>
-                                      <th className="py-1 px-3 font-medium text-right">Credit</th>
-                                      <th className="py-1 pl-3 font-medium">Description</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {e.lines.map((l) => (
-                                      <tr key={l.id} className="border-t border-white/5">
-                                        <td className="py-1 pr-3 font-mono text-white/70">{l.account_code ?? '—'}</td>
-                                        <td className="py-1 pr-3 text-white/70">{l.account_name ?? '—'}</td>
-                                        <td className="py-1 px-3 text-right text-white/80">{formatMoney(l.debit)}</td>
-                                        <td className="py-1 px-3 text-right text-white/80">{formatMoney(l.credit)}</td>
-                                        <td className="py-1 pl-3 text-white/60">{l.description || '—'}</td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
+                            {targetId === null ? (
+                              <EntryPanel
+                                orgId={orgId}
+                                entry={e}
+                                onChanged={onEntryChanged}
+                                onOpenEntry={(ref) => setTargetId(ref.id)}
+                                onStartMerge={startMerge}
+                                notify={showToast}
+                              />
+                            ) : (
+                              <div className="space-y-3">
+                                {/* Re-targeted: the panel shows another entry
+                                    of this row's chain. */}
+                                <div className="flex flex-wrap items-center gap-3 text-xs text-white/60">
+                                  {target?.kind === 'ready' && target.row.id === targetId ? (
+                                    <>
+                                      <span className="font-mono font-semibold text-white/90">
+                                        {entryNo(target.row)}
+                                      </span>
+                                      <span>{target.row.entry_date}</span>
+                                      <Pill tone={statusTone(entryDisplayStatus(target.row))}>
+                                        {entryStatusLabel(target.row)}
+                                      </Pill>
+                                    </>
+                                  ) : target?.kind === 'error' ? (
+                                    <span className="text-red-300">{target.message}</span>
+                                  ) : (
+                                    <span className="text-white/40">Loading entry…</span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => setTargetId(null)}
+                                    className="text-[#4DA6FF] underline underline-offset-2 hover:text-white"
+                                  >
+                                    Back to {entryNo(e)}
+                                  </button>
+                                </div>
+                                {target?.kind === 'ready' && target.row.id === targetId && (
+                                  <EntryPanel
+                                    orgId={orgId}
+                                    entry={target.row}
+                                    onChanged={onEntryChanged}
+                                    onOpenEntry={(ref) => setTargetId(ref.id)}
+                                    onStartMerge={startMerge}
+                                    notify={showToast}
+                                  />
+                                )}
                               </div>
-                              {/* Replace / clear on every expanded row, not only
-                                  unassigned ones (F-S69-9). The row's own
-                                  counterparty is the panel's "current"; a save
-                                  refetches the page — no local mutation. */}
-                              <StaffEntryActions orgId={orgId} entry={e} onChanged={refetch} />
-                            </div>
+                            )}
                           </td>
                         </tr>
                       )}
@@ -212,6 +440,8 @@ export const InternalClientEntries: FC = () => {
           </div>
         </div>
       )}
+
+      <Toast toast={toast} />
     </PageContainer>
   );
 };

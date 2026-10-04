@@ -1,9 +1,9 @@
 // Onboarding soft-gate (§14 14A-2 — rulings D1-as-amended, D-14A2-2, D-14A2-3).
 // Two-layer structure so Tier 1 users NEVER trigger the org fetch:
-//   - Outer OnboardingGate: Redux-only tier check, same flag derivation as
-//     RequireStaffOrSuperuser. Non-staff → children returned as-is: no hook
-//     mounts, no fetch, zero Tier 1 cost. Interim gate per D-14A2-2.
-//     TODO: swap to Tier 2 subscription check when Advanced plan is live
+//   - Outer OnboardingGate: Redux-only tier check on has_tier2, the same flag
+//     the RequireTier2 route guard reads (§21 gate swap, D-21-4). No Tier 2
+//     access → children returned as-is: no hook mounts, no fetch, zero Tier 1
+//     cost.
 //   - Inner gated layer: useOrgMe-driven banner + once-per-session redirect.
 //     Never a wall (D1): children render under ALL states — loading included —
 //     and uploads/every other page stay reachable after the single redirect.

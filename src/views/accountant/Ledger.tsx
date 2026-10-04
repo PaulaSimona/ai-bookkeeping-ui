@@ -10,15 +10,21 @@ import { useOrgContext } from '@/context/OrgContext';
 import { Card } from '@/components/t2/Card';
 import { PageHeader } from '@/components/t2/PageHeader';
 import { StatusBadge } from '@/components/t2/StatusBadge';
-import { FilterChip } from '@/components/t2/FilterChip';
 import {
   useAccountantLedger,
+  useEntryDetail,
   type AccountantLedgerRow,
 } from './hooks/useAccountantLedger';
 import { useAccountantChart } from './hooks/useAccountantChart';
 import { EntryDrawer } from '@/components/ledger/EntryDrawer';
 import { formatIsoDate } from '@/utils/dates';
-import { entryDisplayStatus } from '@/utils/entryStatus';
+import {
+  REGISTRY_STATUS_OPTIONS,
+  canAct,
+  effectiveTotal,
+  entryDisplayStatus,
+  entryStatusLabel,
+} from '@/utils/entryStatus';
 
 const CAD = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' });
 const fmtMoney = (v: string | null): string => (v == null || v === '' ? '' : CAD.format(Number(v)));
@@ -73,12 +79,16 @@ const Skeleton: FC = () => (
   </Card>
 );
 
+const selectCls =
+  'rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent transition';
+
 const LedgerInner: FC = () => {
   const { activeOrg } = useOrgContext();
-  // Show-voided filter (W-S25-6): default off (voided hidden). When on, the hook
-  // requests show_voided=true and drops status:'posted' so voided rows return.
-  const [showVoided, setShowVoided] = useState(false);
-  const { items, count, page, setPage, pageSize, isLoading, error, refetch } = useAccountantLedger(showVoided);
+  // Registry status filter (D-S84-4): '' is "Posted", the list's default, and
+  // sends no status. It replaces the old "Show voided" chip (D-S85-16) — the
+  // list is posted entries only, so a voided entry is never in it.
+  const [statusFilter, setStatusFilter] = useState('');
+  const { items, count, page, setPage, pageSize, isLoading, error, refetch } = useAccountantLedger(statusFilter);
   const { revenueExpenseIds } = useAccountantChart();
 
   const clientName = activeOrg?.org_name ?? 'This client';
@@ -94,8 +104,14 @@ const LedgerInner: FC = () => {
   // the row's "Adjust" action opens the drawer WITH the form expanded.
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [adjustOpen, setAdjustOpen] = useState(false);
+  // "Open JE-xxxx" in the drawer's chain panel re-targets the open drawer: it
+  // then shows that entry, read by id from the detail endpoint (O-S84-1).
+  // Toggling a row goes back to the row's own entry.
+  const [targetId, setTargetId] = useState<string | null>(null);
+  const { entry: target } = useEntryDetail(targetId);
 
   const toggleRow = (id: string) => {
+    setTargetId(null);
     if (expandedId === id) {
       setExpandedId(null);
       setAdjustOpen(false);
@@ -105,14 +121,26 @@ const LedgerInner: FC = () => {
     }
   };
   const openAdjust = (id: string) => {
+    setTargetId(null);
     setExpandedId(id);
     setAdjustOpen(true);
+  };
+  const openChainEntry = (id: string) => {
+    setTargetId(id);
+    setAdjustOpen(false);
+  };
+  const changeStatus = (value: string) => {
+    setStatusFilter(value);
+    setPage(1);
+    setExpandedId(null);
+    setTargetId(null);
   };
   // After a successful in-context post: collapse the drawer and refresh the list
   // so the new adjusting entry appears.
   const onPosted = () => {
     setExpandedId(null);
     setAdjustOpen(false);
+    setTargetId(null);
     refetch();
   };
 
@@ -123,12 +151,16 @@ const LedgerInner: FC = () => {
         subtitle={`${clientName} · already posted & clean. Post adjustments where needed.`}
         right={
           <div className="flex items-center gap-2">
-            <FilterChip
-              active={showVoided}
-              onClick={() => { setShowVoided((v) => !v); setPage(1); setExpandedId(null); }}
+            <select
+              value={statusFilter}
+              onChange={(e) => changeStatus(e.target.value)}
+              className={selectCls}
+              aria-label="Filter by status"
             >
-              Show voided
-            </FilterChip>
+              {REGISTRY_STATUS_OPTIONS.map((o) => (
+                <option key={o.value || 'posted'} value={o.value}>{o.label}</option>
+              ))}
+            </select>
             <NewAdjustmentButton />
           </div>
         }
@@ -150,7 +182,9 @@ const LedgerInner: FC = () => {
           </Card>
         ) : count === 0 ? (
           <Card padding className="text-center">
-            <p className="text-sm text-gray-500">No posted entries yet.</p>
+            <p className="text-sm text-gray-500">
+              {statusFilter ? 'No entries match this filter.' : 'No posted entries yet.'}
+            </p>
           </Card>
         ) : (
           <Card>
@@ -186,7 +220,9 @@ const LedgerInner: FC = () => {
                         {row.description}
                       </span>
                       <span className={`justify-self-end whitespace-nowrap text-[13.5px] text-gray-900 ${MONO} ${strike}`}>
-                        {fmtMoney(row.total_debits)}
+                        {/* D-S85-18: a correction is totalled on its corrected
+                            lines; any other entry keeps the served total. */}
+                        {fmtMoney(effectiveTotal(row))}
                       </span>
                       <span>
                         {voided ? (
@@ -194,16 +230,21 @@ const LedgerInner: FC = () => {
                         ) : (
                           <>
                             <StatusBadge variant="neutral">{humanizeSource(row.source)}</StatusBadge>
-                            {/* F-S71-2 / O-S71-3 (A3): a reversed original is
-                                flagged here too — info tone, as the drawer. */}
-                            {entryDisplayStatus(row) === 'reversed' && (
-                              <StatusBadge variant="info">Reversed</StatusBadge>
+                            {/* D-S84-4: an entry that is no longer plain
+                                "Posted" says what it is — Corrected, Reversed
+                                (info tone, as the drawer) or Reversal. */}
+                            {entryDisplayStatus(row) !== 'posted' && (
+                              <StatusBadge variant={entryDisplayStatus(row) === 'reversed' ? 'info' : 'neutral'}>
+                                {entryStatusLabel(row)}
+                              </StatusBadge>
                             )}
                           </>
                         )}
                       </span>
                       <span className="justify-self-end">
-                        {!voided && isRevenueExpense(row) ? (
+                        {/* D-S85-13: the shortcut is offered on the chain's
+                            live entry only. */}
+                        {!voided && isRevenueExpense(row) && canAct('accountant', row, 'adjust') ? (
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); openAdjust(row.id); }}
@@ -216,15 +257,36 @@ const LedgerInner: FC = () => {
                         )}
                       </span>
                     </div>
-                    {expandedId === row.id && (
+                    {expandedId === row.id && (targetId === null ? (
                       <EntryDrawer
+                        key={row.id}
                         row={row}
                         adjustOpen={adjustOpen}
                         onToggleAdjust={() => setAdjustOpen((v) => !v)}
                         onPosted={onPosted}
                         onVoided={refetch}
+                        onOpenEntry={(ref) => openChainEntry(ref.id)}
                       />
-                    )}
+                    ) : target?.kind === 'ready' && target.row.id === targetId ? (
+                      // Re-targeted: the same drawer, on the entry read by id.
+                      <EntryDrawer
+                        key={target.row.id}
+                        row={target.row}
+                        adjustOpen={adjustOpen}
+                        onToggleAdjust={() => setAdjustOpen((v) => !v)}
+                        onPosted={onPosted}
+                        onVoided={refetch}
+                        onOpenEntry={(ref) => openChainEntry(ref.id)}
+                      />
+                    ) : target?.kind === 'error' ? (
+                      <div className="border-b border-gray-100 bg-gray-50 px-5 py-3 text-[13px] text-red-600">
+                        {target.message}
+                      </div>
+                    ) : (
+                      <div className="border-b border-gray-100 bg-gray-50 px-5 py-4 text-[13px] text-gray-400">
+                        Loading entry…
+                      </div>
+                    ))}
                   </Fragment>
                 );
               })}

@@ -11,6 +11,7 @@ import {
   SectionCard,
   Pill,
   CenteredSpinner,
+  ConfirmModal,
   EmptyState,
   ErrorBanner,
   PrimaryButton,
@@ -21,6 +22,13 @@ import {
   formatAge,
   humanizeCode,
 } from '@/components/internal/ui';
+import { RemediationRefusalView } from '@/components/internal/StaffEntryActions';
+import {
+  REMEDIATION_REASON_MAX,
+  dismissDuplicateDocument,
+  remediationSummary,
+  type RemediationRefusal,
+} from '@/hooks/useStaffResolution';
 import { RejectCorrectEditor } from './RejectCorrectEditor';
 
 const confidencePct = (c: ReviewEntry['confidence']): string => {
@@ -33,7 +41,11 @@ const confidencePct = (c: ReviewEntry['confidence']): string => {
 const entryTitle = (e: ReviewEntry): string =>
   e.description?.trim() || e.entry_number || `Entry ${e.id.slice(0, 8)}`;
 
-type Mode = 'view' | 'confirmApprove' | 'reject';
+type Mode = 'view' | 'confirmApprove' | 'reject' | 'dismiss';
+
+const dismissFieldCls =
+  'w-full rounded-md bg-[#0f172a] border border-white/15 px-2 py-1.5 text-sm text-white ' +
+  'placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-[#0066FF]';
 
 const DetailPane: FC<{
   entry: ReviewEntry;
@@ -65,10 +77,37 @@ const DetailPane: FC<{
     const res = await rejectCorrect(entry.id, payload);
     setSubmitting(false);
     if (res.ok) {
-      notify('Correction posted; original replaced.', 'success');
+      notify('Entry posted with your corrections.', 'success');
       onResolved();
     } else {
       setErrorDetail(res.errorDetail ?? 'Reject & correct failed.');
+    }
+  };
+
+  // Dismiss duplicate (D-S84-7 / D-S85-14): offered on a draft whose document
+  // is flagged as a suspected duplicate. It rejects the DOCUMENT as a
+  // duplicate, which takes its draft out of the queue.
+  const flaggedDocumentId =
+    entry.suspected_duplicate_of_id != null ? entry.source_document_id : null;
+  const documentLabel = entry.source_document_name ?? `document ${entry.source_document_id ?? ''}`;
+  const suspectedLabel =
+    entry.suspected_duplicate_of_name ?? `document ${entry.suspected_duplicate_of_id ?? ''}`;
+  const [dismissReason, setDismissReason] = useState('');
+  const [confirmingDismiss, setConfirmingDismiss] = useState(false);
+  const [refusal, setRefusal] = useState<RemediationRefusal | null>(null);
+
+  const doDismiss = async () => {
+    if (flaggedDocumentId == null) return;
+    setSubmitting(true);
+    setRefusal(null);
+    const res = await dismissDuplicateDocument(flaggedDocumentId, dismissReason.trim());
+    setSubmitting(false);
+    setConfirmingDismiss(false);
+    if (res.ok) {
+      notify(remediationSummary(res.result), 'success');
+      onResolved();
+    } else {
+      setRefusal(res.refusal);
     }
   };
 
@@ -166,6 +205,30 @@ const DetailPane: FC<{
           </div>
         )}
 
+        {flaggedDocumentId != null && (
+          <div>
+            <div className="text-[11px] uppercase tracking-wide text-white/30 mb-1">
+              Suspected duplicate
+            </div>
+            <p className="text-sm text-amber-200/80">
+              This document may be a duplicate of{' '}
+              {entry.suspected_duplicate_of_url ? (
+                <a
+                  href={entry.suspected_duplicate_of_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[#4DA6FF] hover:text-white underline underline-offset-2"
+                >
+                  {suspectedLabel}
+                </a>
+              ) : (
+                suspectedLabel
+              )}
+              .
+            </p>
+          </div>
+        )}
+
         {errorDetail && mode !== 'reject' && (
           <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
             {errorDetail}
@@ -174,10 +237,71 @@ const DetailPane: FC<{
 
         {/* Actions */}
         {mode === 'view' && (
-          <div className="flex items-center gap-3 pt-1">
+          <div className="flex flex-wrap items-center gap-3 pt-1">
             <PrimaryButton onClick={() => setMode('confirmApprove')}>Approve</PrimaryButton>
             <SecondaryButton onClick={() => setMode('reject')}>Reject &amp; correct</SecondaryButton>
+            {flaggedDocumentId != null && (
+              <SecondaryButton tone="danger" onClick={() => setMode('dismiss')}>
+                Dismiss duplicate
+              </SecondaryButton>
+            )}
           </div>
+        )}
+
+        {mode === 'dismiss' && flaggedDocumentId != null && (
+          <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3 space-y-3">
+            <p className="text-sm text-white/80">
+              Dismiss {documentLabel} as a duplicate of {suspectedLabel}.
+            </p>
+            <input
+              value={dismissReason}
+              onChange={(e) => setDismissReason(e.target.value)}
+              maxLength={REMEDIATION_REASON_MAX}
+              placeholder="Reason (required)"
+              aria-label="Reason"
+              disabled={submitting}
+              className={dismissFieldCls}
+            />
+            {refusal && <RemediationRefusalView refusal={refusal} />}
+            <div className="flex items-center gap-3">
+              <PrimaryButton
+                onClick={() => setConfirmingDismiss(true)}
+                disabled={!dismissReason.trim() || submitting}
+                busy={submitting}
+              >
+                Dismiss duplicate
+              </PrimaryButton>
+              <SecondaryButton
+                onClick={() => {
+                  setRefusal(null);
+                  setMode('view');
+                }}
+                disabled={submitting}
+              >
+                Cancel
+              </SecondaryButton>
+            </div>
+          </div>
+        )}
+
+        {confirmingDismiss && (
+          <ConfirmModal
+            title="Dismiss duplicate document?"
+            onClose={() => !submitting && setConfirmingDismiss(false)}
+          >
+            <p className="text-sm text-white/70">
+              Rejects {documentLabel} as a duplicate of {suspectedLabel}. Its draft entry leaves
+              the queue without being posted. Audited; cannot be undone.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <SecondaryButton onClick={() => setConfirmingDismiss(false)} disabled={submitting}>
+                Cancel
+              </SecondaryButton>
+              <PrimaryButton onClick={() => void doDismiss()} disabled={submitting} busy={submitting}>
+                Confirm
+              </PrimaryButton>
+            </div>
+          </ConfirmModal>
         )}
 
         {mode === 'confirmApprove' && (
@@ -311,7 +435,11 @@ export const InternalQueue: FC = () => {
           {/* Detail pane */}
           {selected && (
             <div className="lg:col-span-3">
+              {/* Keyed by entry: opening another entry remounts the pane, so
+                  its mode and the reject-correct editor's lines start fresh
+                  instead of carrying over from the previous entry. */}
               <DetailPane
+                key={selected.id}
                 entry={selected}
                 onResolved={onResolved}
                 onClose={() => setSelectedId(null)}

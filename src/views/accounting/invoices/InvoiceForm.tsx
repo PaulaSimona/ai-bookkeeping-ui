@@ -8,7 +8,10 @@ import { useNavigate, useParams } from 'react-router-dom';
 
 import { Card } from '@/components/t2/Card';
 import { PageHeader } from '@/components/t2/PageHeader';
-import { useOrgMe, useAccounts } from '@/hooks/useAccounts';
+import { AccountPicker } from '@/components/AccountPicker';
+import { useOrgContext } from '@/context/OrgContext';
+import { useOrgMe } from '@/hooks/useAccounts';
+import { useAllAccounts } from '@/hooks/useAllAccounts';
 import {
   createInvoice,
   patchInvoice,
@@ -20,7 +23,12 @@ import {
 } from '@/hooks/useSalesInvoices';
 import { ClientCreateDialog } from '@/views/accounting/ClientCreateForm';
 import { BillFromBanner } from '@/components/accounting/BillFromBanner';
+import type { AccountType, CurrentAccount } from '@/types/account';
 import type { InvoiceLineInput, TaxTreatment } from '@/types/salesInvoice';
+
+// Invoice lines post to revenue accounts only (client convenience; the server
+// is authoritative).
+const REVENUE_ONLY: AccountType[] = ['revenue'];
 
 const TERMS = [
   { value: '', label: 'None' },
@@ -48,10 +56,27 @@ export const InvoiceForm: FC = () => {
   const { role } = useOrgMe();
   const canWrite = role === 'owner' || role === 'accountant';
   const { options: counterparties, refetch: refetchCounterparties } = useCounterpartyOptions();
-  const { accounts } = useAccounts({ type: 'revenue', active: true });
+  // Every active account of the active org, all pages; the picker narrows
+  // them to revenue (D-S84-6).
+  const { activeOrgId } = useOrgContext();
+  const {
+    accounts,
+    loading: accountsLoading,
+    error: accountsError,
+  } = useAllAccounts('owner', activeOrgId);
   const [showAddClient, setShowAddClient] = useState(false);
 
   const { invoice, isLoading: loadingExisting } = useSalesInvoice(isEdit ? id : undefined);
+
+  // The accounts already on the draft being edited. One of them may no longer
+  // be in the active revenue list; its row still has to show it.
+  const draftAccounts = useMemo(() => {
+    const byId = new Map<string, CurrentAccount>();
+    for (const l of invoice?.lines ?? []) {
+      byId.set(l.account, { id: l.account, code: l.account_code, name: l.account_name });
+    }
+    return byId;
+  }, [invoice]);
 
   const [counterparty, setCounterparty] = useState('');
   const [paymentTerms, setPaymentTerms] = useState('');
@@ -186,13 +211,21 @@ export const InvoiceForm: FC = () => {
                   className={`${inputCls} col-span-4`} placeholder="Description"
                   value={l.description} onChange={(e) => setLine(i, { description: e.target.value })}
                 />
-                <select
-                  className={`${inputCls} col-span-3`}
-                  value={l.account} onChange={(e) => setLine(i, { account: e.target.value })}
-                >
-                  <option value="">Revenue account…</option>
-                  {accounts.map((a) => <option key={a.id} value={a.id}>{a.code} {a.name}</option>)}
-                </select>
+                <div className="col-span-3">
+                  <AccountPicker
+                    id={`invoice-line-account-${i}`}
+                    ariaLabel="Revenue account"
+                    required
+                    value={l.account}
+                    onChange={(next) => setLine(i, { account: next })}
+                    accounts={accounts}
+                    loading={accountsLoading}
+                    error={accountsError}
+                    allowedTypes={REVENUE_ONLY}
+                    currentAccount={draftAccounts.get(l.account) ?? null}
+                    placeholder="Revenue account…"
+                  />
+                </div>
                 <input
                   className={`${inputCls} col-span-1 text-right tabular-nums`} placeholder="Qty" inputMode="decimal"
                   value={l.quantity} onChange={(e) => setLine(i, { quantity: e.target.value })}

@@ -12,11 +12,24 @@ import { useCounterparties } from '@/hooks/useCounterparties';
 import { Card } from '@/components/t2/Card';
 import { PageHeader } from '@/components/t2/PageHeader';
 import { FilterChip } from '@/components/t2/FilterChip';
-import { entryDisplayStatus } from '@/utils/entryStatus';
+import { EntryChain } from '@/components/ledger/EntryChain';
+import { useEntryDetail } from '@/views/accountant/hooks/useAccountantLedger';
+import {
+  REGISTRY_STATUS_OPTIONS,
+  canAct,
+  effectiveTotals,
+  entryDisplayStatus,
+  entryStatusLabel,
+  nonLiveNote,
+  type EntryLinkSource,
+  type EntryRef,
+  type EntryStatusSource,
+} from '@/utils/entryStatus';
 
 // §14 14-C Tier 2 Ledger register (D-14C-3..5), restyled onto the t2/ language
 // (s22 B3). Read-only: tab strip + filters over the org's journal entries, calm
-// status badges, and a read-only line drill-down on row expand. NO row actions
+// status badges, and a line drill-down on row expand with the entry's chain
+// (O-S84-1). The one write is assigning a counterparty, on a live entry only
 // (edit/reverse live on the accountant/staff surfaces). Own data layer — nothing
 // imported from the Tier 1 / react-bootstrap component set.
 
@@ -33,44 +46,31 @@ const MONO = 'font-[var(--font-family-mono)]';
 const inputCls =
   'rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent transition';
 
-const STATUS_OPTIONS: { value: string; label: string }[] = [
-  { value: '', label: 'All statuses' },
-  { value: 'draft', label: 'Draft' },
-  { value: 'posted', label: 'Posted' },
-  { value: 'reversed', label: 'Reversed' },
-  { value: 'replaced', label: 'Replaced' },
-];
-
 const PageShell: FC<{ children: ReactNode }> = ({ children }) => (
   <div className="min-h-screen bg-gray-50 text-gray-900">
     <div className="mx-auto max-w-5xl px-6 py-8">{children}</div>
   </div>
 );
 
-// Status badge (D-14C-3): needs_review wins, then the entry status. Unknown
-// status falls back to the calm "Draft" styling. Raw status text never leaks
-// beyond this map. Local pill — t2/StatusBadge is edit-forbidden.
-// F-S71-2 / O-S71-3: the label is derived by entryDisplayStatus (needs_review →
-// reversed_by_entry_id → status), so a posted-but-reversed original renders
-// "Reversed" instead of "Posted". The 'reversed' branch below finally fires.
-const badgeFor = (row: LedgerEntryRow): { label: string; cls: string } => {
+// Status badge (D-14C-3, D-S84-4): where the entry stands in its chain, as the
+// registry resolved it — Posted, Corrected, Reversed or Reversal. The label
+// comes from the shared rule module; this map only picks the colour. There is
+// no "Needs review" badge: the list shows posted entries only, and a review
+// flag on one is internal (the R6 exposure). Local pill — t2/StatusBadge is
+// edit-forbidden.
+const badgeFor = (row: EntryStatusSource): { label: string; cls: string } => {
+  const label = entryStatusLabel(row);
   switch (entryDisplayStatus(row)) {
-    case 'needs_review':
-      return { label: 'Needs review', cls: 'bg-amber-50 text-amber-700' };
-    case 'draft':
-      return { label: 'Draft', cls: 'bg-gray-100 text-gray-600' };
     case 'posted':
-      return { label: 'Posted', cls: 'bg-emerald-50 text-emerald-700' };
+      return { label, cls: 'bg-emerald-50 text-emerald-700' };
     case 'reversed':
-      return { label: 'Reversed', cls: 'bg-blue-50 text-blue-700' };
-    case 'replaced':
-      return { label: 'Replaced', cls: 'bg-gray-100 text-gray-600' };
+      return { label, cls: 'bg-blue-50 text-blue-700' };
     default:
-      return { label: 'Draft', cls: 'bg-gray-100 text-gray-600' };
+      return { label, cls: 'bg-gray-100 text-gray-600' };
   }
 };
 
-const StatusBadge: FC<{ row: LedgerEntryRow }> = ({ row }) => {
+const StatusBadge: FC<{ row: EntryStatusSource }> = ({ row }) => {
   const { label, cls } = badgeFor(row);
   return (
     <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${cls}`}>
@@ -89,9 +89,24 @@ const Chevron: FC<{ open: boolean }> = ({ open }) => (
   </svg>
 );
 
+// What the expanded panel renders from: a list row, or — after "Open JE-xxxx"
+// in the chain panel — the entry read by id from the detail endpoint. Both
+// shapes satisfy it.
+type PanelLine = Pick<
+  LedgerEntryLine,
+  'id' | 'account_code' | 'account_name' | 'debit' | 'credit' | 'line_order'
+>;
+
+interface PanelEntry extends EntryLinkSource {
+  status: string;
+  entry_number_display: string | null;
+  counterparty?: { id: string; name: string } | null;
+  lines: PanelLine[];
+}
+
 // Nested debit/credit sub-table (ACCT · ACCOUNT · DEBIT · CREDIT header band,
 // mono figures). Presentational; ordering by line_order preserved.
-const LineDetail: FC<{ lines: LedgerEntryLine[] }> = ({ lines }) => {
+const LineDetail: FC<{ lines: PanelLine[] }> = ({ lines }) => {
   const ordered = [...lines].sort((a, b) => a.line_order - b.line_order);
   return (
     <div className="border-t border-gray-100 bg-gray-50 px-4 py-3">
@@ -190,6 +205,48 @@ const AssignCounterpartyControl: FC<{ entryId: string; onAssigned: () => void }>
   );
 };
 
+// The expanded panel of one entry (O-S84-1, D-S85-13).
+//   Counterparty (D-14C2-16: set-only-when-null v1): attributed → read-only
+//   chip, no edit/clear. Unattributed → the Assign control, on the chain's LIVE
+//   entry only; any other entry says how it is linked and where changes are
+//   made instead.
+//   Chain: the original and everything that later corrected, reversed or
+//   restored it, with "Open JE-xxxx" for the live entry. Nothing renders for an
+//   entry that was never corrected or reversed.
+const EntryPanel: FC<{
+  entry: PanelEntry;
+  onAssigned: () => void;
+  onOpenEntry: (ref: EntryRef) => void;
+}> = ({ entry, onAssigned, onOpenEntry }) => {
+  const note = nonLiveNote(entry);
+  return (
+    <>
+      <div className="space-y-2 bg-gray-50 px-4 py-3">
+        {entry.counterparty ? (
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-gray-500">Counterparty</span>
+            <CounterpartyChip name={entry.counterparty.name} />
+          </div>
+        ) : canAct('owner', entry, 'assign_counterparty') ? (
+          <AssignCounterpartyControl entryId={entry.id} onAssigned={onAssigned} />
+        ) : (
+          <div className="text-xs text-gray-500">No counterparty assigned.</div>
+        )}
+        {note && <p className="text-xs text-gray-500">{note}</p>}
+      </div>
+      <LineDetail lines={entry.lines} />
+      <EntryChain
+        className="mx-4 my-3"
+        chain={entry.chain}
+        currentId={entry.id}
+        liveEntry={entry.live_entry}
+        truncated={entry.chain_truncated}
+        onOpenEntry={onOpenEntry}
+      />
+    </>
+  );
+};
+
 const LoadingSkeleton: FC = () => (
   <>
     <div className="h-8 w-40 animate-pulse rounded bg-gray-100" />
@@ -247,7 +304,13 @@ export const LedgerRegister: FC = () => {
   const [dateFrom, setDateFrom] = useState<string | null>(null);
   const [dateTo, setDateTo] = useState<string | null>(null);
   const [unattributed, setUnattributed] = useState(false);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedId, setExpandedRowId] = useState<string | null>(null);
+  // "Open JE-xxxx" in the chain panel re-targets the expanded panel: it then
+  // shows that entry, read by id from the detail endpoint (O-S84-1). Expanding
+  // or collapsing a row goes back to the row's own entry.
+  const [targetId, setTargetId] = useState<string | null>(null);
+  const { entry: target } = useEntryDetail(targetId);
+  const setExpandedId = (id: string | null) => { setExpandedRowId(id); setTargetId(null); };
   // Column sort (O-S30-2). null = the server's default order (date-desc),
   // rendered byte-unchanged from today.
   const [sort, setSort] = useState<{ key: 'date' | 'entry_number'; dir: 'asc' | 'desc' } | null>(null);
@@ -352,8 +415,10 @@ export const LedgerRegister: FC = () => {
           className={inputCls}
           aria-label="Filter by status"
         >
-          {STATUS_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
+          {/* The shared registry options (D-S84-4). "Posted" is the list's
+              default and sends no status. */}
+          {REGISTRY_STATUS_OPTIONS.map((o) => (
+            <option key={o.value || 'posted'} value={o.value}>{o.label}</option>
           ))}
         </select>
         <label className="flex items-center gap-2 text-sm text-gray-500">
@@ -424,6 +489,9 @@ export const LedgerRegister: FC = () => {
                 <tbody>
                   {rows.map((row) => {
                     const open = expandedId === row.id;
+                    // D-S85-18: a correction is totalled on its corrected
+                    // lines; any other entry keeps the served totals.
+                    const totals = effectiveTotals(row);
                     return (
                       <Fragment key={row.id}>
                         <tr
@@ -440,30 +508,54 @@ export const LedgerRegister: FC = () => {
                               {row.counterparty && <CounterpartyChip name={row.counterparty.name} />}
                             </span>
                           </td>
-                          <td className={`whitespace-nowrap px-4 py-3 text-right tabular-nums text-gray-700 ${MONO}`}>{fmtMoney(row.total_debits)}</td>
-                          <td className={`whitespace-nowrap px-4 py-3 text-right tabular-nums text-gray-700 ${MONO}`}>{fmtMoney(row.total_credits)}</td>
+                          <td className={`whitespace-nowrap px-4 py-3 text-right tabular-nums text-gray-700 ${MONO}`}>{fmtMoney(totals.debits)}</td>
+                          <td className={`whitespace-nowrap px-4 py-3 text-right tabular-nums text-gray-700 ${MONO}`}>{fmtMoney(totals.credits)}</td>
                           <td className="px-4 py-3"><StatusBadge row={row} /></td>
                         </tr>
                         {open && (
                           <tr>
                             <td colSpan={7} className="p-0">
-                              {/* Counterparty section (D-14C2-16: set-only-when-null v1).
-                                  Attributed → read-only chip, no edit/clear. Unattributed
-                                  → Assign control. */}
-                              <div className="bg-gray-50 px-4 py-3">
-                                {row.counterparty ? (
-                                  <div className="flex items-center gap-2 text-xs">
-                                    <span className="text-gray-500">Counterparty</span>
-                                    <CounterpartyChip name={row.counterparty.name} />
+                              {targetId === null ? (
+                                <EntryPanel
+                                  entry={row}
+                                  onAssigned={() => { setExpandedId(null); refetch(); }}
+                                  onOpenEntry={(ref) => setTargetId(ref.id)}
+                                />
+                              ) : (
+                                <>
+                                  {/* Re-targeted: the panel shows another entry
+                                      of this row's chain. */}
+                                  <div className="flex flex-wrap items-center gap-3 border-b border-gray-100 bg-gray-50 px-4 py-2 text-xs text-gray-600">
+                                    {target?.kind === 'ready' && target.row.id === targetId ? (
+                                      <>
+                                        <span className={`font-semibold text-gray-900 ${MONO}`}>
+                                          {target.row.entry_number_display ?? '—'}
+                                        </span>
+                                        <span>{fmtDate(target.row.entry_date)}</span>
+                                        <StatusBadge row={target.row} />
+                                      </>
+                                    ) : target?.kind === 'error' ? (
+                                      <span className="text-red-600">{target.message}</span>
+                                    ) : (
+                                      <span className="text-gray-400">Loading entry…</span>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => setTargetId(null)}
+                                      className="font-medium text-[var(--color-primary)] hover:underline"
+                                    >
+                                      Back to {row.entry_number_display ?? 'this entry'}
+                                    </button>
                                   </div>
-                                ) : (
-                                  <AssignCounterpartyControl
-                                    entryId={row.id}
-                                    onAssigned={() => { setExpandedId(null); refetch(); }}
-                                  />
-                                )}
-                              </div>
-                              <LineDetail lines={row.lines} />
+                                  {target?.kind === 'ready' && target.row.id === targetId && (
+                                    <EntryPanel
+                                      entry={target.row}
+                                      onAssigned={() => { setExpandedId(null); refetch(); }}
+                                      onOpenEntry={(ref) => setTargetId(ref.id)}
+                                    />
+                                  )}
+                                </>
+                              )}
                             </td>
                           </tr>
                         )}

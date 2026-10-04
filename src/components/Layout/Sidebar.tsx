@@ -24,8 +24,6 @@ const Icon: FC<{ path: string }> = ({ path }) => (
 );
 
 const ICONS = {
-  accounts:
-    'M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5M9 11.25v1.5M12 9v3.75m3-6v6',
   faq: 'M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z',
   reviewer:
     'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4',
@@ -304,7 +302,6 @@ export const Sidebar: FC = () => {
   const isAccountantPersona =
     activeRole === 'accountant' ||
     (memberships.length > 0 && memberships.every((m) => m.role === 'accountant'));
-  const isSuperuser = auth.user?.user?.is_superuser ?? auth.user?.is_superuser ?? false;
   // §21 entitlement flag (D-21-3) — same derivation shape as the staff flags;
   // wired into the Tier 2 nav block + single-Documents rule in D-21-5.
   const hasTier2 = auth.user?.user?.has_tier2 ?? auth.user?.has_tier2 ?? false;
@@ -383,17 +380,6 @@ export const Sidebar: FC = () => {
           {NAV_MAIN.filter((item) => !(hasTier2 && (item.to === '/documents' || item.to === '/dashboard' || item.to === '/reports' || item.to === '/workbook'))).map(({ to, label, icon }) => (
             <NavItem key={to} to={to} label={label} icon={icon} />
           ))}
-          {/* Chart of Accounts — staff tool, superuser-only. §21: stays superuser;
-              exposed to Tier 2 users deliberately at §14 (D-21-5).
-              S69 E8 (O-S69-14): the Reviewer Management, Accounting Review and
-              Reviewer links moved to the Internal Console (InternalLayout);
-              their pages, routes and guards in App.tsx are untouched. */}
-          {isSuperuser && (
-            <>
-              <div className="my-2 border-t border-white/10" />
-              <NavItem to="/accounts" label="Chart of Accounts" icon={ICONS.accounts} />
-            </>
-          )}
         </nav>
 
         {/* Resources */}

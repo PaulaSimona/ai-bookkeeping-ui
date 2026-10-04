@@ -1,12 +1,17 @@
-// Chart of accounts tab (s24 U2 — O-S24-3 carry, D-S24-11). Reproduces the
-// existing /accounts surface FIELD-FOR-FIELD (staff route stays untouched),
-// restyled to the light sibling-tab visuals. Same data layer + payloads as the
-// shipped page: useAccounts (GET /api/accounting/accounts/ + AccountFilters),
-// useCreateAccount (POST accounts/create/ {code,name,type,normal_balance,
-// parent_account_id?,is_active?}), useUpdateAccount (PATCH accounts/{id}/).
+// Chart of accounts tab (s24 U2 — O-S24-3 carry, D-S24-11). The one chart of
+// accounts screen: the standalone /accounts staff page it once reproduced is
+// retired, and that URL now redirects here (/settings?tab=chart). Light
+// sibling-tab visuals. Data layer + payloads: useAccounts (GET
+// /api/accounting/accounts/ + AccountFilters), useCreateAccount (POST
+// accounts/create/ {code,name,type,normal_balance, is_active?}),
+// useUpdateAccount (PATCH accounts/{id}/).
 // Backend endpoint is require_tier2 + membership, so a Tier 2 owner calling it
-// from Settings is legal — surfacing here IS the intended swap (trace flag
-// resolved); the old RequireSuperuser route guard is unchanged.
+// from Settings is legal; the tab renders only for an account with Tier 2
+// access (settings/index.tsx).
+//
+// No parent-account field (D-S85-8): the server treats parent_account_id as
+// read-only on both endpoints, so a parent chosen here was never saved
+// (F-S85-7). An account that HAS a parent shows it read-only in the edit form.
 import { type FC, useEffect, useMemo, useState } from 'react';
 import {
   useAccounts,
@@ -75,7 +80,6 @@ const AccountModal: FC<ModalProps> = ({ mode, initial, accounts, onClose, onSave
   const [name, setName]                   = useState(initial?.name ?? '');
   const [type, setType]                   = useState<AccountType>(initial?.type ?? 'expense');
   const [normalBalance, setNormalBalance] = useState<NormalBalance>(initial?.normal_balance ?? DEFAULT_NORMAL_BALANCE['expense']);
-  const [parentId, setParentId]           = useState<string>(initial?.parent_account_id ?? '');
   const [isActive, setIsActive]           = useState(initial?.is_active ?? true);
 
   // Auto-set normal balance when type changes (identical to shipped page).
@@ -83,12 +87,20 @@ const AccountModal: FC<ModalProps> = ({ mode, initial, accounts, onClose, onSave
 
   const fieldError = (field: string) => serverErrors?.[field]?.[0] ?? serverErrors?.['detail']?.[0];
 
+  // An existing parent, shown read-only as "code — name". The response carries
+  // the parent's id and code but not its name, so the name comes from the
+  // loaded list; when the parent is not in that list (the page's search or
+  // type filter can leave it out), the code alone is shown.
+  const parent = initial?.parent_account_id
+    ? accounts.find((a) => a.id === initial.parent_account_id)
+    : undefined;
+  const parentLabel = parent?.full_name ?? initial?.parent_account_code ?? null;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const payload: CreateAccountPayload = {
       code, name, type,
       normal_balance: normalBalance,
-      parent_account_id: parentId || null,
       is_active: isActive,
     };
     const res = await onSave(payload);
@@ -146,16 +158,12 @@ const AccountModal: FC<ModalProps> = ({ mode, initial, accounts, onClose, onSave
               </div>
             </div>
 
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-gray-500">Parent account</label>
-              <select value={parentId} onChange={(e) => setParentId(e.target.value)} className={`${control()} bg-white`}>
-                <option value="">— None (top-level) —</option>
-                {accounts
-                  .filter((a) => a.type === type && a.id !== initial?.id)
-                  .sort((a, b) => a.code.localeCompare(b.code))
-                  .map((a) => <option key={a.id} value={a.id}>{a.full_name}</option>)}
-              </select>
-            </div>
+            {parentLabel && (
+              <div>
+                <p className="mb-1.5 block text-xs font-medium text-gray-500">Parent account</p>
+                <p className="text-sm text-gray-700">{parentLabel}</p>
+              </div>
+            )}
 
             {mode === 'edit' && (
               <label className="flex cursor-pointer items-center gap-2.5">
