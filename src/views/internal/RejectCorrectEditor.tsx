@@ -8,7 +8,6 @@ import { PrimaryButton, SecondaryButton } from '@/components/internal/ui';
 import { createStaffOrgAccount } from '@/hooks/useStaffResolution';
 import { useAllAccounts } from '@/hooks/useAllAccounts';
 import { AccountPicker } from '@/components/AccountPicker';
-import { accountLabel } from '@/components/AccountPicker/filter';
 import { CounterpartyPicker } from '@/components/internal/CounterpartyPicker';
 import type { CurrentAccount } from '@/types/account';
 
@@ -63,29 +62,23 @@ interface EditLine {
 
 type CpMode = 'keep' | 'clear' | 'set';
 
-interface AccountOption {
-  value: string;
-  label: string;
-  type: string;
-}
-
 const inputCls =
   'w-full rounded-md bg-[#0f172a] border border-white/15 px-2 py-1.5 text-sm text-white ' +
   'placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-[#0066FF]';
 
 // ─── Inline new-account form ───────────────────────────────────────────────────
+// No parent-account field (D-S85-8): the server treats parent_account_id as
+// read-only on this endpoint, so a parent chosen here was never saved (F-S85-7).
 
 const NewAccountForm: FC<{
   orgId: string;
-  parentOptions: AccountOption[];
   onCreated: (accountId: string) => void;
   onCancel: () => void;
-}> = ({ orgId, parentOptions, onCreated, onCancel }) => {
+}> = ({ orgId, onCreated, onCancel }) => {
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [type, setType] = useState('expense');
   const [normalBalance, setNormalBalance] = useState(NORMAL_BALANCE_DEFAULT.expense);
-  const [parent, setParent] = useState('');
   const [creating, setCreating] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -103,7 +96,6 @@ const NewAccountForm: FC<{
       name: name.trim(),
       type,
       normal_balance: normalBalance,
-      parent_account_id: parent || null,
     });
     setCreating(false);
     if (res.ok && res.data) {
@@ -131,14 +123,6 @@ const NewAccountForm: FC<{
         <select value={normalBalance} onChange={(e) => setNormalBalance(e.target.value)} className={inputCls}>
           <option value="debit">Debit</option>
           <option value="credit">Credit</option>
-        </select>
-        <select value={parent} onChange={(e) => setParent(e.target.value)} className={`${inputCls} col-span-2`}>
-          <option value="">No parent (optional)</option>
-          {parentOptions.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
         </select>
       </div>
       {err && <p className="text-xs text-red-300">{err}</p>}
@@ -180,12 +164,6 @@ export const RejectCorrectEditor: FC<{
     error: accountsError,
     refetch: refetchAccounts,
   } = useAllAccounts('staff', orgId || null);
-
-  // Parent choices for the inline new-account form.
-  const accountOptions = useMemo<AccountOption[]>(
-    () => accounts.map((a) => ({ value: a.id, label: accountLabel(a), type: a.type })),
-    [accounts],
-  );
 
   // A draft line's own account may be inactive (absent from the active chart).
   // Each prefilled line hands it to its picker as the current account, keyed
@@ -407,7 +385,6 @@ export const RejectCorrectEditor: FC<{
           <div className="mt-2">
             <NewAccountForm
               orgId={orgId}
-              parentOptions={accountOptions}
               onCreated={(id) => {
                 updateLine(newAcctForKey, { account_id: id });
                 setNewAcctForKey(null);

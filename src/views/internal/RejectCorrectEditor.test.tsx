@@ -213,6 +213,42 @@ describe('RejectCorrectEditor account picker', () => {
     expect(onSubmit.mock.calls[0][0].lines[0].account_id).toBe('acc-1999');
   });
 
+  it('creates a new account without a parent field or parent_account_id, and selects it (D-S85-8)', async () => {
+    const user = userEvent.setup();
+    const created = accountRow('5999', 'Sundry', 'expense');
+    post.mockResolvedValue({ status: 201, data: created });
+    renderEditor();
+    await ready();
+
+    await user.click(screen.getAllByRole('button', { name: '+ New account' })[0]);
+    // The form offers code, name, type and normal balance — no parent.
+    expect(screen.queryByText('No parent (optional)')).not.toBeInTheDocument();
+
+    // After the create, the account list is read again and holds the new one.
+    get.mockImplementation((url) =>
+      Promise.resolve(
+        url === ACCOUNTS_URL ? page([...ACCOUNTS, created]) : { status: 404, data: {} },
+      ),
+    );
+    await user.type(screen.getByPlaceholderText('Code'), '5999');
+    await user.type(screen.getByPlaceholderText('Name'), 'Sundry');
+    await user.click(screen.getByRole('button', { name: 'Create & select' }));
+
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    const [url, body] = post.mock.calls[0];
+    expect(url).toBe(ACCOUNTS_URL);
+    expect(body).toEqual({
+      code: '5999',
+      name: 'Sundry',
+      type: 'expense',
+      normal_balance: 'debit',
+    });
+    expect(body).not.toHaveProperty('parent_account_id');
+
+    // The new account lands in the line it was created for.
+    await waitFor(() => expect(pickers()[0]).toHaveValue(L('5999', 'Sundry')));
+  });
+
   it('does not submit while a line has no account', async () => {
     const user = userEvent.setup();
     const onSubmit = renderEditor();
