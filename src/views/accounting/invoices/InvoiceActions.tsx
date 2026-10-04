@@ -9,7 +9,9 @@ import { type FC, type ReactNode, useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { Card } from '@/components/t2/Card';
-import { useAccounts } from '@/hooks/useAccounts';
+import { AccountPicker } from '@/components/AccountPicker';
+import { useOrgContext } from '@/context/OrgContext';
+import { useAllAccounts } from '@/hooks/useAllAccounts';
 import { useInvoicePdf } from '@/hooks/useInvoicePdf';
 import {
   issueInvoice,
@@ -21,7 +23,11 @@ import {
   primaryBtn,
   secondaryBtn,
 } from '@/hooks/useSalesInvoices';
+import type { AccountType } from '@/types/account';
 import type { InvoiceLineInput, SalesInvoice, TaxTreatment } from '@/types/salesInvoice';
+
+// Credit-note lines post to revenue accounts only, like invoice lines.
+const REVENUE_ONLY: AccountType[] = ['revenue'];
 
 type Dialog = null | 'issue' | 'void' | 'payment' | 'credit' | 'send';
 
@@ -273,7 +279,14 @@ const SendDialog: FC<{ busy: boolean; error?: string | null; placeholder?: strin
 const blankLine = (): InvoiceLineInput => ({ description: '', quantity: '1', unit_price: '', account: '', tax_treatment: 'taxable' });
 
 const CreditNoteDialog: FC<{ busy: boolean; error?: string | null; onClose: () => void; onConfirm: (lines: InvoiceLineInput[]) => void }> = ({ busy, error, onClose, onConfirm }) => {
-  const { accounts } = useAccounts({ type: 'revenue', active: true });
+  // Every active account of the active org, all pages; the picker narrows
+  // them to revenue (D-S84-6).
+  const { activeOrgId } = useOrgContext();
+  const {
+    accounts,
+    loading: accountsLoading,
+    error: accountsError,
+  } = useAllAccounts('owner', activeOrgId);
   const [lines, setLines] = useState<InvoiceLineInput[]>([blankLine()]);
   const setLine = (i: number, patch: Partial<InvoiceLineInput>) =>
     setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
@@ -285,10 +298,20 @@ const CreditNoteDialog: FC<{ busy: boolean; error?: string | null; onClose: () =
         {lines.map((l, i) => (
           <div key={i} className="grid grid-cols-12 gap-2">
             <input className={`${inputCls} col-span-4`} placeholder="Description" value={l.description} onChange={(e) => setLine(i, { description: e.target.value })} />
-            <select className={`${inputCls} col-span-4`} value={l.account} onChange={(e) => setLine(i, { account: e.target.value })}>
-              <option value="">Revenue account…</option>
-              {accounts.map((a) => <option key={a.id} value={a.id}>{a.code} {a.name}</option>)}
-            </select>
+            <div className="col-span-4">
+              <AccountPicker
+                id={`credit-note-line-account-${i}`}
+                ariaLabel="Revenue account"
+                required
+                value={l.account}
+                onChange={(next) => setLine(i, { account: next })}
+                accounts={accounts}
+                loading={accountsLoading}
+                error={accountsError}
+                allowedTypes={REVENUE_ONLY}
+                placeholder="Revenue account…"
+              />
+            </div>
             <input className={`${inputCls} col-span-2 text-right tabular-nums`} placeholder="Qty" value={l.quantity} onChange={(e) => setLine(i, { quantity: e.target.value })} />
             <input className={`${inputCls} col-span-2 text-right tabular-nums`} placeholder="Price" value={l.unit_price} onChange={(e) => setLine(i, { unit_price: e.target.value })} />
           </div>

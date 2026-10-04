@@ -7,7 +7,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import api from '@/utils/api';
 import { PageLoader } from '@/components/Loader';
 import { TaxProfileForm } from '@/components/accounting/TaxProfileForm';
-import { useAccounts, useOrgMe } from '@/hooks/useAccounts';
+import { AccountPicker } from '@/components/AccountPicker';
+import { useOrgContext } from '@/context/OrgContext';
+import { useOrgMe } from '@/hooks/useAccounts';
+import { useAllAccounts } from '@/hooks/useAllAccounts';
 import { useTaxProfile, type SaveTaxProfileResult } from '@/hooks/useTaxProfile';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -130,7 +133,13 @@ export const Onboarding: FC = () => {
   const isOwner = org.role === 'owner';
 
   const { profile, isLoading: profileLoading, refetch: refetchProfile } = useTaxProfile();
-  const { accounts } = useAccounts({ active: true });
+  // Every active account of the active org, all pages (D-S84-6).
+  const { activeOrgId } = useOrgContext();
+  const {
+    accounts,
+    loading: accountsLoading,
+    error: accountsError,
+  } = useAllAccounts('owner', activeOrgId);
 
   const [step, setStep] = useState<1 | 2 | 3 | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
@@ -491,17 +500,25 @@ export const Onboarding: FC = () => {
                         {lines.map((l) => (
                           <div key={l.key}>
                             <div className="flex gap-2 items-start">
-                              <select
-                                value={l.account_code}
-                                disabled={!isOwner}
-                                onChange={(e) => patchLine(l.key, { account_code: e.target.value })}
-                                className={`${inputCls} flex-1 min-w-0`}
-                              >
-                                <option value="">— Select account —</option>
-                                {accountOptions.map((a) => (
-                                  <option key={a.id} value={a.code}>{a.code} — {a.name}</option>
-                                ))}
-                              </select>
+                              {/* The line stores the account CODE (the request
+                                  field is account_code), so the picker reads
+                                  and emits codes. It sits inside this <form>;
+                                  Enter in it never submits. */}
+                              <div className="flex-1 min-w-0">
+                                <AccountPicker
+                                  id={`opening-balance-account-${l.key}`}
+                                  ariaLabel="Account"
+                                  required
+                                  valueKey="code"
+                                  value={l.account_code}
+                                  onChange={(next) => patchLine(l.key, { account_code: next })}
+                                  accounts={accountOptions}
+                                  loading={accountsLoading}
+                                  error={accountsError}
+                                  disabled={!isOwner}
+                                  placeholder="— Select account —"
+                                />
+                              </div>
                               <input
                                 type="text"
                                 inputMode="decimal"
