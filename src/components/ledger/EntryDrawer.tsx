@@ -20,6 +20,7 @@ import {
   effectiveTotals,
   entryDisplayStatus,
   entryStatusLabel,
+  isOwnLine,
   isReversingLine,
   nonLiveNote,
   type EntryRef,
@@ -182,9 +183,13 @@ export const EntryDrawer: FC<EntryDrawerProps> = ({
     }
   };
 
+  // The adjustment form is seeded from the entry's OWN lines only — the ones
+  // whose reverses_line_id is null (D-S85-18). A correction also holds the
+  // lines reversing the entry it corrected; those are not its content and are
+  // never offered as rows. An ordinary entry seeds every line.
   // Code and name ride along so an account that is no longer active still shows
   // in the seeded adjustment row.
-  const seedAccounts = orderedLines.map((l) => ({
+  const seedAccounts = orderedLines.filter(isOwnLine).map((l) => ({
     id: l.account_id,
     code: l.account_code ?? '—',
     name: l.account_name ?? '',

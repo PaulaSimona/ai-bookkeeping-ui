@@ -499,7 +499,9 @@ const AttachDocumentEditor: FC<{
 export interface MergeParty {
   id: string;
   number: string; // "JE-0068"
-  total: string | null; // the entry's total debits, as listed
+  // The entry's EFFECTIVE total (D-S85-18): the debits of a correction's
+  // corrected lines; any other entry's total debits. Shown, never compared.
+  total: string | null;
 }
 
 export const MergeEditor: FC<{

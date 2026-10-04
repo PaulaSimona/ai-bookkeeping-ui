@@ -294,3 +294,75 @@ describe('EntryDrawer — voided text (D-S85-16)', () => {
     expect(screen.queryByText(/show voided/i)).not.toBeInTheDocument();
   });
 });
+
+describe('EntryDrawer — "Adjust this entry" seed rows (UI2-U8, F-S85-15)', () => {
+  const line = (
+    id: string,
+    code: string,
+    name: string,
+    debit: string | null,
+    credit: string | null,
+    order: number,
+    reverses: string | null,
+  ) => ({
+    id,
+    account_id: `acc-${code}`,
+    account_code: code,
+    account_name: name,
+    debit,
+    credit,
+    description: '',
+    tax_code: '',
+    line_order: order,
+    reverses_line_id: reverses,
+  });
+
+  // The seeded rows, as the adjustment form's account pickers show them. The
+  // chart served here is empty, so each picker shows exactly its seeded account.
+  const seededAccounts = async () =>
+    (await screen.findAllByRole('combobox', { name: 'Account' })).map(
+      (picker) => (picker as HTMLInputElement).value,
+    );
+
+  it('on a correction with two reversing and two corrected lines, seeds the two corrected ones', async () => {
+    // A live one-entry correction: Cr 5000 / Dr 1000 reverse the entry it
+    // corrected; Dr 5100 / Cr 1000 are its own content.
+    renderDrawer(
+      row({
+        source: 'staff_correction',
+        total_debits: '200.00',
+        total_credits: '200.00',
+        lines: [
+          line('l1', '5000', 'Rent Expense', null, '100.00', 0, 'old-1'),
+          line('l2', '1000', 'Cash', '100.00', null, 1, 'old-2'),
+          line('l3', '5100', 'Office Supplies', '100.00', null, 2, null),
+          line('l4', '1000', 'Cash', null, '100.00', 3, null),
+        ],
+      }),
+      { adjustOpen: true },
+    );
+
+    expect(await seededAccounts()).toEqual(['5100 — Office Supplies', '1000 — Cash']);
+    // The reversing half — the Cr 5000 line — is not offered as a row.
+    expect(await seededAccounts()).not.toContain('5000 — Rent Expense');
+  });
+
+  it('on an ordinary entry, seeds every line, as before', async () => {
+    renderDrawer(
+      row({
+        lines: [
+          line('l1', '5000', 'Rent Expense', '60.00', null, 0, null),
+          line('l2', '5100', 'Office Supplies', '40.00', null, 1, null),
+          line('l3', '1000', 'Cash', null, '100.00', 2, null),
+        ],
+      }),
+      { adjustOpen: true },
+    );
+
+    expect(await seededAccounts()).toEqual([
+      '5000 — Rent Expense',
+      '5100 — Office Supplies',
+      '1000 — Cash',
+    ]);
+  });
+});
