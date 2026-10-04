@@ -556,12 +556,45 @@ describe('loading, error and disabled', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it('hideError leaves the message to the screen but still offers no options', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<Harness error="Failed to load accounts." hideError onChange={onChange} />);
+    // The screen says it once for all of its pickers; this one does not repeat it.
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByText('Failed to load accounts.')).not.toBeInTheDocument();
+    expect(field()).toHaveAttribute('aria-invalid', 'true');
+    expect(field()).not.toHaveAttribute('aria-describedby');
+
+    await user.click(field());
+    await user.keyboard('2110{ArrowDown}{Enter}');
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
   it('does not open when disabled', async () => {
     const user = userEvent.setup();
     render(<Harness disabled />);
     expect(field()).toBeDisabled();
     await user.click(field());
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+  });
+});
+
+describe('size', () => {
+  it('uses the form-field padding by default and the roomier one for size "lg"', () => {
+    const { unmount } = render(<Harness />);
+    expect(field()).toHaveClass('px-3', 'py-2');
+    unmount();
+
+    render(<Harness size="lg" />);
+    expect(field()).toHaveClass('px-3.5', 'py-2.5');
+    expect(field()).not.toHaveClass('px-3');
+  });
+
+  it('keeps the one dark size', () => {
+    render(<Harness tone="dark" size="lg" />);
+    expect(field()).toHaveClass('px-2', 'py-1.5');
   });
 });
 

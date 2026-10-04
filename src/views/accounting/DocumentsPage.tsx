@@ -10,9 +10,8 @@
 // also drives the 30s freshness interval below. The list is presentational.
 //
 // Two-layer gating mirrors the other Tier 2 pages: the route is wrapped in
-// <RequireStaffOrSuperuser> (interim), and this page redirects on the real
-// org-role check — same structural pattern as AccountingReview.
-// TODO: swap to Tier 2 subscription check when Advanced plan is live
+// <RequireTier2> (§21 gate swap, D-21-4), and this page redirects on the real
+// org-role check — same structural pattern as CardsPage.
 import { type FC, useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useOrgMe } from '@/hooks/useAccounts';
@@ -170,8 +169,8 @@ export const DocumentsPage: FC = () => {
   const activeChipLabel = STATUS_CHIPS.find((c) => c.value === statusFilter)?.label ?? null;
 
   // Redirect members without accounting access — same structural pattern as
-  // AccountingReview, gated on org role (the backend enforces org membership
-  // on /documents/status/, not is_staff).
+  // CardsPage (an effect, never a navigate() during render), gated on org role
+  // (the backend enforces org membership on /documents/status/, not is_staff).
   useEffect(() => {
     if (!orgLoading && !canView) {
       navigate('/dashboard', { replace: true });

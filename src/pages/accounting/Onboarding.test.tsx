@@ -148,6 +148,16 @@ describe('Onboarding opening-balance account picker', () => {
     expect(post).toHaveBeenCalledWith('/api/accounting/opening-balance/', EXPECTED_BODY);
   });
 
+  it('sizes the picker like the fields in its row', async () => {
+    const user = userEvent.setup();
+    serve('owner');
+    renderPage();
+    await openBalancesForm(user);
+    // The wizard's own inputs are px-3.5 py-2.5 (inputCls).
+    expect(picker()).toHaveClass('px-3.5', 'py-2.5');
+    expect(screen.getAllByPlaceholderText('Debit')[0]).toHaveClass('px-3.5', 'py-2.5');
+  });
+
   it('never offers the server-owned 3500 account', async () => {
     const user = userEvent.setup();
     serve('owner');

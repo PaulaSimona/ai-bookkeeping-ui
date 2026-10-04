@@ -75,8 +75,9 @@ const extractDetail = (res: unknown, fallback: string): string => {
   return parts.length ? parts.join(' ') : fallback;
 };
 
-// Read the full list off a paginated envelope in one page (pickers need the whole
-// set; the chart / active counterparties fit under the 200 server max).
+// Read the full list off a paginated envelope in one page (the counterparty
+// picker needs the whole set; the active counterparties fit under the 200
+// server max).
 const fetchAll = async <T>(url: string, params?: Record<string, string>): Promise<T[]> => {
   const res = await api.get(url, { params: { ...(params ?? {}), page_size: 200 } });
   if (res == null || res.status !== 200) return [];
@@ -85,40 +86,9 @@ const fetchAll = async <T>(url: string, params?: Record<string, string>): Promis
   return Array.isArray(data?.results) ? (data.results as T[]) : [];
 };
 
-// ─── Accounts (the reject-correct chart picker) ────────────────────────────────
-
-export const useStaffOrgAccounts = (orgId: string | null | undefined) => {
-  const [accounts, setAccounts] = useState<StaffAccount[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [revision, setRevision] = useState(0);
-  const refetch = useCallback(() => setRevision((r) => r + 1), []);
-
-  useEffect(() => {
-    if (!orgId) {
-      setAccounts([]);
-      return;
-    }
-    let cancelled = false;
-    setIsLoading(true);
-    setError(null);
-    fetchAll<StaffAccount>(`/api/accounting/staff/orgs/${orgId}/accounts/`)
-      .then((rows) => {
-        if (!cancelled) setAccounts(rows);
-      })
-      .catch(() => {
-        if (!cancelled) setError('Failed to load accounts.');
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [orgId, revision]);
-
-  return { accounts, isLoading, error, refetch };
-};
+// ─── Accounts ──────────────────────────────────────────────────────────────────
+// The chart itself is read through useAllAccounts('staff', orgId) (every page,
+// D-S84-6) — this file only creates an account from the reject-correct editor.
 
 export const createStaffOrgAccount = async (
   orgId: string,

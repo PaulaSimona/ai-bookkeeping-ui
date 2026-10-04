@@ -414,9 +414,13 @@ export const PostedCorrectionEditor: FC<{
                           onChange={(next) => updateLine(l.key, { account_id: next })}
                           accounts={accounts}
                           loading={accountsLoading}
+                          // A chart that failed to load is said ONCE, in the
+                          // banner above; the pickers are disabled and do
+                          // not repeat it.
                           error={accountsError}
+                          hideError
                           currentAccount={originalAccounts.get(l.key) ?? null}
-                          disabled={submitting}
+                          disabled={submitting || !!accountsError}
                           placeholder="Select…"
                         />
                         {isInactive(l) && (

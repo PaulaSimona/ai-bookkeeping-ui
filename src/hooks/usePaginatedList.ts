@@ -1,9 +1,8 @@
 // usePaginatedList<T> (§14 14A-2, ruling D2) — generic hook over the Tier 2
-// AccountingPagination envelope {count, next, previous, results}. Built
-// BESIDE useListEndpoint (useStaffConsole.ts), NOT replacing it: that helper
-// stays the private bare-array staff-console reader (the C2 pagination rider
-// remains queued for §15). First consumer: 14A-3's /documents/status/ — no
-// existing file adopts this hook in this commit.
+// AccountingPagination envelope {count, next, previous, results}. The shared
+// paginated-list reader of the owner and internal-staff screens (document
+// status, ledger entries, counterparties, invoices, cards, the staff client
+// entries and cards).
 import { useCallback, useEffect, useState } from 'react';
 import api from '@/utils/api';
 

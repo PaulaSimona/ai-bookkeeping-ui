@@ -1,7 +1,7 @@
 // Onboarding wizard (§14 14A-2) — 3 steps: tax profile (shared TaxProfileForm),
 // opening balance (once-ever choice), bank-connection pointer. Soft gate per
 // ruling D1: this page is a guided path, never a wall — uploads are not blocked
-// anywhere. Route carries the interim RequireStaffOrSuperuser gate (D-14A2-4).
+// anywhere. Route carries the RequireTier2 gate (§21 gate swap, D-21-4).
 import { Fragment, type FC, type FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '@/utils/api';
@@ -508,6 +508,7 @@ export const Onboarding: FC = () => {
                                 <AccountPicker
                                   id={`opening-balance-account-${l.key}`}
                                   ariaLabel="Account"
+                                  size="lg"
                                   required
                                   valueKey="code"
                                   value={l.account_code}

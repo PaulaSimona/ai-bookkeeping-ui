@@ -70,6 +70,12 @@ export type AccountPickerProps = Labelling & {
   clearable?: boolean;
   placeholder?: string;
   tone?: Tone;
+  // 'lg' matches a form whose own fields are the roomier light inputs
+  // (px-3.5 py-2.5 — the onboarding wizard). The dark tone has one size.
+  size?: 'md' | 'lg';
+  // The picker is blocked by `error` either way; true leaves the message to
+  // the screen, which already shows it once for all of its pickers.
+  hideError?: boolean;
 };
 
 // Every class below is already in use on a neighbouring screen: dark is the
@@ -97,6 +103,11 @@ const TONES: Record<Tone, Record<string, string>> = {
     star: 'text-red-500',
     input:
       'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 ' +
+      'focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent ' +
+      'transition disabled:bg-gray-50 disabled:text-gray-400',
+    // The onboarding wizard's field (Onboarding inputCls padding).
+    inputLg:
+      'w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 ' +
       'focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent ' +
       'transition disabled:bg-gray-50 disabled:text-gray-400',
     status: 'mt-1 text-xs text-gray-500',
@@ -141,6 +152,8 @@ export const AccountPicker: FC<AccountPickerProps> = ({
   clearable = false,
   placeholder,
   tone = 'light',
+  size = 'md',
+  hideError = false,
 }) => {
   const t = TONES[tone];
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -394,13 +407,13 @@ export const AccountPicker: FC<AccountPickerProps> = ({
         }
         aria-required={required || undefined}
         aria-invalid={error ? true : undefined}
-        aria-describedby={error ? errorId : undefined}
+        aria-describedby={error && !hideError ? errorId : undefined}
         autoComplete="off"
         spellCheck={false}
         disabled={disabled}
         placeholder={placeholder}
         value={query ?? selectedLabel}
-        className={t.input}
+        className={(size === 'lg' && t.inputLg) || t.input}
         onChange={(e) => {
           setQuery(e.target.value);
           setMovedKey(null);
@@ -424,7 +437,7 @@ export const AccountPicker: FC<AccountPickerProps> = ({
           Loading accounts…
         </p>
       )}
-      {error && (
+      {error && !hideError && (
         <p id={errorId} role="alert" className={t.error}>
           {error}
         </p>

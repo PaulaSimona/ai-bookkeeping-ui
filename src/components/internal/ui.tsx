@@ -1,9 +1,9 @@
 import { type FC, type PropsWithChildren, type ReactNode, useState, useCallback } from 'react';
 
 /**
- * Local Tailwind primitives for the internal staff console. Mirrors the Tier 2
- * dark language used by ReviewerManagement / AccountingReview (bg-[#0f172a] page,
- * bg-[#0A1628] cards, border-white/10, #0066FF primary) — deliberately NOT the
+ * Local Tailwind primitives for the internal staff console — its dark language
+ * (bg-[#0f172a] page, bg-[#0A1628] cards, border-white/10, #0066FF primary),
+ * used by every page under views/internal — deliberately NOT the
  * legacy react-bootstrap shared components (Button/Card/Badge are @ts-nocheck
  * Tier 1). No PII is ever passed to console.* here.
  */

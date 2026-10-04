@@ -100,34 +100,12 @@ const HomeRedirect: FC = () => {
   return <LandingPage />;
 };
 
-// Tier 2 feature route guards. Mirror the /reviewer page's auth check
-// (auth.user flags, wait out inProgress, redirect to /dashboard) but enforce it
-// at the route so a Tier 1 user can't reach the page by typing the URL.
-// §21: /accounts + /reviewer-management stay superuser (staff tools). Chart of
-// Accounts is exposed to Tier 2 users deliberately at §14 — no swap here yet.
-const RequireSuperuser: FC<PropsWithChildren> = ({ children }) => {
-  const { user, inProgress } = useSelector((s: RootState) => s.auth);
-  const isSuperuser = user?.user?.is_superuser ?? user?.is_superuser ?? false;
-  if (inProgress) return <PageLoader />;
-  if (!isSuperuser) return <Navigate to="/dashboard" replace />;
-  return <>{children}</>;
-};
-
-// §21: retained for the staff-only Accounting Review queue (internal reviewer
-// surface) — deliberately NOT swapped to the Tier 2 entitlement gate (D-21-4).
-const RequireStaffOrSuperuser: FC<PropsWithChildren> = ({ children }) => {
-  const { user, inProgress } = useSelector((s: RootState) => s.auth);
-  const isStaff = user?.user?.is_staff ?? user?.is_staff ?? false;
-  const isSuperuser = user?.user?.is_superuser ?? user?.is_superuser ?? false;
-  if (inProgress) return <PageLoader />;
-  if (!isStaff && !isSuperuser) return <Navigate to="/dashboard" replace />;
-  return <>{children}</>;
-};
-
 // §21 Tier 2 entitlement gate (D-21-4, 2026-07-18) — user Tier 2 surfaces render
 // iff the account has Tier 2 access (has_tier2: an active membership in an
-// entitled org). Replaces the interim staff/superuser gate on client Tier 2
-// pages; mirrors RequireStaffOrSuperuser (inProgress → loader, else /dashboard).
+// entitled org). Enforced at the route, so a Tier 1 user can't reach a Tier 2
+// page by typing the URL: inProgress → loader, else redirect to /dashboard. It
+// replaced the interim staff/superuser route guards, which are gone — the
+// internal staff console has its own (components/internal/InternalGuards).
 const RequireTier2: FC<PropsWithChildren> = ({ children }) => {
   const { user, inProgress } = useSelector((s: RootState) => s.auth);
   const hasTier2 = user?.user?.has_tier2 ?? user?.has_tier2 ?? false;

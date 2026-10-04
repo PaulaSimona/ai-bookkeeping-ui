@@ -273,6 +273,22 @@ describe('PostedCorrectionEditor account picker', () => {
   });
 });
 
+describe('PostedCorrectionEditor — chart load error (UI2-U6)', () => {
+  it('says it once, and disables the line pickers without repeating it', async () => {
+    serve(ENTRY, () => ({ status: 500, data: { detail: 'Server error.' } }));
+    renderEditor();
+    await screen.findByText('Corrected lines');
+
+    // One message on the screen — the banner — however many lines there are.
+    await waitFor(() => expect(pickers()[0]).toBeDisabled());
+    expect(pickers()).toHaveLength(2);
+    expect(pickers()[1]).toBeDisabled();
+    expect(screen.getAllByText('Server error.')).toHaveLength(1);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(postButton()).toBeDisabled();
+  });
+});
+
 describe('PostedCorrectionEditor — line descriptions and tax codes (D-S85-17)', () => {
   it('shows each line\'s description and tax code', async () => {
     serve(ENTRY, () => page(ACCOUNTS));
