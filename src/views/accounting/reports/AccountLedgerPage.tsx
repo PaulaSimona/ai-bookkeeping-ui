@@ -15,67 +15,19 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { Card } from '@/components/t2/Card';
 import { PageHeader } from '@/components/t2/PageHeader';
 import { LedgerSummaryStrip } from '@/components/ledger/LedgerSummaryStrip';
-import { type EntryState, LedgerTable, humanize } from '@/components/ledger/LedgerTable';
+import { LedgerTable, humanize } from '@/components/ledger/LedgerTable';
 import { Spinner } from '@/views/settings/ui';
-import api from '@/utils/api';
 import { type LedgerLine, type ReportPeriod, useAccountLedger } from '@/hooks/useReports';
 import { reportPeriodQueryString, useReportPeriod } from '@/hooks/useReportPeriod';
+// The drawer renders from a full entry row, read ON CLICK from the org-scoped
+// detail endpoint through the shared hook and mapper — so the registry fields
+// (status, chain, live entry) reach the drawer.
+import { useEntryDetail } from '@/views/accountant/hooks/useAccountantLedger';
 import { PeriodControls } from './PeriodControls';
 import { ExportBar } from './ExportBar';
 import { MONO } from './format';
 
 const PAGE_SIZE = 100;
-
-// ─── Entry fetch for the drawer ──────────────────────────────────────────────
-// The drawer renders from a full row (JournalEntrySerializer shape). Fetched ON
-// CLICK from the org-scoped detail endpoint; mapped onto the drawer's row type.
-
-const useEntryDetail = (entryId: string | null): EntryState | null => {
-  const [state, setState] = useState<EntryState | null>(null);
-  useEffect(() => {
-    if (!entryId) { setState(null); return; }
-    let cancelled = false;
-    setState({ kind: 'loading' });
-    api.get(`/api/accounting/entries/${encodeURIComponent(entryId)}/`).then((res) => {
-      if (cancelled) return;
-      if (res?.status === 200 && res.data) {
-        const d = res.data;
-        setState({
-          kind: 'ready',
-          row: {
-            id: d.id,
-            entry_number_display: d.entry_number_display ?? null,
-            entry_date: d.entry_date,
-            description: d.description ?? '',
-            source: d.source,
-            status: d.status,
-            created_by: d.created_by,
-            voided_at: d.voided_at ?? null,
-            voided_by: d.voided_by ?? null,
-            void_reason: d.void_reason ?? '',
-            source_document_id: d.source_document_id ?? null,
-            total_debits: d.total_debits,
-            total_credits: d.total_credits,
-            lines: (d.lines ?? []).map((l: any) => ({
-              id: l.id,
-              account_id: l.account_id,
-              account_code: l.account_code ?? null,
-              account_name: l.account_name ?? null,
-              debit: l.debit ?? null,
-              credit: l.credit ?? null,
-              description: l.description ?? '',
-              line_order: l.line_order,
-            })),
-          },
-        });
-      } else {
-        setState({ kind: 'error', message: res?.data?.detail ?? 'Could not load this entry.' });
-      }
-    });
-    return () => { cancelled = true; };
-  }, [entryId]);
-  return state;
-};
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 
@@ -109,8 +61,13 @@ export const AccountLedgerPage: FC = () => {
   const { data, isLoading, error, status } = useAccountLedger(code, period, page, PAGE_SIZE);
 
   const [openEntryId, setOpenEntryId] = useState<string | null>(null);
-  const entry = useEntryDetail(openEntryId);
-  useEffect(() => { setOpenEntryId(null); }, [code, page, reportPeriodQueryString(period)]);
+  // "Open JE-xxxx" in the drawer's chain panel re-targets the open drawer: it
+  // then shows that entry, read by id from the same detail endpoint. Toggling
+  // a row goes back to the row's own entry.
+  const [targetId, setTargetId] = useState<string | null>(null);
+  const { entry } = useEntryDetail(targetId ?? openEntryId);
+  const toggleRow = (entryId: string | null) => { setOpenEntryId(entryId); setTargetId(null); };
+  useEffect(() => { setOpenEntryId(null); setTargetId(null); }, [code, page, reportPeriodQueryString(period)]);
 
   const backHref = `/accounting/reports?${reportPeriodQueryString(period)}`;
   const title = data ? `${data.account.code} · ${data.account.name}` : code;
@@ -164,8 +121,9 @@ export const AccountLedgerPage: FC = () => {
             <LedgerTable
               lines={lines}
               expandedId={openEntryId}
-              onRowToggle={setOpenEntryId}
+              onRowToggle={toggleRow}
               entry={entry}
+              onOpenEntry={(ref) => setTargetId(ref.id)}
               readOnly
               count={count}
               first={first}

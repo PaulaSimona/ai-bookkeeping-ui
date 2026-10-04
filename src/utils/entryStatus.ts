@@ -203,6 +203,21 @@ export const entryLinkLabel = (row: EntryLinkSource): string | null => {
 export const liveEntryLink = (row: EntryKindSource): EntryRef | null =>
   row.live_entry != null && row.live_entry.id !== row.id ? row.live_entry : null;
 
+// What a non-live entry says where its actions would be (D-S85-13): how it is
+// linked, and where changes are made instead. null for the live entry, and for
+// an entry with nothing to say (no registry fields; an unposted entry).
+export const nonLiveNote = (row: EntryLinkSource): string | null => {
+  if (isLiveEntry(row)) return null;
+  const parts: string[] = [];
+  const label = entryLinkLabel(row);
+  if (label) parts.push(`${label}.`);
+  const live = liveEntryLink(row);
+  if (live) {
+    parts.push(`Changes are made on the live entry${live.number ? `, ${live.number}` : ''}.`);
+  }
+  return parts.length > 0 ? parts.join(' ') : null;
+};
+
 // "JE-0071" for 71 — mirrors the backend's _format_entry_number (ledger_serializers.py)
 // for the rare caller that has only the integer. Prefer the API's *_number_display
 // strings whenever they are present.

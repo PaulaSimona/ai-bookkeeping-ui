@@ -12,6 +12,7 @@ import {
   formatEntryNumber,
   isLiveEntry,
   liveEntryLink,
+  nonLiveNote,
   type EntryLinkSource,
 } from './entryStatus';
 
@@ -137,6 +138,18 @@ describe('labels', () => {
     expect(liveEntryLink(ORIGINAL)).toEqual(ref('e-102', 'JE-0102'));
     expect(liveEntryLink(CORRECTION)).toBeNull(); // it IS the live entry
     expect(liveEntryLink(REVERSED)).toBeNull(); // the chain has none
+  });
+
+  it('says, on a non-live entry, how it is linked and where changes are made', () => {
+    expect(nonLiveNote(ORIGINAL)).toBe(
+      'Corrected by JE-0102. Changes are made on the live entry, JE-0102.',
+    );
+    // A reversed chain has no live entry to point at.
+    expect(nonLiveNote(REVERSED)).toBe('Reversed by JE-0103.');
+    expect(nonLiveNote(REVERSAL)).toBe('Reversal of JE-0070.');
+    // The live entry has nothing to say; nor has a payload without registry fields.
+    expect(nonLiveNote(CORRECTION)).toBeNull();
+    expect(nonLiveNote({ id: 'e-1' })).toBeNull();
   });
 
   it('shows the display status as the status label', () => {

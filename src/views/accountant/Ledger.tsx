@@ -12,12 +12,18 @@ import { PageHeader } from '@/components/t2/PageHeader';
 import { StatusBadge } from '@/components/t2/StatusBadge';
 import {
   useAccountantLedger,
+  useEntryDetail,
   type AccountantLedgerRow,
 } from './hooks/useAccountantLedger';
 import { useAccountantChart } from './hooks/useAccountantChart';
 import { EntryDrawer } from '@/components/ledger/EntryDrawer';
 import { formatIsoDate } from '@/utils/dates';
-import { REGISTRY_STATUS_OPTIONS, entryDisplayStatus, entryStatusLabel } from '@/utils/entryStatus';
+import {
+  REGISTRY_STATUS_OPTIONS,
+  canAct,
+  entryDisplayStatus,
+  entryStatusLabel,
+} from '@/utils/entryStatus';
 
 const CAD = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' });
 const fmtMoney = (v: string | null): string => (v == null || v === '' ? '' : CAD.format(Number(v)));
@@ -97,8 +103,14 @@ const LedgerInner: FC = () => {
   // the row's "Adjust" action opens the drawer WITH the form expanded.
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [adjustOpen, setAdjustOpen] = useState(false);
+  // "Open JE-xxxx" in the drawer's chain panel re-targets the open drawer: it
+  // then shows that entry, read by id from the detail endpoint (O-S84-1).
+  // Toggling a row goes back to the row's own entry.
+  const [targetId, setTargetId] = useState<string | null>(null);
+  const { entry: target } = useEntryDetail(targetId);
 
   const toggleRow = (id: string) => {
+    setTargetId(null);
     if (expandedId === id) {
       setExpandedId(null);
       setAdjustOpen(false);
@@ -108,14 +120,26 @@ const LedgerInner: FC = () => {
     }
   };
   const openAdjust = (id: string) => {
+    setTargetId(null);
     setExpandedId(id);
     setAdjustOpen(true);
+  };
+  const openChainEntry = (id: string) => {
+    setTargetId(id);
+    setAdjustOpen(false);
+  };
+  const changeStatus = (value: string) => {
+    setStatusFilter(value);
+    setPage(1);
+    setExpandedId(null);
+    setTargetId(null);
   };
   // After a successful in-context post: collapse the drawer and refresh the list
   // so the new adjusting entry appears.
   const onPosted = () => {
     setExpandedId(null);
     setAdjustOpen(false);
+    setTargetId(null);
     refetch();
   };
 
@@ -128,7 +152,7 @@ const LedgerInner: FC = () => {
           <div className="flex items-center gap-2">
             <select
               value={statusFilter}
-              onChange={(e) => { setStatusFilter(e.target.value); setPage(1); setExpandedId(null); }}
+              onChange={(e) => changeStatus(e.target.value)}
               className={selectCls}
               aria-label="Filter by status"
             >
@@ -215,7 +239,9 @@ const LedgerInner: FC = () => {
                         )}
                       </span>
                       <span className="justify-self-end">
-                        {!voided && isRevenueExpense(row) ? (
+                        {/* D-S85-13: the shortcut is offered on the chain's
+                            live entry only. */}
+                        {!voided && isRevenueExpense(row) && canAct('accountant', row, 'adjust') ? (
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); openAdjust(row.id); }}
@@ -228,15 +254,36 @@ const LedgerInner: FC = () => {
                         )}
                       </span>
                     </div>
-                    {expandedId === row.id && (
+                    {expandedId === row.id && (targetId === null ? (
                       <EntryDrawer
+                        key={row.id}
                         row={row}
                         adjustOpen={adjustOpen}
                         onToggleAdjust={() => setAdjustOpen((v) => !v)}
                         onPosted={onPosted}
                         onVoided={refetch}
+                        onOpenEntry={(ref) => openChainEntry(ref.id)}
                       />
-                    )}
+                    ) : target?.kind === 'ready' && target.row.id === targetId ? (
+                      // Re-targeted: the same drawer, on the entry read by id.
+                      <EntryDrawer
+                        key={target.row.id}
+                        row={target.row}
+                        adjustOpen={adjustOpen}
+                        onToggleAdjust={() => setAdjustOpen((v) => !v)}
+                        onPosted={onPosted}
+                        onVoided={refetch}
+                        onOpenEntry={(ref) => openChainEntry(ref.id)}
+                      />
+                    ) : target?.kind === 'error' ? (
+                      <div className="border-b border-gray-100 bg-gray-50 px-5 py-3 text-[13px] text-red-600">
+                        {target.message}
+                      </div>
+                    ) : (
+                      <div className="border-b border-gray-100 bg-gray-50 px-5 py-4 text-[13px] text-gray-400">
+                        Loading entry…
+                      </div>
+                    ))}
                   </Fragment>
                 );
               })}

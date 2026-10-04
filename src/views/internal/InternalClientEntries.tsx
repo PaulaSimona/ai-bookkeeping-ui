@@ -1,11 +1,12 @@
 import { type FC, Fragment, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useStaffOrgEntries } from '@/hooks/useStaffResolution';
-import { type LedgerEntryRow } from '@/hooks/useLedgerEntries';
-// S69 E8 fence 4a (F-S69-9): the expanded row's counterparty control is the
-// shared StaffEntryActions panel (replace / clear / reason, confirm on clear,
-// refetch on success) — the same implementation the staff account ledger uses.
+import { useStaffEntryDetail } from '@/hooks/useStaffReports';
+// S69 E8 fence 4a (F-S69-9): the expanded row's staff writes are the shared
+// StaffEntryActions panel — the same implementation the staff account ledger
+// uses. Offered on the chain's LIVE entry only (D-S85-13).
 import { StaffEntryActions } from '@/components/internal/StaffEntryActions';
+import { EntryChain } from '@/components/ledger/EntryChain';
 import {
   PageContainer,
   SectionCard,
@@ -15,7 +16,16 @@ import {
   ErrorBanner,
   formatMoney,
 } from '@/components/internal/ui';
-import { REGISTRY_STATUS_OPTIONS, entryDisplayStatus, entryStatusLabel } from '@/utils/entryStatus';
+import {
+  REGISTRY_STATUS_OPTIONS,
+  entryDisplayStatus,
+  entryStatusLabel,
+  formatEntryNumber,
+  isLiveEntry,
+  nonLiveNote,
+  type EntryLinkSource,
+  type EntryRef,
+} from '@/utils/entryStatus';
 
 // The list is posted entries only (D-S84-4): Posted, Corrected, Reversed or
 // Reversal — never a draft, a replaced draft or a review flag.
@@ -25,8 +35,106 @@ const statusTone = (s: string): 'success' | 'warning' | 'neutral' | 'danger' => 
   return 'neutral';
 };
 
-const entryNo = (e: LedgerEntryRow): string =>
-  e.entry_number_display || (e.entry_number != null ? String(e.entry_number) : '—');
+const entryNo = (e: { entry_number_display?: string | null; entry_number?: number | null }): string =>
+  e.entry_number_display || formatEntryNumber(e.entry_number) || '—';
+
+// What the expanded panel renders from: a list row, or — after "Open JE-xxxx"
+// in the chain panel — the entry read by id from the staff detail endpoint.
+// Both shapes satisfy it.
+interface PanelLine {
+  id: string;
+  account_code: string | null;
+  account_name: string | null;
+  debit: string | null;
+  credit: string | null;
+  description?: string;
+}
+
+interface PanelEntry extends EntryLinkSource {
+  status: string;
+  entry_number?: number | null;
+  entry_number_display?: string | null;
+  counterparty?: { id: string; name: string } | null;
+  reverses_entry_id?: string | null;
+  reversed_by_entry_id?: string | null;
+  corrects_entry_id?: string | null;
+  corrects_entry_number_display?: string | null;
+  lines: PanelLine[];
+}
+
+// The expanded panel of one entry (O-S84-1, D-S85-13): its lines, its chain
+// with "Open JE-xxxx" for the live entry, and — on the chain's LIVE entry only
+// — the staff writes. Any other entry says how it is linked and where changes
+// are made instead.
+const EntryPanel: FC<{
+  orgId: string;
+  entry: PanelEntry;
+  onChanged: () => void;
+  onOpenEntry: (ref: EntryRef) => void;
+}> = ({ orgId, entry, onChanged, onOpenEntry }) => {
+  const note = nonLiveNote(entry);
+  return (
+    <div className="space-y-3">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-[11px] uppercase tracking-wide text-white/30">
+              <th className="py-1 pr-3 font-medium">Code</th>
+              <th className="py-1 pr-3 font-medium">Account</th>
+              <th className="py-1 px-3 font-medium text-right">Debit</th>
+              <th className="py-1 px-3 font-medium text-right">Credit</th>
+              <th className="py-1 pl-3 font-medium">Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            {entry.lines.map((l) => (
+              <tr key={l.id} className="border-t border-white/5">
+                <td className="py-1 pr-3 font-mono text-white/70">{l.account_code ?? '—'}</td>
+                <td className="py-1 pr-3 text-white/70">{l.account_name ?? '—'}</td>
+                <td className="py-1 px-3 text-right text-white/80">{formatMoney(l.debit)}</td>
+                <td className="py-1 px-3 text-right text-white/80">{formatMoney(l.credit)}</td>
+                <td className="py-1 pl-3 text-white/60">{l.description || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <EntryChain
+        tone="dark"
+        chain={entry.chain}
+        currentId={entry.id}
+        liveEntry={entry.live_entry}
+        truncated={entry.chain_truncated}
+        onOpenEntry={onOpenEntry}
+      />
+
+      {isLiveEntry(entry) ? (
+        // Replace / clear the counterparty and correct the entry. The panel's
+        // own counterparty is the "current"; a save refetches — no local
+        // mutation.
+        <StaffEntryActions
+          orgId={orgId}
+          entry={{
+            id: entry.id,
+            entry_number: entry.entry_number ?? null,
+            counterparty: entry.counterparty ?? null,
+            entry_number_display: entry.entry_number_display ?? null,
+            reverses_entry_id: entry.reverses_entry_id ?? null,
+            reversed_by_entry_id: entry.reversed_by_entry_id ?? null,
+            corrects_entry_id: entry.corrects_entry_id ?? null,
+            reverses_entry_number_display: entry.reverses_entry_number_display ?? null,
+            reversed_by_entry_number_display: entry.reversed_by_entry_number_display ?? null,
+            corrects_entry_number_display: entry.corrects_entry_number_display ?? null,
+          }}
+          onChanged={onChanged}
+        />
+      ) : (
+        note && <p className="text-xs text-amber-200/80">{note}</p>
+      )}
+    </div>
+  );
+};
 
 export const InternalClientEntries: FC = () => {
   const { orgId = '' } = useParams();
@@ -36,7 +144,15 @@ export const InternalClientEntries: FC = () => {
     orgId,
     { status: status || undefined, unattributed },
   );
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedId, setExpandedRowId] = useState<string | null>(null);
+  // "Open JE-xxxx" in the chain panel re-targets the expanded panel: it then
+  // shows that entry, read by id from the staff detail endpoint (O-S84-1).
+  // Expanding or collapsing a row goes back to the row's own entry.
+  const [targetId, setTargetId] = useState<string | null>(null);
+  const { entry: target, refetch: refetchTarget } = useStaffEntryDetail(targetId);
+  const setExpandedId = (id: string | null) => { setExpandedRowId(id); setTargetId(null); };
+  // Immediate reflection: a staff write re-reads the page and the open entry.
+  const onEntryChanged = () => { refetch(); refetchTarget(); };
 
   const totalPages = Math.max(1, Math.ceil(count / pageSize));
 
@@ -60,6 +176,7 @@ export const InternalClientEntries: FC = () => {
           onChange={(e) => {
             setStatus(e.target.value);
             setPage(1);
+            setExpandedId(null);
           }}
           aria-label="Filter by status"
           className="rounded-lg bg-[#0A1628] border border-white/15 px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#0066FF]"
@@ -144,37 +261,51 @@ export const InternalClientEntries: FC = () => {
                       {expanded && (
                         <tr className="border-b border-white/5 bg-white/[0.02]">
                           <td colSpan={7} className="px-5 py-3">
-                            <div className="space-y-3">
-                              <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
-                                  <thead>
-                                    <tr className="text-left text-[11px] uppercase tracking-wide text-white/30">
-                                      <th className="py-1 pr-3 font-medium">Code</th>
-                                      <th className="py-1 pr-3 font-medium">Account</th>
-                                      <th className="py-1 px-3 font-medium text-right">Debit</th>
-                                      <th className="py-1 px-3 font-medium text-right">Credit</th>
-                                      <th className="py-1 pl-3 font-medium">Description</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {e.lines.map((l) => (
-                                      <tr key={l.id} className="border-t border-white/5">
-                                        <td className="py-1 pr-3 font-mono text-white/70">{l.account_code ?? '—'}</td>
-                                        <td className="py-1 pr-3 text-white/70">{l.account_name ?? '—'}</td>
-                                        <td className="py-1 px-3 text-right text-white/80">{formatMoney(l.debit)}</td>
-                                        <td className="py-1 px-3 text-right text-white/80">{formatMoney(l.credit)}</td>
-                                        <td className="py-1 pl-3 text-white/60">{l.description || '—'}</td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
+                            {targetId === null ? (
+                              <EntryPanel
+                                orgId={orgId}
+                                entry={e}
+                                onChanged={onEntryChanged}
+                                onOpenEntry={(ref) => setTargetId(ref.id)}
+                              />
+                            ) : (
+                              <div className="space-y-3">
+                                {/* Re-targeted: the panel shows another entry
+                                    of this row's chain. */}
+                                <div className="flex flex-wrap items-center gap-3 text-xs text-white/60">
+                                  {target?.kind === 'ready' && target.row.id === targetId ? (
+                                    <>
+                                      <span className="font-mono font-semibold text-white/90">
+                                        {entryNo(target.row)}
+                                      </span>
+                                      <span>{target.row.entry_date}</span>
+                                      <Pill tone={statusTone(entryDisplayStatus(target.row))}>
+                                        {entryStatusLabel(target.row)}
+                                      </Pill>
+                                    </>
+                                  ) : target?.kind === 'error' ? (
+                                    <span className="text-red-300">{target.message}</span>
+                                  ) : (
+                                    <span className="text-white/40">Loading entry…</span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => setTargetId(null)}
+                                    className="text-[#4DA6FF] underline underline-offset-2 hover:text-white"
+                                  >
+                                    Back to {entryNo(e)}
+                                  </button>
+                                </div>
+                                {target?.kind === 'ready' && target.row.id === targetId && (
+                                  <EntryPanel
+                                    orgId={orgId}
+                                    entry={target.row}
+                                    onChanged={onEntryChanged}
+                                    onOpenEntry={(ref) => setTargetId(ref.id)}
+                                  />
+                                )}
                               </div>
-                              {/* Replace / clear on every expanded row, not only
-                                  unassigned ones (F-S69-9). The row's own
-                                  counterparty is the panel's "current"; a save
-                                  refetches the page — no local mutation. */}
-                              <StaffEntryActions orgId={orgId} entry={e} onChanged={refetch} />
-                            </div>
+                            )}
                           </td>
                         </tr>
                       )}

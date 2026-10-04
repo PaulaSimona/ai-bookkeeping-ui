@@ -76,12 +76,27 @@ const entry = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-const serve = (rows: unknown[]) => {
-  get.mockImplementation(async (url) =>
-    url === ENTRIES_URL
-      ? { status: 200, data: { count: rows.length, next: null, previous: null, results: rows } }
-      : { status: 200, data: { count: 0, next: null, previous: null, results: [] } },
-  );
+const ACCOUNTS_URL = '/api/accounting/accounts/';
+// The chart decides which rows get the "Adjust" shortcut (revenue / expense).
+const CHART = [
+  { id: 'acc-5000', code: '5000', name: 'Rent Expense', type: 'expense', is_active: true, full_name: '5000 — Rent Expense', children: [] },
+];
+
+const page = (results: unknown[]) => ({
+  status: 200,
+  data: { count: results.length, next: null, previous: null, results },
+});
+
+// `details` are the entries the detail endpoint answers for, by id.
+const serve = (rows: unknown[], details: Record<string, unknown> = {}) => {
+  get.mockImplementation(async (url) => {
+    if (url === ENTRIES_URL) return page(rows);
+    if (url === ACCOUNTS_URL) return page(CHART);
+    for (const [id, payload] of Object.entries(details)) {
+      if (url === `${ENTRIES_URL}${id}/`) return { status: 200, data: payload };
+    }
+    return page([]);
+  });
 };
 
 const entryParams = () =>
@@ -211,5 +226,82 @@ describe('accountant ledger — status badges', () => {
     expect(within(rowOf('Reversal one')).getAllByText('Reversal').length).toBeGreaterThan(0);
     // A plain posted row carries no extra status badge.
     expect(within(rowOf('Plain one')).queryByText('Posted')).not.toBeInTheDocument();
+  });
+});
+
+// JE-0068 was corrected by JE-0102, which is the chain's live entry.
+const CORRECTED_CHAIN = [
+  { id: 'e-68', number: 'JE-0068', date: '2026-09-30', role: 'original', display_status: 'corrected' },
+  { id: 'e-102', number: 'JE-0102', date: '2026-10-02', role: 'correction', display_status: 'posted' },
+];
+const CORRECTED = entry({
+  description: 'Corrected one',
+  display_status: 'corrected',
+  corrected_by: { id: 'e-102', number: 'JE-0102' },
+  live_entry: { id: 'e-102', number: 'JE-0102' },
+  chain: CORRECTED_CHAIN,
+});
+const LIVE_CORRECTION = entry({
+  id: 'e-102',
+  entry_number: 102,
+  entry_number_display: 'JE-0102',
+  entry_date: '2026-10-02',
+  description: 'Live one',
+  corrects_entry_id: 'e-68',
+  corrects_entry_number_display: 'JE-0068',
+  live_entry: { id: 'e-102', number: 'JE-0102' },
+  chain: CORRECTED_CHAIN,
+});
+
+describe('accountant ledger — actions on the live entry only (D-S85-13)', () => {
+  const rowOf = (description: string) => screen.getByText(description).parentElement as HTMLElement;
+
+  it('offers the row Adjust shortcut on a live entry, not on a corrected, reversed or reversal one', async () => {
+    serve([
+      LIVE_CORRECTION,
+      CORRECTED,
+      entry({ id: 'e-71', entry_number_display: 'JE-0071', description: 'Reversed one', display_status: 'reversed', live_entry: null }),
+      entry({ id: 'e-72', entry_number_display: 'JE-0072', description: 'Reversal one', display_status: 'reversal', live_entry: null }),
+    ]);
+    renderPage();
+    await screen.findByText('Live one');
+
+    // Every row has an expense line, so only the entry kind decides.
+    await waitFor(() =>
+      expect(within(rowOf('Live one')).getByRole('button', { name: 'Adjust' })).toBeInTheDocument(),
+    );
+    for (const description of ['Corrected one', 'Reversed one', 'Reversal one']) {
+      expect(within(rowOf(description)).queryByRole('button', { name: 'Adjust' })).not.toBeInTheDocument();
+    }
+  });
+
+  it('opens the live entry from the chain panel, read by id from the detail endpoint', async () => {
+    serve([CORRECTED], { 'e-102': LIVE_CORRECTION });
+    renderPage();
+
+    await userEvent.click(await screen.findByText('Corrected one'));
+    // The corrected entry: its chain, and no writes.
+    expect(await screen.findByRole('region', { name: 'Entry history' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Adjust this entry' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Open JE-0102' }));
+
+    // The drawer is re-targeted to JE-0102 — the live entry — and offers its writes.
+    expect(await screen.findByRole('button', { name: 'Adjust this entry' })).toBeInTheDocument();
+    expect(screen.getByText('This is the live entry.')).toBeInTheDocument();
+    expect(get.mock.calls.map(([url]) => url)).toContain(`${ENTRIES_URL}e-102/`);
+  });
+
+  it('says so when the live entry cannot be read', async () => {
+    get.mockImplementation(async (url) => {
+      if (url === ENTRIES_URL) return page([CORRECTED]);
+      if (url === `${ENTRIES_URL}e-102/`) return { status: 404, data: { detail: 'Not found.' } };
+      return page([]);
+    });
+    renderPage();
+
+    await userEvent.click(await screen.findByText('Corrected one'));
+    await userEvent.click(await screen.findByRole('button', { name: 'Open JE-0102' }));
+    expect(await screen.findByText('Not found.')).toBeInTheDocument();
   });
 });

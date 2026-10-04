@@ -3,7 +3,8 @@
 // impersonation: the ledger and the drawer's entry detail both come from the
 // org-addressed staff endpoints (useStaffReports); the shared LedgerSummaryStrip
 // / LedgerTable render exactly what the owner sees; the ExportBar downloads via
-// the staff exportUrl. `drawerActions` is left null here — fence 3 fills it.
+// the staff exportUrl. `drawerActions` holds the staff writes — on the chain's
+// LIVE entry only (D-S85-13).
 import { type FC, useEffect, useState } from 'react';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
 
@@ -21,6 +22,7 @@ import { type LedgerLine, type ReportPeriod } from '@/hooks/useReports';
 import { reportPeriodQueryString, useReportPeriod } from '@/hooks/useReportPeriod';
 import { staffExportUrl, useStaffAccountLedger, useStaffEntryDetail } from '@/hooks/useStaffReports';
 import { StaffEntryActions } from '@/components/internal/StaffEntryActions';
+import { isLiveEntry } from '@/utils/entryStatus';
 import { StaffBanner, orgLabel } from './InternalClientReports';
 
 const PAGE_SIZE = 100;
@@ -58,17 +60,25 @@ export const InternalClientAccountLedger: FC = () => {
     useStaffAccountLedger(orgId, code, period, page, PAGE_SIZE);
 
   const [openEntryId, setOpenEntryId] = useState<string | null>(null);
-  const { entry, refetch: refetchEntry } = useStaffEntryDetail(openEntryId);
-  useEffect(() => { setOpenEntryId(null); }, [code, page, reportPeriodQueryString(period)]);
+  // "Open JE-xxxx" in the drawer's chain panel re-targets the open drawer: it
+  // then shows that entry, read by id from the staff detail endpoint. Toggling
+  // a row goes back to the row's own entry.
+  const [targetId, setTargetId] = useState<string | null>(null);
+  const { entry, refetch: refetchEntry } = useStaffEntryDetail(targetId ?? openEntryId);
+  const toggleRow = (entryId: string | null) => { setOpenEntryId(entryId); setTargetId(null); };
+  useEffect(() => { setOpenEntryId(null); setTargetId(null); }, [code, page, reportPeriodQueryString(period)]);
 
   const linkState = { orgName };
   const backHref = `/internal/clients/${orgId}/reports?${reportPeriodQueryString(period)}`;
   const title = data ? `${data.account.code} · ${data.account.name}` : code;
 
   const lines: LedgerLine[] = data?.lines.results ?? [];
-  // The line the drawer is open on: its counterparty is the server's current
-  // value and refreshes with the ledger refetch after a save (no local mutation).
-  const openLine = openEntryId ? lines.find((l) => l.entry_id === openEntryId) ?? null : null;
+  // The entry the drawer shows, once its DETAIL has loaded. The staff writes
+  // act on it — never on the ledger LINE, which carries no status, chain or
+  // linkage — and only while it is the chain's live entry (D-S85-13). Its
+  // counterparty is the server's current value and refreshes with the detail
+  // re-read after a save (no local mutation).
+  const shown = entry?.kind === 'ready' ? entry.row : null;
   // Immediate reflection (S69 E8): re-read the ledger page AND the open entry.
   const onEntryChanged = () => { refetch(); refetchEntry(); };
   const count = data?.lines.count ?? 0;
@@ -126,8 +136,9 @@ export const InternalClientAccountLedger: FC = () => {
           <LedgerTable
             lines={lines}
             expandedId={openEntryId}
-            onRowToggle={setOpenEntryId}
+            onRowToggle={toggleRow}
             entry={entry}
+            onOpenEntry={(ref) => setTargetId(ref.id)}
             readOnly
             count={count}
             first={first}
@@ -136,27 +147,20 @@ export const InternalClientAccountLedger: FC = () => {
             hasNext={!!data.lines.next}
             onPrevious={() => setPage(page - 1)}
             onNext={() => setPage(page + 1)}
-            drawerActions={openLine ? (
+            drawerActions={shown && isLiveEntry(shown) ? (
               <StaffEntryActions
                 orgId={orgId}
                 entry={{
-                  id: openLine.entry_id,
-                  entry_number: openLine.entry_number,
-                  counterparty: openLine.counterparty,
-                  // F-S71-2 / O-S71-5 (A4): the Correct guard reads the entry
-                  // DETAIL (useStaffEntryDetail), never the LedgerLine — the
-                  // line carries no status or linkage. Absent until loaded.
-                  ...(entry?.kind === 'ready'
-                    ? {
-                        entry_number_display: entry.row.entry_number_display,
-                        reverses_entry_id: entry.row.reverses_entry_id ?? null,
-                        reversed_by_entry_id: entry.row.reversed_by_entry_id ?? null,
-                        corrects_entry_id: entry.row.corrects_entry_id ?? null,
-                        reverses_entry_number_display: entry.row.reverses_entry_number_display ?? null,
-                        reversed_by_entry_number_display: entry.row.reversed_by_entry_number_display ?? null,
-                        corrects_entry_number_display: entry.row.corrects_entry_number_display ?? null,
-                      }
-                    : {}),
+                  id: shown.id,
+                  entry_number: shown.entry_number ?? null,
+                  counterparty: shown.counterparty ?? null,
+                  entry_number_display: shown.entry_number_display,
+                  reverses_entry_id: shown.reverses_entry_id ?? null,
+                  reversed_by_entry_id: shown.reversed_by_entry_id ?? null,
+                  corrects_entry_id: shown.corrects_entry_id ?? null,
+                  reverses_entry_number_display: shown.reverses_entry_number_display ?? null,
+                  reversed_by_entry_number_display: shown.reversed_by_entry_number_display ?? null,
+                  corrects_entry_number_display: shown.corrects_entry_number_display ?? null,
                 }}
                 onChanged={onEntryChanged}
               />

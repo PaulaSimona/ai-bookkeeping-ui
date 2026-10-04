@@ -120,6 +120,47 @@ export const toLedgerRow = (d: any): AccountantLedgerRow => ({
 });
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
+// ─── One entry by id ───────────────────────────────────────────────────────────
+// GET /api/accounting/entries/<id>/ — the org-scoped detail read the owner and
+// the accountant share (X-Org-Id). It answers with the same registry payload a
+// list row carries, so the result goes through the one mapper. Used by the
+// account-ledger drill-down (the drawer opens on a ledger LINE, which is not an
+// entry) and by "Open JE-xxxx" in a chain panel, which re-targets a panel to
+// another entry of the chain.
+export type EntryDetailState =
+  | { kind: 'loading' }
+  | { kind: 'error'; message: string }
+  | { kind: 'ready'; row: AccountantLedgerRow };
+
+export const useEntryDetail = (
+  entryId: string | null,
+): { entry: EntryDetailState | null; refetch: () => void } => {
+  const [state, setState] = useState<EntryDetailState | null>(null);
+  const [revision, setRevision] = useState(0);
+  const refetch = useCallback(() => setRevision((r) => r + 1), []);
+
+  useEffect(() => {
+    if (!entryId) { setState(null); return; }
+    let cancelled = false;
+    setState({ kind: 'loading' });
+    api.get(`/api/accounting/entries/${encodeURIComponent(entryId)}/`)
+      .then((res) => {
+        if (cancelled) return;
+        if (res?.status === 200 && res.data) {
+          setState({ kind: 'ready', row: toLedgerRow(res.data) });
+        } else {
+          setState({ kind: 'error', message: res?.data?.detail ?? 'Could not load this entry.' });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setState({ kind: 'error', message: 'Could not load this entry.' });
+      });
+    return () => { cancelled = true; };
+  }, [entryId, revision]);
+
+  return { entry: state, refetch };
+};
+
 interface Envelope {
   count: number;
   next: string | null;

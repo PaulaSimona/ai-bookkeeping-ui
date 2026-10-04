@@ -13,6 +13,7 @@ import { type AccountantLedgerRow } from '@/views/accountant/hooks/useAccountant
 import { Spinner } from '@/views/settings/ui';
 import { formatIsoDate } from '@/utils/dates';
 import { type LedgerLine } from '@/hooks/useReports';
+import { type EntryRef } from '@/utils/entryStatus';
 import { fmtMoney, MONO } from '@/views/accounting/reports/format';
 
 export const humanize = (s: string): string => {
@@ -46,6 +47,9 @@ export interface LedgerTableProps {
   drawerActions?: ReactNode;
   // O-S69-17: threaded to EntryDrawer; absent → the drawer's owner-lane default.
   documentUrl?: (docId: string) => string | null;
+  // UI2-U3: threaded to EntryDrawer — "Open JE-xxxx" in the chain panel. The
+  // page re-targets `entry` through its lane's detail endpoint.
+  onOpenEntry?: (entry: EntryRef) => void;
 }
 
 export const LedgerTable: FC<LedgerTableProps> = ({
@@ -63,6 +67,7 @@ export const LedgerTable: FC<LedgerTableProps> = ({
   onNext,
   drawerActions = null,
   documentUrl,
+  onOpenEntry,
 }) => (
             <Card>
               {lines.length === 0 ? (
@@ -115,9 +120,11 @@ export const LedgerTable: FC<LedgerTableProps> = ({
                                   )}
                                   {entry?.kind === 'ready' && (
                                     <EntryDrawer
+                                      key={entry.row.id}
                                       row={entry.row}
                                       readOnly={readOnly}
                                       documentUrl={documentUrl}
+                                      onOpenEntry={onOpenEntry}
                                       adjustOpen={false}
                                       onToggleAdjust={() => undefined}
                                       onPosted={() => undefined}

@@ -24,6 +24,9 @@ export interface EntryChainProps {
   onOpenEntry?: (entry: EntryRef) => void;
   // light = the owner and accountant surfaces; dark = the staff console.
   tone?: 'light' | 'dark';
+  // Spacing from the host (the panel renders nothing for a chain of one, so
+  // the margin belongs on the panel itself, not on a wrapper).
+  className?: string;
 }
 
 const ROLE_LABELS: Record<string, string> = {
@@ -80,6 +83,7 @@ const TONES = {
 
 export const EntryChain: FC<EntryChainProps> = ({
   chain, currentId, liveEntry = null, truncated = false, onOpenEntry, tone = 'light',
+  className = '',
 }) => {
   if (!chain || chain.length === 0) return null;
   if (chain.length === 1 && !truncated) return null;
@@ -89,7 +93,7 @@ export const EntryChain: FC<EntryChainProps> = ({
   const liveNumber = liveEntry?.number ?? 'the live entry';
 
   return (
-    <section aria-label="Entry history" className={t.box}>
+    <section aria-label="Entry history" className={`${t.box} ${className}`}>
       <div className={t.title}>Entry history</div>
       <ol>
         {chain.map((member) => {

@@ -139,3 +139,109 @@ describe('owner ledger — status badge', () => {
     expect(within(rowOf('JE-0072')).getByText('Reversal')).toBeInTheDocument();
   });
 });
+
+// JE-0068 was corrected by JE-0102, which is the chain's live entry.
+const CORRECTED_CHAIN = [
+  { id: 'e-68', number: 'JE-0068', date: '2026-09-30', role: 'original', display_status: 'corrected' },
+  { id: 'e-102', number: 'JE-0102', date: '2026-10-02', role: 'correction', display_status: 'posted' },
+];
+const CORRECTED = entry({
+  counterparty: null,
+  display_status: 'corrected',
+  corrected_by: { id: 'e-102', number: 'JE-0102' },
+  live_entry: { id: 'e-102', number: 'JE-0102' },
+  chain: CORRECTED_CHAIN,
+});
+const LIVE_CORRECTION = entry({
+  id: 'e-102',
+  entry_number: 102,
+  entry_number_display: 'JE-0102',
+  entry_date: '2026-10-02',
+  counterparty: null,
+  corrects_entry_id: 'e-68',
+  corrects_entry_number_display: 'JE-0068',
+  live_entry: { id: 'e-102', number: 'JE-0102' },
+  chain: CORRECTED_CHAIN,
+});
+
+const expand = async (number: string) => userEvent.click(await screen.findByText(number));
+
+describe('owner ledger — Assign on the live entry only (D-S85-13)', () => {
+  it('offers Assign on an unattributed live entry', async () => {
+    serve([entry({ counterparty: null })]);
+    render(<LedgerRegister />);
+    await expand('JE-0068');
+
+    expect(await screen.findByRole('button', { name: 'Assign' })).toBeInTheDocument();
+    // An entry that was never corrected has no chain panel.
+    expect(screen.queryByRole('region', { name: 'Entry history' })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['corrected', CORRECTED, 'Corrected by JE-0102. Changes are made on the live entry, JE-0102.'],
+    [
+      'reversed',
+      entry({
+        counterparty: null,
+        display_status: 'reversed',
+        reversed_by_entry_number_display: 'JE-0103',
+        live_entry: null,
+        chain: [
+          { id: 'e-68', number: 'JE-0068', date: '2026-09-30', role: 'original', display_status: 'reversed' },
+          { id: 'e-103', number: 'JE-0103', date: '2026-10-02', role: 'reversal', display_status: 'reversal' },
+        ],
+      }),
+      'Reversed by JE-0103.',
+    ],
+    [
+      'reversal',
+      entry({
+        counterparty: null,
+        source: 'reversal',
+        display_status: 'reversal',
+        reverses_entry_number_display: 'JE-0067',
+        live_entry: null,
+        chain: [
+          { id: 'e-67', number: 'JE-0067', date: '2026-09-29', role: 'original', display_status: 'reversed' },
+          { id: 'e-68', number: 'JE-0068', date: '2026-09-30', role: 'reversal', display_status: 'reversal' },
+        ],
+      }),
+      'Reversal of JE-0067.',
+    ],
+  ])('offers no Assign on an unattributed %s entry; it shows its link and its chain', async (_kind, row, note) => {
+    serve([row]);
+    render(<LedgerRegister />);
+    await expand('JE-0068');
+
+    // Control: the panel is open.
+    expect(await screen.findByRole('region', { name: 'Entry history' })).toBeInTheDocument();
+    expect(screen.getByText(note)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Assign' })).not.toBeInTheDocument();
+  });
+
+  it('opens the live entry from the chain panel, read by id from the detail endpoint', async () => {
+    get.mockImplementation(async (url) => {
+      if (url === ENTRIES_URL) {
+        return { status: 200, data: { count: 1, next: null, previous: null, results: [CORRECTED] } };
+      }
+      if (url === `${ENTRIES_URL}e-102/`) return { status: 200, data: LIVE_CORRECTION };
+      return { status: 200, data: { count: 0, next: null, previous: null, results: [] } };
+    });
+    render(<LedgerRegister />);
+    await expand('JE-0068');
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Open JE-0102' }));
+
+    // The panel is re-targeted to JE-0102 — the live entry — and offers Assign.
+    expect(await screen.findByRole('button', { name: 'Assign' })).toBeInTheDocument();
+    expect(screen.getByText('This is the live entry.')).toBeInTheDocument();
+    expect(get.mock.calls.map(([url]) => url)).toContain(`${ENTRIES_URL}e-102/`);
+
+    // Back to the row's own entry: its note returns and Assign goes.
+    await userEvent.click(screen.getByRole('button', { name: 'Back to JE-0068' }));
+    expect(screen.queryByRole('button', { name: 'Assign' })).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Corrected by JE-0102. Changes are made on the live entry, JE-0102.'),
+    ).toBeInTheDocument();
+  });
+});
