@@ -13,6 +13,8 @@ import {
   CenteredSpinner,
   EmptyState,
   ErrorBanner,
+  Toast,
+  useToast,
 } from '@/components/internal/ui';
 import { LedgerSummaryStrip } from '@/components/ledger/LedgerSummaryStrip';
 import { LedgerTable, humanize } from '@/components/ledger/LedgerTable';
@@ -81,6 +83,9 @@ export const InternalClientAccountLedger: FC = () => {
   const shown = entry?.kind === 'ready' ? entry.row : null;
   // Immediate reflection (S69 E8): re-read the ledger page AND the open entry.
   const onEntryChanged = () => { refetch(); refetchEntry(); };
+  // The page's toast: a save reloads the ledger, which unmounts the drawer and
+  // the staff panel under it, so the confirmation lives here.
+  const { toast, showToast } = useToast();
   const count = data?.lines.count ?? 0;
   const first = count === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const last = count === 0 ? 0 : first + lines.length - 1;
@@ -157,6 +162,7 @@ export const InternalClientAccountLedger: FC = () => {
                 }}
                 onChanged={onEntryChanged}
                 onOpenEntry={(ref) => setTargetId(ref.id)}
+                notify={showToast}
               />
             ) : null}
             documentUrl={() => null}   // O-S69-17: no owner-lane call from the staff drawer
@@ -167,6 +173,8 @@ export const InternalClientAccountLedger: FC = () => {
           </Link>
         </>
       )}
+
+      <Toast toast={toast} />
     </PageContainer>
   );
 };

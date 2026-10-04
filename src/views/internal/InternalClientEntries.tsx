@@ -5,7 +5,11 @@ import { useStaffEntryDetail } from '@/hooks/useStaffReports';
 // S69 E8 fence 4a (F-S69-9): the expanded row's staff writes are the shared
 // StaffEntryActions panel — the same implementation the staff account ledger
 // uses. Offered on the chain's LIVE entry only (D-S85-13).
-import { StaffEntryActions } from '@/components/internal/StaffEntryActions';
+import {
+  MergeEditor,
+  StaffEntryActions,
+  type MergeParty,
+} from '@/components/internal/StaffEntryActions';
 import { EntryChain } from '@/components/ledger/EntryChain';
 import {
   PageContainer,
@@ -14,7 +18,9 @@ import {
   CenteredSpinner,
   EmptyState,
   ErrorBanner,
+  Toast,
   formatMoney,
+  useToast,
 } from '@/components/internal/ui';
 import {
   REGISTRY_STATUS_OPTIONS,
@@ -55,8 +61,16 @@ interface PanelEntry extends EntryLinkSource {
   entry_number?: number | null;
   entry_number_display?: string | null;
   counterparty?: { id: string; name: string } | null;
+  total_debits?: string | null;
   lines: PanelLine[];
 }
+
+// One side of a merge, as the confirm names it: the number and the total.
+const mergeParty = (e: PanelEntry): MergeParty => ({
+  id: e.id,
+  number: entryNo(e),
+  total: e.total_debits ?? null,
+});
 
 // The expanded panel of one entry (O-S84-1, D-S85-13): its lines, its chain
 // with "Open JE-xxxx" for the live entry, and — on the chain's LIVE entry only
@@ -67,7 +81,9 @@ const EntryPanel: FC<{
   entry: PanelEntry;
   onChanged: () => void;
   onOpenEntry: (ref: EntryRef) => void;
-}> = ({ orgId, entry, onChanged, onOpenEntry }) => {
+  onStartMerge: (duplicate: MergeParty) => void;
+  notify: (message: string, type: 'success' | 'error') => void;
+}> = ({ orgId, entry, onChanged, onOpenEntry, onStartMerge, notify }) => {
   const note = nonLiveNote(entry);
   return (
     <div className="space-y-3">
@@ -118,6 +134,8 @@ const EntryPanel: FC<{
           }}
           onChanged={onChanged}
           onOpenEntry={onOpenEntry}
+          onStartMerge={() => onStartMerge(mergeParty(entry))}
+          notify={notify}
         />
       ) : (
         note && <p className="text-xs text-amber-200/80">{note}</p>
@@ -143,6 +161,34 @@ export const InternalClientEntries: FC = () => {
   const setExpandedId = (id: string | null) => { setExpandedRowId(id); setTargetId(null); };
   // Immediate reflection: a staff write re-reads the page and the open entry.
   const onEntryChanged = () => { refetch(); refetchTarget(); };
+  // The page's toast: a save reloads the list, which unmounts the entry's
+  // panel, so the confirmation lives here.
+  const { toast, showToast } = useToast();
+
+  // Merge pick mode (D-S85-14): "Merge into…" on a duplicate's panel starts
+  // it; while it is on, clicking a row picks the surviving entry instead of
+  // expanding it. Only another LIVE entry can be picked — the server refuses
+  // anything else.
+  const [merge, setMerge] = useState<{ duplicate: MergeParty; survivor: MergeParty | null } | null>(null);
+  const startMerge = (duplicate: MergeParty) => {
+    setMerge({ duplicate, survivor: null });
+    setExpandedId(null);
+  };
+  const canSurvive = (e: PanelEntry): boolean =>
+    merge !== null && e.id !== merge.duplicate.id && isLiveEntry(e);
+  const onMerged = (summary: string) => {
+    showToast(summary, 'success');
+    setMerge(null);
+    onEntryChanged();
+  };
+  // A merge refusal can name another entry (the ITC adjustment that blocks
+  // it): leave pick mode and show that entry in the duplicate's panel.
+  const openFromMerge = (ref: EntryRef) => {
+    if (!merge) return;
+    setExpandedRowId(merge.duplicate.id);
+    setTargetId(ref.id);
+    setMerge(null);
+  };
 
   const totalPages = Math.max(1, Math.ceil(count / pageSize));
 
@@ -194,6 +240,16 @@ export const InternalClientEntries: FC = () => {
 
       {error && <ErrorBanner message={error} onRetry={refetch} />}
 
+      {merge && (
+        <MergeEditor
+          duplicate={merge.duplicate}
+          survivor={merge.survivor}
+          onCancel={() => setMerge(null)}
+          onMerged={onMerged}
+          onOpenEntry={openFromMerge}
+        />
+      )}
+
       {isLoading ? (
         <SectionCard>
           <CenteredSpinner label="Loading entries…" />
@@ -220,11 +276,24 @@ export const InternalClientEntries: FC = () => {
               <tbody>
                 {items.map((e) => {
                   const expanded = expandedId === e.id;
+                  // Pick mode: a click picks the survivor; the duplicate and
+                  // any entry that is not live cannot be picked.
+                  const pickable = canSurvive(e);
+                  const picked = merge?.survivor?.id === e.id;
+                  const rowCls = merge
+                    ? `${pickable ? 'cursor-pointer hover:bg-[#0066FF]/10' : 'opacity-40'} ${
+                        picked ? 'bg-[#0066FF]/20' : ''
+                      }`
+                    : 'cursor-pointer hover:bg-white/5';
                   return (
                     <Fragment key={e.id}>
                       <tr
-                        onClick={() => setExpandedId(expanded ? null : e.id)}
-                        className="border-b border-white/5 cursor-pointer hover:bg-white/5 transition-colors align-top"
+                        onClick={() => {
+                          if (!merge) setExpandedId(expanded ? null : e.id);
+                          else if (pickable) setMerge({ ...merge, survivor: mergeParty(e) });
+                        }}
+                        aria-selected={merge ? picked : undefined}
+                        className={`border-b border-white/5 transition-colors align-top ${rowCls}`}
                       >
                         <td className="py-2.5 px-5 text-white/70 whitespace-nowrap">{e.entry_date}</td>
                         <td className="py-2.5 px-3 text-white/60">{entryNo(e)}</td>
@@ -257,6 +326,8 @@ export const InternalClientEntries: FC = () => {
                                 entry={e}
                                 onChanged={onEntryChanged}
                                 onOpenEntry={(ref) => setTargetId(ref.id)}
+                                onStartMerge={startMerge}
+                                notify={showToast}
                               />
                             ) : (
                               <div className="space-y-3">
@@ -292,6 +363,8 @@ export const InternalClientEntries: FC = () => {
                                     entry={target.row}
                                     onChanged={onEntryChanged}
                                     onOpenEntry={(ref) => setTargetId(ref.id)}
+                                    onStartMerge={startMerge}
+                                    notify={showToast}
                                   />
                                 )}
                               </div>
@@ -334,6 +407,8 @@ export const InternalClientEntries: FC = () => {
           </div>
         </div>
       )}
+
+      <Toast toast={toast} />
     </PageContainer>
   );
 };

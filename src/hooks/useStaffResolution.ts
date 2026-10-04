@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import api from '@/utils/api';
 import { usePaginatedList } from '@/hooks/usePaginatedList';
 import { type LedgerEntryRow } from '@/hooks/useLedgerEntries';
+import { formatEntryNumber } from '@/utils/entryStatus';
 
 /**
  * Internal-staff client-data resolution (backend s28, fe71367). Lets an assigned
@@ -10,6 +11,8 @@ import { type LedgerEntryRow } from '@/hooks/useLedgerEntries';
  *   GET/POST /api/accounting/staff/orgs/<org_id>/counterparties/
  *   POST     /api/accounting/staff/entries/<id>/attribute/
  *   POST     /api/accounting/staff/entries/<id>/correct/    (S70 3c, O-S70-6)
+ *   POST     /api/accounting/staff/entries/<id>/reverse/ · merge-into/ ·
+ *            attach-document/, staff/documents/<id>/dismiss-duplicate/  (S84 CW4)
  *   GET      /api/accounting/staff/orgs/<org_id>/entries/  (paginated)
  *   GET/POST /api/accounting/staff/orgs/<org_id>/cards/    (paginated; s29)
  *   PATCH    /api/accounting/staff/cards/<pk>/             (s29)
@@ -281,6 +284,172 @@ export const correctPostedEntry = async (
     };
   } catch {
     return { ok: false, errorDetail: 'Correction failed.' };
+  }
+};
+
+// ─── Staff remediation (S84 CW4, D-S84-7 / D-S85-14) ──────────────────────────
+// Four staff-lane writes (backend accounting/remediation_views.py), each one
+// transaction and one audit row:
+//   POST staff/entries/<id>/reverse/             {reason}
+//   POST staff/entries/<id>/merge-into/          {survivor_entry_id, reason}
+//   POST staff/entries/<id>/attach-document/     {document_id, reason}
+//   POST staff/documents/<id>/dismiss-duplicate/ {reason}
+// The bodies are STRICT (an unknown key is a 400). Success is 201 with every
+// entry the action created and what it moved. A refusal is {code, detail,
+// ...context}: 409 for a state conflict, 400 otherwise, the staff lane's 404
+// for anything the caller may not see, 429 for the shared hourly limit.
+
+export interface RemediationEntryRef {
+  id: string;
+  entry_number: number | null;
+}
+
+export interface RemediationCreatedEntry extends RemediationEntryRef {
+  kind: string; // reversal | itc_adjustment | …
+}
+
+export interface RemediationResult {
+  action: string;
+  entry?: RemediationEntryRef;
+  survivor?: RemediationEntryRef;
+  document_id?: number;
+  entries_created: RemediationCreatedEntry[];
+  moved: Record<string, unknown>;
+}
+
+// A refusal as the server sent it. `detail` is the server's own text and is
+// what the reviewer reads; `code` tells the refusals apart; `context` holds
+// the rest of the body (field, links, entry_id, adjustment_entry_id,
+// duplicate_total, survivor_total, current_status, …).
+export interface RemediationRefusal {
+  status?: number;
+  code?: string;
+  detail: string;
+  context: Record<string, unknown>;
+}
+
+export type RemediationOutcome =
+  | { ok: true; result: RemediationResult }
+  | { ok: false; refusal: RemediationRefusal };
+
+export const REMEDIATION_REASON_MAX = 500;
+
+const remediate = async (
+  url: string,
+  body: Record<string, unknown>,
+  fallback: string,
+): Promise<RemediationOutcome> => {
+  try {
+    const res = await api.post(url, body);
+    if (res && res.status === 201 && res.data) {
+      const data = res.data as Partial<RemediationResult>;
+      return {
+        ok: true,
+        result: {
+          ...data,
+          action: data.action ?? '',
+          entries_created: Array.isArray(data.entries_created) ? data.entries_created : [],
+          moved: data.moved ?? {},
+        },
+      };
+    }
+    const status = res?.status;
+    const raw = res?.data;
+    const context: Record<string, unknown> =
+      raw != null && typeof raw === 'object' && !Array.isArray(raw)
+        ? (raw as Record<string, unknown>)
+        : {};
+    if (status === 404) return { ok: false, refusal: { status, detail: 'Not found', context } };
+    if (status === 429) {
+      return {
+        ok: false,
+        refusal: {
+          status,
+          detail: 'The hourly limit for these actions has been reached. Try again later.',
+          context,
+        },
+      };
+    }
+    return {
+      ok: false,
+      refusal: { status, code: refusalCode(res), detail: extractDetail(res, fallback), context },
+    };
+  } catch {
+    return { ok: false, refusal: { detail: fallback, context: {} } };
+  }
+};
+
+// Reverse a live entry that nothing points at. 409 entry_has_links (context
+// `links`) when a bank state, an active match or a document state does.
+export const reverseStaffEntry = (entryId: string, reason: string) =>
+  remediate(`/api/accounting/staff/entries/${entryId}/reverse/`, { reason }, 'Reversal failed.');
+
+// Merge the duplicate entry into the entry that survives.
+export const mergeStaffEntry = (entryId: string, survivorEntryId: string, reason: string) =>
+  remediate(
+    `/api/accounting/staff/entries/${entryId}/merge-into/`,
+    { survivor_entry_id: survivorEntryId, reason },
+    'Merge failed.',
+  );
+
+// Attach one of the org's documents to a live entry. A document outside the
+// entry's org is the same 404 as one that does not exist.
+export const attachStaffDocument = (entryId: string, documentId: number, reason: string) =>
+  remediate(
+    `/api/accounting/staff/entries/${entryId}/attach-document/`,
+    { document_id: documentId, reason },
+    'Attaching the document failed.',
+  );
+
+// Reject an UNPOSTED document as a duplicate and clear its duplicate flag.
+export const dismissDuplicateDocument = (documentId: number, reason: string) =>
+  remediate(
+    `/api/accounting/staff/documents/${documentId}/dismiss-duplicate/`,
+    { reason },
+    'Dismissing the document failed.',
+  );
+
+const createdLabel = (e: RemediationCreatedEntry): string =>
+  `${formatEntryNumber(e.entry_number) ?? 'an entry'} (${e.kind.replace(/_/g, ' ')})`;
+
+// One line saying what an action did and what it moved — the success message.
+export const remediationSummary = (result: RemediationResult): string => {
+  const entry = formatEntryNumber(result.entry?.entry_number) ?? 'The entry';
+  const created = result.entries_created.map(createdLabel);
+  const createdText = created.length > 0 ? ` Created ${created.join(', ')}.` : '';
+  const moved = result.moved as {
+    bank_state_ids?: unknown[];
+    matches_carried?: unknown;
+    matches_unmatched?: unknown;
+    documents?: { document_id?: number; mode?: string }[];
+  };
+  const count = (v: unknown): number => (Array.isArray(v) ? v.length : typeof v === 'number' ? v : 0);
+  const documents = Array.isArray(moved.documents) ? moved.documents : [];
+  const documentText = documents
+    .map((d) => `document ${d.document_id ?? '—'}${d.mode ? ` (${d.mode.replace(/_/g, ' ')})` : ''}`)
+    .join(', ');
+
+  switch (result.action) {
+    case 'reverse':
+      return `${entry} reversed.${createdText}`;
+    case 'merge': {
+      const survivor = formatEntryNumber(result.survivor?.entry_number) ?? 'the surviving entry';
+      const parts = [
+        `${count(moved.bank_state_ids)} bank link(s)`,
+        `${count(moved.matches_carried)} match(es) carried`,
+        `${count(moved.matches_unmatched)} match(es) left unmatched`,
+        documentText || 'no documents',
+      ];
+      return `${entry} merged into ${survivor}.${createdText} Moved: ${parts.join('; ')}.`;
+    }
+    case 'attach_document':
+      return `Attached to ${entry}: ${documentText || 'the document'}.${createdText}`;
+    case 'dismiss_duplicate':
+      return result.document_id != null
+        ? `Document ${result.document_id} dismissed as a duplicate.`
+        : 'Document dismissed as a duplicate.';
+    default:
+      return `Done.${createdText}`;
   }
 };
 

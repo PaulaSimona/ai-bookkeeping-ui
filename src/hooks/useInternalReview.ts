@@ -42,6 +42,13 @@ export interface ReviewEntry {
   source_document_id: number | null;
   source_document_name: string | null;
   source_document_url: string | null;
+  // The document this draft's own document is suspected to duplicate
+  // (review_serializers.py suspected_duplicate_of_*); all null when it is not
+  // flagged. Optional so older fixtures type-check; the API always sends all
+  // three. Drives "Dismiss duplicate" in the queue (D-S85-14).
+  suspected_duplicate_of_id?: number | null;
+  suspected_duplicate_of_name?: string | null;
+  suspected_duplicate_of_url?: string | null;
   total_debits: string | number | null;
   total_credits: string | number | null;
   lines: ReviewLine[];
@@ -63,8 +70,8 @@ export interface RejectCorrectPayload {
   reason_code: string;
   note: string;
   lines: CorrectedLineInput[];
-  // Tri-state counterparty (§14 14-C-2b). OMIT the key → replacement inherits the
-  // original's counterparty; null → clear it; a UUID → set it. The editor only
+  // Tri-state counterparty (§14 14-C-2b). OMIT the key → the posted entry keeps
+  // the draft's counterparty; null → clear it; a UUID → set it. The editor only
   // includes this key when the reviewer chooses clear/pick, so `keep` inherits.
   counterparty_id?: string | null;
 }

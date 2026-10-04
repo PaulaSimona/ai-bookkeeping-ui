@@ -268,3 +268,106 @@ describe('staff client entries — writes on the live entry only (D-S85-13)', ()
     ).toBeInTheDocument();
   });
 });
+
+describe('staff client entries — Merge into… pick mode (D-S85-14)', () => {
+  const post = api.post as unknown as Mock<(url: string, body?: unknown) => Promise<unknown>>;
+
+  // Two live entries for the same amount, and one that was corrected.
+  const DUPLICATE = entry({ description: 'Rent (entered twice)' });
+  const SURVIVOR = entry({
+    id: 'e-90',
+    entry_number: 90,
+    entry_number_display: 'JE-0090',
+    description: 'Rent',
+    live_entry: { id: 'e-90', number: 'JE-0090' },
+    chain_root: { id: 'e-90', number: 'JE-0090' },
+    chain: [{ id: 'e-90', number: 'JE-0090', date: '2026-09-30', role: 'original', display_status: 'posted' }],
+  });
+  const NOT_LIVE = entry({
+    id: 'e-70',
+    entry_number: 70,
+    entry_number_display: 'JE-0070',
+    description: 'Old rent',
+    display_status: 'corrected',
+    corrected_by: { id: 'e-102', number: 'JE-0102' },
+    live_entry: { id: 'e-102', number: 'JE-0102' },
+  });
+
+  // The body POST staff/entries/<duplicate>/merge-into/ takes.
+  const MERGE_URL = '/api/accounting/staff/entries/e-68/merge-into/';
+  const MERGE_BODY = { survivor_entry_id: 'e-90', reason: 'Entered twice' };
+
+  const startMerge = async () => {
+    serve([DUPLICATE, SURVIVOR, NOT_LIVE]);
+    renderPage();
+    await userEvent.click(await screen.findByText('JE-0068'));
+    await userEvent.click(await screen.findByRole('button', { name: 'Merge into…' }));
+  };
+
+  beforeEach(() => {
+    post.mockReset();
+  });
+
+  it('puts the list into pick mode; clicking a row picks the survivor instead of expanding it', async () => {
+    await startMerge();
+
+    expect(screen.getByText('Merge JE-0068 into…')).toBeInTheDocument();
+    expect(screen.getByText('Click the entry that should survive in the list below.')).toBeInTheDocument();
+    // The duplicate's panel is closed while picking.
+    expect(screen.queryByRole('button', { name: 'Correct' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByText('JE-0090'));
+    // The number is now in the merge panel too; the row is the one in the table.
+    const pickedRow = within(screen.getByRole('table')).getByText('JE-0090').closest('tr');
+    expect(pickedRow).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('Surviving entry')).toBeInTheDocument();
+    // Picking did not expand the row.
+    expect(screen.queryByRole('button', { name: 'Correct' })).not.toBeInTheDocument();
+  });
+
+  it('does not let the duplicate itself or a non-live entry be picked', async () => {
+    await startMerge();
+
+    await userEvent.click(within(screen.getByRole('table')).getByText('JE-0068'));
+    await userEvent.click(screen.getByText('JE-0070'));
+    expect(screen.queryByText('Surviving entry')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Merge' })).toBeDisabled();
+  });
+
+  it('the confirm names both entries and both totals, then posts the merge and leaves pick mode', async () => {
+    post.mockResolvedValue({
+      status: 201,
+      data: {
+        action: 'merge',
+        entry: { id: 'e-68', entry_number: 68 },
+        survivor: { id: 'e-90', entry_number: 90 },
+        entries_created: [{ id: 'r-1', entry_number: 121, kind: 'reversal' }],
+        moved: { bank_state_ids: [], matches_carried: [], matches_unmatched: [], documents: [] },
+      },
+    });
+    await startMerge();
+    await userEvent.click(screen.getByText('JE-0090'));
+    await userEvent.type(screen.getByRole('textbox', { name: 'Reason' }), 'Entered twice');
+    await userEvent.click(screen.getByRole('button', { name: 'Merge' }));
+
+    expect(screen.getByText('Merge JE-0068 into JE-0090?')).toBeInTheDocument();
+    expect(
+      screen.getByText(/JE-0068 \(total 100\.00\) is reversed as a duplicate, and its bank links and documents move to JE-0090 \(total 100\.00\)\./),
+    ).toBeInTheDocument();
+    expect(post).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    expect(post).toHaveBeenCalledWith(MERGE_URL, MERGE_BODY);
+    // The page's toast lists what moved, and pick mode is over.
+    expect(await screen.findByText(/JE-0068 merged into JE-0090\. Created JE-0121 \(reversal\)\./)).toBeInTheDocument();
+    expect(screen.queryByText('Merge JE-0068 into…')).not.toBeInTheDocument();
+  });
+
+  it('Cancel leaves pick mode without writing', async () => {
+    await startMerge();
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByText('Merge JE-0068 into…')).not.toBeInTheDocument();
+    expect(post).not.toHaveBeenCalled();
+  });
+});

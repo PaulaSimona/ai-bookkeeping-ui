@@ -148,6 +148,91 @@ beforeEach(() => {
   });
 });
 
+describe('InternalQueue dismiss duplicate (UI2-U5, D-S85-14)', () => {
+  const DISMISS_URL = '/api/accounting/staff/documents/41/dismiss-duplicate/';
+  // The body the endpoint takes (backend StaffRemediationReasonSerializer).
+  const DISMISS_BODY = { reason: 'Same receipt uploaded twice' };
+
+  // Entry A's document is flagged as a suspected duplicate; entry B's is not.
+  const serveFlagged = () => {
+    const flagged = {
+      ...QUEUE[0],
+      source_document_id: 41,
+      source_document_name: 'rent-sept.pdf',
+      suspected_duplicate_of_id: 17,
+      suspected_duplicate_of_name: 'rent-sept-copy.pdf',
+      suspected_duplicate_of_url: null,
+    };
+    get.mockImplementation((url) => {
+      if (url === '/api/accounting/review/') return Promise.resolve(page([flagged, QUEUE[1]]));
+      if (url in ACCOUNTS) return Promise.resolve(page(ACCOUNTS[url]));
+      return Promise.resolve({ status: 404, data: { detail: 'Not found.' } });
+    });
+  };
+
+  it('is offered only on a draft whose document is flagged', async () => {
+    const user = userEvent.setup();
+    serveFlagged();
+    render(<InternalQueue />);
+
+    await openEntry(user, 'Birch flight to Calgary');
+    // Control: the pane is open on the unflagged entry.
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Dismiss duplicate' })).not.toBeInTheDocument();
+
+    await openEntry(user, 'Acme September rent');
+    expect(screen.getByRole('button', { name: 'Dismiss duplicate' })).toBeInTheDocument();
+    expect(screen.getByText(/This document may be a duplicate of rent-sept-copy\.pdf/)).toBeInTheDocument();
+  });
+
+  it('needs a reason and a confirm, then posts {reason} for the document', async () => {
+    const user = userEvent.setup();
+    serveFlagged();
+    post.mockResolvedValue({
+      status: 201,
+      data: { action: 'dismiss_duplicate', document_id: 41, entries_created: [], moved: {} },
+    });
+    render(<InternalQueue />);
+    await openEntry(user, 'Acme September rent');
+
+    await user.click(screen.getByRole('button', { name: 'Dismiss duplicate' }));
+    // The editor's own button waits for a reason.
+    expect(screen.getByRole('button', { name: 'Dismiss duplicate' })).toBeDisabled();
+    await user.type(screen.getByRole('textbox', { name: 'Reason' }), 'Same receipt uploaded twice');
+    await user.click(screen.getByRole('button', { name: 'Dismiss duplicate' }));
+
+    expect(screen.getByText('Dismiss duplicate document?')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Rejects rent-sept\.pdf as a duplicate of rent-sept-copy\.pdf\./),
+    ).toBeInTheDocument();
+    expect(post).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Confirm' }));
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    expect(post).toHaveBeenCalledWith(DISMISS_URL, DISMISS_BODY);
+    expect(await screen.findByText('Document 41 dismissed as a duplicate.')).toBeInTheDocument();
+  });
+
+  it.each([
+    ['already_posted', 'This document already has a posted entry. Merge the entry instead.'],
+    ['already_rejected', 'This document was already rejected.'],
+  ])('%s: shows the server\'s detail and keeps the pane open', async (code, detail) => {
+    const user = userEvent.setup();
+    serveFlagged();
+    post.mockResolvedValue({ status: 409, data: { code, detail } });
+    render(<InternalQueue />);
+    await openEntry(user, 'Acme September rent');
+
+    await user.click(screen.getByRole('button', { name: 'Dismiss duplicate' }));
+    await user.type(screen.getByRole('textbox', { name: 'Reason' }), 'Same receipt uploaded twice');
+    await user.click(screen.getByRole('button', { name: 'Dismiss duplicate' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(detail);
+    expect(screen.getByRole('button', { name: 'Dismiss duplicate' })).toBeInTheDocument();
+  });
+});
+
 describe('InternalQueue reject & correct', () => {
   it('posts the unchanged request body for an account chosen through the picker', async () => {
     const user = userEvent.setup();
