@@ -30,7 +30,6 @@ import { PrivacyPolicy } from '@/views/legal/PrivacyPolicy';
 import { TermsOfService } from '@/views/legal/TermsOfService';
 import { ReviewerDashboard } from '@/views/reviewer';
 import { LandingPage } from '@/pages/LandingPage';
-import { ChartOfAccounts } from '@/pages/accounts/ChartOfAccounts';
 import { BankConnections } from '@/views/accounting/BankConnections';
 import { DocumentsPage } from '@/views/accounting/DocumentsPage';
 import { CardsPage } from '@/views/accounting/CardsPage';
@@ -49,13 +48,11 @@ import { NewAdjustment } from '@/views/accountant/NewAdjustment';
 import { AccountantReports } from '@/views/accountant/Reports';
 import { PeriodClose } from '@/views/accountant/PeriodClose';
 import { PlaidOauthCallback } from '@/views/accounting/PlaidOauthCallback';
-import { AccountingReview } from '@/pages/accounting/AccountingReview';
 import { TaxProfile } from '@/pages/accounting/TaxProfile';
 import { AdvancedPlans } from '@/pages/accounting/AdvancedPlans';
 import { AdvancedPlansSuccess } from '@/pages/accounting/AdvancedPlansSuccess';
 import { Onboarding } from '@/pages/accounting/Onboarding';
 import { OnboardingGate } from '@/components/accounting/OnboardingGate';
-import { ReviewerManagement } from '@/pages/accounting/ReviewerManagement';
 import { FAQ } from '@/views/faq';
 import { NotFound } from '@/views/not-found';
 // Internal staff console (§15) — own shell + System B guards
@@ -227,17 +224,20 @@ const App: FC = () => {
         <Route path="/accounting/subscription"         element={<AdvancedPlans />} />
         <Route path="/accounting/subscription/success" element={<AdvancedPlansSuccess />} />
         <Route path="/reviewer"             element={<ReviewerDashboard />} />
-        <Route path="/accounts"             element={<RequireSuperuser><ChartOfAccounts /></RequireSuperuser>} />
-        <Route path="/reviewer-management"  element={<RequireSuperuser><ReviewerManagement /></RequireSuperuser>} />
-        <Route path="/accounting-review"    element={<RequireStaffOrSuperuser><AccountingReview /></RequireStaffOrSuperuser>} />
+        {/* Retired legacy staff pages (O-S85-2, D-S85-9): each path redirects,
+            with replace, to the surface that took it over. The targets carry
+            their own guards. */}
+        <Route path="/accounts"             element={<Navigate to="/settings?tab=chart" replace />} />
+        <Route path="/reviewer-management"  element={<Navigate to="/internal/staff" replace />} />
+        <Route path="/accounting-review"    element={<Navigate to="/internal/queue" replace />} />
       </Route>
 
       {/* Internal staff console (§15, s27/15-A) — sibling subtree with its own
           dark shell + System B guards (GET /api/accounting/staff/me/). Kept OUT
           of the client PrivateLayout on purpose; must precede the catch-all or
-          it would be swallowed. Legacy staff pages (/reviewer, /accounts,
-          /reviewer-management, /accounting-review) are untouched and retire in a
-          later owner-approved step. */}
+          it would be swallowed. Of the legacy staff pages, /accounts,
+          /reviewer-management and /accounting-review are retired and redirect
+          (above); the Tier 1 /reviewer page is untouched. */}
       <Route path="/internal" element={<Navigate to="/internal/queue" replace />} />
       <Route element={<InternalLayout />}>
         <Route path="/internal/queue"       element={<RequireInternalStaff><InternalQueue /></RequireInternalStaff>} />
