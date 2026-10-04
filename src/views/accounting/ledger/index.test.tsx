@@ -140,6 +140,53 @@ describe('owner ledger — status badge', () => {
   });
 });
 
+describe('owner ledger — effective totals (D-S85-18)', () => {
+  const line = (id: string, debit: string | null, credit: string | null, reverses: string | null) => ({
+    id,
+    account_id: `acc-${id}`,
+    account_code: '5000',
+    account_name: 'Rent Expense',
+    debit,
+    credit,
+    description: '',
+    tax_code: '',
+    line_order: 0,
+    reverses_line_id: reverses,
+  });
+
+  it('lists a correction on the total of its corrected lines; an ordinary entry keeps its total', async () => {
+    serve([
+      // Two lines reversing the corrected entry, then the two corrected lines:
+      // served 200.00, stands for 100.00.
+      entry({
+        source: 'staff_correction',
+        total_debits: '200.00',
+        total_credits: '200.00',
+        lines: [
+          line('c1', null, '100.00', 'old-1'),
+          line('c2', '100.00', null, 'old-2'),
+          line('c3', '100.00', null, null),
+          line('c4', null, '100.00', null),
+        ],
+      }),
+      entry({
+        id: 'e-90',
+        entry_number: 90,
+        entry_number_display: 'JE-0090',
+        total_debits: '120.00',
+        total_credits: '120.00',
+        lines: [line('o1', '120.00', null, null), line('o2', null, '120.00', null)],
+      }),
+    ]);
+    render(<LedgerRegister />);
+    await screen.findByText('JE-0068');
+
+    expect(rowOf('JE-0068')).toHaveTextContent('$100.00');
+    expect(rowOf('JE-0068')).not.toHaveTextContent('$200.00');
+    expect(rowOf('JE-0090')).toHaveTextContent('$120.00');
+  });
+});
+
 // JE-0068 was corrected by JE-0102, which is the chain's live entry.
 const CORRECTED_CHAIN = [
   { id: 'e-68', number: 'JE-0068', date: '2026-09-30', role: 'original', display_status: 'corrected' },

@@ -17,6 +17,7 @@ import { useEntryDetail } from '@/views/accountant/hooks/useAccountantLedger';
 import {
   REGISTRY_STATUS_OPTIONS,
   canAct,
+  effectiveTotals,
   entryDisplayStatus,
   entryStatusLabel,
   nonLiveNote,
@@ -488,6 +489,9 @@ export const LedgerRegister: FC = () => {
                 <tbody>
                   {rows.map((row) => {
                     const open = expandedId === row.id;
+                    // D-S85-18: a correction is totalled on its corrected
+                    // lines; any other entry keeps the served totals.
+                    const totals = effectiveTotals(row);
                     return (
                       <Fragment key={row.id}>
                         <tr
@@ -504,8 +508,8 @@ export const LedgerRegister: FC = () => {
                               {row.counterparty && <CounterpartyChip name={row.counterparty.name} />}
                             </span>
                           </td>
-                          <td className={`whitespace-nowrap px-4 py-3 text-right tabular-nums text-gray-700 ${MONO}`}>{fmtMoney(row.total_debits)}</td>
-                          <td className={`whitespace-nowrap px-4 py-3 text-right tabular-nums text-gray-700 ${MONO}`}>{fmtMoney(row.total_credits)}</td>
+                          <td className={`whitespace-nowrap px-4 py-3 text-right tabular-nums text-gray-700 ${MONO}`}>{fmtMoney(totals.debits)}</td>
+                          <td className={`whitespace-nowrap px-4 py-3 text-right tabular-nums text-gray-700 ${MONO}`}>{fmtMoney(totals.credits)}</td>
                           <td className="px-4 py-3"><StatusBadge row={row} /></td>
                         </tr>
                         {open && (

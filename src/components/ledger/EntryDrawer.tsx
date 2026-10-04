@@ -17,8 +17,10 @@ import { formatIsoDate } from '@/utils/dates';
 import { EntryChain } from '@/components/ledger/EntryChain';
 import {
   canAct,
+  effectiveTotals,
   entryDisplayStatus,
   entryStatusLabel,
+  isReversingLine,
   nonLiveNote,
   type EntryRef,
 } from '@/utils/entryStatus';
@@ -84,6 +86,10 @@ export const EntryDrawer: FC<EntryDrawerProps> = ({
     (s: RootState) => s.auth.user?.user?.id ?? s.auth.user?.id ?? null,
   );
   const orderedLines = [...row.lines].sort((a, b) => a.line_order - b.line_order);
+  // D-S85-18: an entry holding both reversing and corrected lines (a one-entry
+  // correction) is totalled on its corrected lines; any other entry keeps the
+  // totals the server sent.
+  const totals = effectiveTotals(row);
 
   // Void state. voidedInfo is set locally on a successful void so the drawer shows
   // the voided state immediately (the list also refetches via onVoided). A row that
@@ -229,6 +235,13 @@ export const EntryDrawer: FC<EntryDrawerProps> = ({
                 <span className={`text-gray-500 ${MONO}`}>{l.account_code ?? ''}</span>
                 {l.account_code ? ' · ' : ''}
                 {l.account_name ?? ''}
+                {/* A line that reverses a line of the corrected entry — not
+                    part of this entry's own total. */}
+                {isReversingLine(l) && (
+                  <span className="ml-2 rounded-full bg-gray-100 px-1.5 py-0.5 text-[10.5px] font-medium text-gray-500">
+                    reversing
+                  </span>
+                )}
                 {l.description ? (
                   <span className="mt-0.5 block text-[11.5px] text-gray-400">{l.description}</span>
                 ) : null}
@@ -238,11 +251,14 @@ export const EntryDrawer: FC<EntryDrawerProps> = ({
             </div>
           ))}
         </div>
-        {/* Totals row — is_balanced is a backend invariant; not recomputed here. */}
+        {/* Totals row — is_balanced is a backend invariant; not recomputed here.
+            A correction shows the totals of its corrected lines (D-S85-18). */}
         <div className="grid grid-cols-[1fr_140px_140px] gap-3 border-t border-gray-100 bg-gray-50 px-4 py-2.5 text-[12px] font-semibold text-gray-600">
-          <span className="justify-self-start">Total</span>
-          <span className={`justify-self-end text-gray-900 ${MONO}`}>{fmtMoney(row.total_debits)}</span>
-          <span className={`justify-self-end text-gray-900 ${MONO}`}>{fmtMoney(row.total_credits)}</span>
+          <span className="justify-self-start">
+            {totals.effective ? 'Total (excluding reversing lines)' : 'Total'}
+          </span>
+          <span className={`justify-self-end text-gray-900 ${MONO}`}>{fmtMoney(totals.debits)}</span>
+          <span className={`justify-self-end text-gray-900 ${MONO}`}>{fmtMoney(totals.credits)}</span>
         </div>
       </div>
 

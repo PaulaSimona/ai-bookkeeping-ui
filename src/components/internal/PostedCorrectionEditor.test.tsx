@@ -1,7 +1,8 @@
-// PostedCorrectionEditor: the shared AccountPicker (UI1-C3, site #1) and the
+// PostedCorrectionEditor: the shared AccountPicker (UI1-C3, site #1), the
 // correction rules of UI2-U4 — the live-entry gate, the carried line
 // descriptions and tax codes, active accounts only, the confirm, and the
-// refusal that links to the live entry.
+// refusal that links to the live entry — and UI2-U7: a correction is prefilled
+// from its corrected lines only.
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
@@ -52,7 +53,7 @@ const entryLine = (
   debit: string | null,
   credit: string | null,
   order: number,
-  extra: { description?: string; tax_code?: string } = {},
+  extra: { description?: string; tax_code?: string; reverses_line_id?: string | null } = {},
 ) => ({
   id,
   account_id: `acc-${code}`,
@@ -63,6 +64,9 @@ const entryLine = (
   description: extra.description ?? '',
   tax_code: extra.tax_code ?? '',
   line_order: order,
+  // Every line of an entry read carries it (S84 CW7): the id of the line it
+  // reverses, or null.
+  reverses_line_id: extra.reverses_line_id ?? null,
 });
 
 // A posted entry that was never corrected or reversed: its chain's live entry.
@@ -456,31 +460,131 @@ describe('PostedCorrectionEditor — live entry only (D-S85-13)', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it('does not prefill or offer to correct an entry that is itself a correction', async () => {
-    // A correction's lines are the ones reversing the entry it corrects plus
-    // its corrected lines; the read does not mark which is which.
-    serve(
-      postedEntry(
-        [
-          entryLine('line-1', '5000', 'Rent Expense', null, '100.00', 0),
-          entryLine('line-2', '1000', 'Cash', '100.00', null, 1),
-          entryLine('line-3', '5100', 'Office Supplies', '100.00', null, 2),
-          entryLine('line-4', '1000', 'Cash', null, '100.00', 3),
-        ],
-        {
-          source: 'staff_correction',
-          corrects_entry_id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
-          corrects_entry_number_display: 'JE-0009',
-        },
-      ),
-      () => page(ACCOUNTS),
-    );
-    renderEditor();
+});
 
-    expect(await screen.findByText(/JE-0012 is itself a correction of JE-0009\./)).toBeInTheDocument();
-    expect(screen.queryByText('Corrected lines')).not.toBeInTheDocument();
+describe('PostedCorrectionEditor — correcting a correction (D-S85-18, F-S85-15)', () => {
+  // JE-0012 is itself a correction of JE-0009 (Dr 5000 100 / Cr 1000 100 →
+  // Dr 5100 100 / Cr 1000 100), and the chain's live entry. Its read holds four
+  // lines: two reversing JE-0009's lines, then its two corrected lines.
+  const CORRECTION = postedEntry(
+    [
+      entryLine('line-1', '5000', 'Rent Expense', null, '100.00', 0, {
+        description: 'Office rent',
+        tax_code: 'HST',
+        reverses_line_id: 'old-line-1',
+      }),
+      entryLine('line-2', '1000', 'Cash', '100.00', null, 1, {
+        description: 'Paid by cheque',
+        reverses_line_id: 'old-line-2',
+      }),
+      entryLine('line-3', '5100', 'Office Supplies', '100.00', null, 2, {
+        description: 'Office rent',
+        tax_code: 'HST',
+      }),
+      entryLine('line-4', '1000', 'Cash', null, '100.00', 3, { description: 'Paid by cheque' }),
+    ],
+    {
+      source: 'staff_correction',
+      total_debits: '200.00',
+      total_credits: '200.00',
+      corrects_entry_id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      corrects_entry_number_display: 'JE-0009',
+      chain_root: { id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', number: 'JE-0009' },
+      chain: [
+        { id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', number: 'JE-0009', date: '2026-09-28', role: 'original', display_status: 'corrected' },
+        { id: ENTRY_ID, number: 'JE-0012', date: '2026-09-30', role: 'correction', display_status: 'posted' },
+      ],
+    },
+  );
+
+  // What a second correction sends: ONLY the edited corrected lines — never the
+  // two reversing lines — and no line carries reverses_line_id.
+  const SECOND_CORRECTION_BODY = {
+    reason: 'Should have been accounts payable',
+    lines: [
+      { account_id: 'acc-2100', side: 'debit', amount: '100.00', description: 'Office rent', tax_code: 'HST' },
+      { account_id: 'acc-1000', side: 'credit', amount: '100.00', description: 'Paid by cheque', tax_code: '' },
+    ],
+  };
+
+  it('prefills only the two corrected lines of a four-line correction', async () => {
+    serve(CORRECTION, () => page(ACCOUNTS));
+    renderEditor();
+    await ready();
+
+    expect(pickers()).toHaveLength(2);
+    expect(pickers()[0]).toHaveValue(L('5100', 'Office Supplies'));
+    expect(pickers()[1]).toHaveValue(L('1000', 'Cash'));
+    // The reversing half — Cr 5000 — is not in the corrected set.
+    expect(pickers().map((p) => (p as HTMLInputElement).value)).not.toContain(L('5000', 'Rent Expense'));
+    expect(screen.getAllByPlaceholderText('0.00').map((i) => (i as HTMLInputElement).value)).toEqual([
+      '100.00',
+      '100.00',
+    ]);
+  });
+
+  it('offers the editor on a live correction entry: the stopgap guard is gone', async () => {
+    serve(CORRECTION, () => page(ACCOUNTS));
+    renderEditor();
+    await ready();
+
+    expect(screen.queryByText(/is itself a correction/)).not.toBeInTheDocument();
+    expect(screen.getByText('Corrected lines')).toBeInTheDocument();
+    expect(postButton()).toBeInTheDocument();
+  });
+
+  it('posts only the edited corrected lines, and no line carries reverses_line_id', async () => {
+    const user = userEvent.setup();
+    serve(CORRECTION, () => page(ACCOUNTS));
+    post.mockResolvedValue(CREATED);
+    const { notify } = renderEditor();
+    await ready();
+
+    await user.click(pickers()[0]);
+    await user.keyboard('2100{Enter}');
+    await user.type(reasonInput(), 'Should have been accounts payable');
+    await user.click(postButton());
+    await user.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    expect(post).toHaveBeenCalledWith(CORRECT_URL, SECOND_CORRECTION_BODY);
+    const sent = post.mock.calls[0][1] as { lines: Record<string, unknown>[] };
+    expect(sent.lines).toHaveLength(2);
+    for (const line of sent.lines) {
+      expect(line).not.toHaveProperty('reverses_line_id');
+    }
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith('Correction posted — JE-0013 corrects JE-0012.', 'success'),
+    );
+  });
+
+  it('treats the corrected lines as the original: unchanged, there is nothing to correct', async () => {
+    const user = userEvent.setup();
+    serve(CORRECTION, () => page(ACCOUNTS));
+    renderEditor();
+    await ready();
+    await user.type(reasonInput(), 'No change');
+
+    expect(screen.getByText('Identical to the original — nothing to correct.')).toBeInTheDocument();
+    expect(postButton()).toBeDisabled();
+  });
+
+  it('prefills nothing from a read that does not say which lines are reversing', async () => {
+    // Lines without reverses_line_id at all: not known to be the entry's own,
+    // so none is carried into the corrected set.
+    const stripped = {
+      ...CORRECTION,
+      lines: (CORRECTION.lines as Record<string, unknown>[]).map((line) => {
+        const copy = { ...line };
+        delete copy.reverses_line_id;
+        return copy;
+      }),
+    };
+    serve(stripped, () => page(ACCOUNTS));
+    renderEditor();
+    await screen.findByText('Corrected lines');
+
     expect(screen.queryByRole('combobox', { name: 'Account' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Post correction' })).not.toBeInTheDocument();
-    expect(post).not.toHaveBeenCalled();
+    expect(postButton()).toBeDisabled();
   });
 });

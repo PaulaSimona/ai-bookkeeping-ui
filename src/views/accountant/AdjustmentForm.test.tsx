@@ -152,6 +152,42 @@ describe('AdjustmentForm account picker', () => {
     ]);
   });
 
+  it('tags a seeded inactive account and keeps Post disabled until every line is active (D-S85-19)', async () => {
+    const user = userEvent.setup();
+    // The adjustments endpoint refuses an inactive account ("Invalid
+    // account."), so the form does not offer to post one. 1999 is absent from
+    // the active list.
+    post.mockResolvedValue({ status: 201, data: { id: 'new-entry' } });
+    render(
+      <AdjustmentForm
+        initialDate="2026-09-30"
+        seedAccounts={[
+          { id: 'acc-1999', code: '1999', name: 'Old Clearing' },
+          { id: 'acc-5000', code: '5000', name: 'Rent Expense' },
+        ]}
+        onPosted={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    await ready();
+
+    // Everything else valid and balanced; only the inactive account blocks.
+    await user.type(screen.getByPlaceholderText('Reason for the adjustment'), 'Reclass supplies');
+    await user.type(screen.getAllByLabelText('Debit amount')[0], '25.00');
+    await user.type(screen.getAllByLabelText('Credit amount')[1], '25.00');
+    expect(screen.getAllByText('inactive')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Post adjustment' })).toBeDisabled();
+
+    await user.click(pickers()[0]);
+    await user.keyboard('5100{Enter}');
+    expect(screen.queryByText('inactive')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Post adjustment' })).toBeEnabled();
+
+    await user.click(screen.getByRole('button', { name: 'Post adjustment' }));
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    expect(post).toHaveBeenCalledWith('/api/accounting/adjustments/', EXPECTED_BODY);
+  });
+
   it('keeps Post disabled until every line has an account', async () => {
     const user = userEvent.setup();
     render(<AdjustmentForm onPosted={vi.fn()} onCancel={vi.fn()} />);

@@ -371,3 +371,135 @@ describe('staff client entries — Merge into… pick mode (D-S85-14)', () => {
     expect(post).not.toHaveBeenCalled();
   });
 });
+
+describe('staff client entries — effective totals (D-S85-18)', () => {
+  const post = api.post as unknown as Mock<(url: string, body?: unknown) => Promise<unknown>>;
+
+  const line = (id: string, code: string, debit: string | null, credit: string | null, reverses: string | null) => ({
+    id,
+    account_id: `acc-${code}`,
+    account_code: code,
+    account_name: `Account ${code}`,
+    debit,
+    credit,
+    description: '',
+    tax_code: '',
+    line_order: 0,
+    reverses_line_id: reverses,
+  });
+
+  // A live one-entry correction: two lines reversing the entry it corrected,
+  // then its two corrected lines. The served totals sum all four (200.00); it
+  // stands for 100.00.
+  const CORRECTION_LINES = [
+    line('c1', '5000', null, '100.00', 'old-1'),
+    line('c2', '1000', '100.00', null, 'old-2'),
+    line('c3', '5100', '100.00', null, null),
+    line('c4', '1000', null, '100.00', null),
+  ];
+  const CORRECTION = entry({
+    source: 'staff_correction',
+    description: 'Rent (corrected)',
+    total_debits: '200.00',
+    total_credits: '200.00',
+    corrects_entry_id: 'e-60',
+    corrects_entry_number_display: 'JE-0060',
+    lines: CORRECTION_LINES,
+  });
+  // An ordinary live entry for a DIFFERENT amount.
+  const OTHER = entry({
+    id: 'e-90',
+    entry_number: 90,
+    entry_number_display: 'JE-0090',
+    description: 'Rent',
+    total_debits: '120.00',
+    total_credits: '120.00',
+    live_entry: { id: 'e-90', number: 'JE-0090' },
+    lines: [line('o1', '5000', '120.00', null, null), line('o2', '1000', null, '120.00', null)],
+  });
+
+  beforeEach(() => {
+    post.mockReset();
+  });
+
+  it('lists a correction on the total of its corrected lines; an ordinary entry keeps its total', async () => {
+    serve([CORRECTION, OTHER]);
+    renderPage();
+    await screen.findByText('JE-0068');
+
+    const cells = (number: string) =>
+      within(rowOf(number)).getAllByRole('cell').map((cell) => cell.textContent);
+    // Date, Entry #, Description, Debits, Credits, …
+    expect(cells('JE-0068').slice(3, 5)).toEqual(['100.00', '100.00']);
+    expect(cells('JE-0090').slice(3, 5)).toEqual(['120.00', '120.00']);
+  });
+
+  it('the merge confirm shows both effective totals and posts whatever they are', async () => {
+    post.mockResolvedValue({
+      status: 400,
+      data: {
+        code: 'amount_mismatch',
+        detail: 'The two entries are not for the same amount, so one is not a duplicate of the other.',
+        duplicate_total: '100.00',
+        survivor_total: '120.00',
+      },
+    });
+    serve([CORRECTION, OTHER]);
+    renderPage();
+    await userEvent.click(await screen.findByText('JE-0068'));
+    await userEvent.click(await screen.findByRole('button', { name: 'Merge into…' }));
+    await userEvent.click(screen.getByText('JE-0090'));
+    await userEvent.type(screen.getByRole('textbox', { name: 'Reason' }), 'Entered twice');
+
+    // The totals differ (100.00 against 120.00) and the UI does not block on it.
+    expect(screen.getByRole('button', { name: 'Merge' })).toBeEnabled();
+    await userEvent.click(screen.getByRole('button', { name: 'Merge' }));
+    expect(
+      screen.getByText(/JE-0068 \(total 100\.00\) is reversed as a duplicate, and its bank links and documents move to JE-0090 \(total 120\.00\)\./),
+    ).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    expect(post).toHaveBeenCalledWith('/api/accounting/staff/entries/e-68/merge-into/', {
+      survivor_entry_id: 'e-90',
+      reason: 'Entered twice',
+    });
+    // The server decides: its amount_mismatch is what refuses the merge.
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The two entries are not for the same amount',
+    );
+  });
+
+  it('reads the survivor by id when its row came without lines, and shows its effective total', async () => {
+    // The surviving entry is itself a correction; its list row has no lines.
+    const SURVIVOR_ROW = entry({
+      id: 'e-90',
+      entry_number: 90,
+      entry_number_display: 'JE-0090',
+      description: 'Rent',
+      total_debits: '200.00',
+      total_credits: '200.00',
+      live_entry: { id: 'e-90', number: 'JE-0090' },
+      lines: [],
+    });
+    const DETAIL_URL = '/api/accounting/staff/entries/e-90/';
+    get.mockImplementation(async (url) => {
+      if (url === ENTRIES_URL) {
+        return { status: 200, data: { count: 2, next: null, previous: null, results: [CORRECTION, SURVIVOR_ROW] } };
+      }
+      if (url === DETAIL_URL) return { status: 200, data: { ...SURVIVOR_ROW, lines: CORRECTION_LINES } };
+      return { status: 200, data: { count: 0, next: null, previous: null, results: [] } };
+    });
+    renderPage();
+    await userEvent.click(await screen.findByText('JE-0068'));
+    await userEvent.click(await screen.findByRole('button', { name: 'Merge into…' }));
+    await userEvent.click(screen.getByText('JE-0090'));
+
+    await waitFor(() => expect(get.mock.calls.map(([url]) => url)).toContain(DETAIL_URL));
+    await userEvent.type(screen.getByRole('textbox', { name: 'Reason' }), 'Entered twice');
+    await userEvent.click(screen.getByRole('button', { name: 'Merge' }));
+    expect(
+      await screen.findByText(/move to JE-0090 \(total 100\.00\)\./),
+    ).toBeInTheDocument();
+  });
+});

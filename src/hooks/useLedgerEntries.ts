@@ -29,6 +29,10 @@ export interface LedgerEntryLine {
   description: string;
   tax_code: string;
   line_order: number;
+  // The id of the line this one REVERSES, or null (S84 CW7, D-S85-18). Set on
+  // the reversing half of a one-entry correction and on every line of a
+  // reversal entry. Read-only: never sent back.
+  reverses_line_id: string | null;
 }
 
 // Typed per JournalEntrySerializer (the C2 read contract, incl. needs_review).

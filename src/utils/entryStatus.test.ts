@@ -5,12 +5,16 @@ import {
   REGISTRY_STATUS_OPTIONS,
   allowedActions,
   canAct,
+  effectiveTotal,
+  effectiveTotals,
   entryDisplayStatus,
   entryKind,
   entryLinkLabel,
   entryStatusLabel,
   formatEntryNumber,
   isLiveEntry,
+  isOwnLine,
+  isReversingLine,
   liveEntryLink,
   nonLiveNote,
   type EntryLinkSource,
@@ -194,6 +198,98 @@ describe('registry filter options (D-S84-4)', () => {
       { value: 'reversals', label: 'Reversal entries' },
       { value: 'all', label: 'All' },
     ]);
+  });
+});
+
+describe('effective lines and totals (D-S85-18)', () => {
+  // A one-entry correction of Dr 5000 100 / Cr 1000 100 to Dr 5100 100: two
+  // lines reversing the corrected entry, then the two corrected lines. The
+  // served totals sum all four.
+  const CORRECTION_ENTRY = {
+    total_debits: '200.00',
+    total_credits: '200.00',
+    lines: [
+      { debit: null, credit: '100.00', reverses_line_id: 'line-a' },
+      { debit: '100.00', credit: null, reverses_line_id: 'line-b' },
+      { debit: '100.00', credit: null, reverses_line_id: null },
+      { debit: null, credit: '100.00', reverses_line_id: null },
+    ],
+  };
+  const ORDINARY_ENTRY = {
+    total_debits: '75.50',
+    total_credits: '75.50',
+    lines: [
+      { debit: '75.50', credit: null, reverses_line_id: null },
+      { debit: null, credit: '75.50', reverses_line_id: null },
+    ],
+  };
+  // Every line of a reversal entry reverses a line.
+  const REVERSAL_ENTRY = {
+    total_debits: '75.50',
+    total_credits: '75.50',
+    lines: [
+      { debit: null, credit: '75.50', reverses_line_id: 'line-c' },
+      { debit: '75.50', credit: null, reverses_line_id: 'line-d' },
+    ],
+  };
+
+  it('tells a reversing line from a line known to be the entry\'s own', () => {
+    expect(isReversingLine({ reverses_line_id: 'line-a' })).toBe(true);
+    expect(isReversingLine({ reverses_line_id: null })).toBe(false);
+    expect(isOwnLine({ reverses_line_id: null })).toBe(true);
+    expect(isOwnLine({ reverses_line_id: 'line-a' })).toBe(false);
+    // A read that does not carry the field says nothing: neither.
+    expect(isReversingLine({})).toBe(false);
+    expect(isOwnLine({})).toBe(false);
+  });
+
+  it('totals a correction on its corrected lines', () => {
+    expect(effectiveTotal(CORRECTION_ENTRY)).toBe('100.00');
+    expect(effectiveTotals(CORRECTION_ENTRY)).toEqual({
+      debits: '100.00',
+      credits: '100.00',
+      effective: true,
+    });
+  });
+
+  it('leaves an ordinary entry and a reversal entry on their served totals', () => {
+    expect(effectiveTotal(ORDINARY_ENTRY)).toBe('75.50');
+    expect(effectiveTotals(ORDINARY_ENTRY).effective).toBe(false);
+    expect(effectiveTotal(REVERSAL_ENTRY)).toBe('75.50');
+    expect(effectiveTotals(REVERSAL_ENTRY).effective).toBe(false);
+  });
+
+  it('keeps the served total when the lines are not loaded', () => {
+    expect(effectiveTotal({ total_debits: '200.00', total_credits: '200.00' })).toBe('200.00');
+    expect(effectiveTotal({ total_debits: '200.00', lines: [] })).toBe('200.00');
+    expect(effectiveTotal({})).toBeNull();
+  });
+
+  it('sums exactly, in cents', () => {
+    expect(
+      effectiveTotal({
+        total_debits: '0.60',
+        lines: [
+          { debit: null, credit: '0.30', reverses_line_id: 'line-a' },
+          { debit: '0.10', credit: null, reverses_line_id: null },
+          { debit: '0.20', credit: null, reverses_line_id: null },
+          { debit: null, credit: '0.30', reverses_line_id: null },
+        ],
+      }),
+    ).toBe('0.30');
+  });
+
+  it('never guesses: an amount it cannot read leaves the served totals in place', () => {
+    expect(
+      effectiveTotals({
+        total_debits: '200.00',
+        total_credits: '200.00',
+        lines: [
+          { debit: null, credit: '100.00', reverses_line_id: 'line-a' },
+          { debit: 'n/a', credit: null, reverses_line_id: null },
+        ],
+      }),
+    ).toEqual({ debits: '200.00', credits: '200.00', effective: false });
   });
 });
 

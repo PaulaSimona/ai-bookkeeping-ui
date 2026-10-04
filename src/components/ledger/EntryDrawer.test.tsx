@@ -48,6 +48,7 @@ const row = (over: Partial<AccountantLedgerRow> = {}): AccountantLedgerRow => ({
       description: '',
       tax_code: '',
       line_order: 0,
+      reverses_line_id: null,
     },
   ],
   display_status: 'posted',
@@ -158,6 +159,79 @@ describe('EntryDrawer — actions by entry kind (D-S85-13)', () => {
     renderDrawer(LIVE, { readOnly: true });
     expect(screen.queryByRole('button', { name: 'Adjust this entry' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Void entry' })).not.toBeInTheDocument();
+  });
+});
+
+describe('EntryDrawer — effective total (D-S85-18)', () => {
+  const line = (
+    id: string,
+    code: string,
+    name: string,
+    debit: string | null,
+    credit: string | null,
+    order: number,
+    reverses: string | null,
+  ) => ({
+    id,
+    account_id: `acc-${code}`,
+    account_code: code,
+    account_name: name,
+    debit,
+    credit,
+    description: '',
+    tax_code: '',
+    line_order: order,
+    reverses_line_id: reverses,
+  });
+
+  // A one-entry correction: two lines reversing the corrected entry, then the
+  // two corrected lines. The served totals sum all four.
+  const CORRECTION = row({
+    source: 'staff_correction',
+    total_debits: '200.00',
+    total_credits: '200.00',
+    lines: [
+      line('l1', '5000', 'Rent Expense', null, '100.00', 0, 'old-1'),
+      line('l2', '1000', 'Cash', '100.00', null, 1, 'old-2'),
+      line('l3', '5100', 'Office Supplies', '100.00', null, 2, null),
+      line('l4', '1000', 'Cash', null, '100.00', 3, null),
+    ],
+  });
+
+  const totalRow = (label: string) => screen.getByText(label).parentElement as HTMLElement;
+
+  it('totals a correction on its corrected lines and marks the reversing ones', () => {
+    renderDrawer(CORRECTION);
+
+    const total = totalRow('Total (excluding reversing lines)');
+    expect(total).toHaveTextContent('$100.00');
+    expect(total).not.toHaveTextContent('$200.00');
+    expect(screen.getAllByText('reversing')).toHaveLength(2);
+  });
+
+  it('leaves an ordinary entry on the totals the server sent', () => {
+    renderDrawer(row({ total_debits: '100.00', total_credits: '100.00' }));
+
+    expect(totalRow('Total')).toHaveTextContent('$100.00');
+    expect(screen.queryByText('Total (excluding reversing lines)')).not.toBeInTheDocument();
+    expect(screen.queryByText('reversing')).not.toBeInTheDocument();
+  });
+
+  it('leaves a reversal entry — every line reversing — on its served totals', () => {
+    renderDrawer(
+      row({
+        source: 'reversal',
+        display_status: 'reversal',
+        live_entry: null,
+        total_debits: '100.00',
+        total_credits: '100.00',
+        lines: [
+          line('l1', '5000', 'Rent Expense', null, '100.00', 0, 'old-1'),
+          line('l2', '1000', 'Cash', '100.00', null, 1, 'old-2'),
+        ],
+      }),
+    );
+    expect(totalRow('Total')).toHaveTextContent('$100.00');
   });
 });
 

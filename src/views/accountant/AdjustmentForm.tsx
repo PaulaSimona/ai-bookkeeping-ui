@@ -72,7 +72,8 @@ const seedLines = (seedAccounts?: CurrentAccount[]): DraftLine[] => {
 export interface AdjustmentFormProps {
   // Seed the line rows with these accounts in order (amounts blank). Absent →
   // two empty rows. Code and name come along so a seeded account that is no
-  // longer active (absent from the loaded list) still shows in its row.
+  // longer active (absent from the loaded list) still shows in its row —
+  // tagged "inactive", and it must be changed before posting (D-S85-19).
   seedAccounts?: CurrentAccount[];
   initialMemo?: string;
   initialDate?: string;
@@ -125,9 +126,23 @@ export const AdjustmentForm: FC<AdjustmentFormProps> = ({
     return { debitCents: d, creditCents: c };
   }, [lines]);
 
+  // D-S85-19: the adjustment endpoint refuses a line on an inactive account
+  // ("Invalid account."). The loaded chart is the org's ACTIVE accounts, so a
+  // seeded account missing from it is inactive: the line is tagged, and posting
+  // waits until every line has an active account. Unknown when the chart
+  // failed to load.
+  const activeIds = useMemo(
+    () => new Set(accounts.filter((a) => a.is_active).map((a) => a.id)),
+    [accounts],
+  );
+  const isInactive = (l: DraftLine): boolean =>
+    !error && !!l.account_id && !activeIds.has(l.account_id);
+  const anyInactive = lines.some(isInactive);
+
   const balanced = debitCents > 0 && debitCents === creditCents;
   const allComplete = lines.every(lineComplete);
-  const canPost = balanced && memo.trim().length > 0 && lines.length >= 2 && allComplete && !submitting;
+  const canPost =
+    balanced && memo.trim().length > 0 && lines.length >= 2 && allComplete && !anyInactive && !submitting;
 
   const submit = async () => {
     if (!canPost) return;
@@ -209,17 +224,24 @@ export const AdjustmentForm: FC<AdjustmentFormProps> = ({
           <div className="space-y-2">
             {lines.map((l) => (
               <div key={l.key} className="grid grid-cols-[1fr_140px_140px_36px] items-center gap-3">
-                <AccountPicker
-                  id={`adjustment-account-${l.key}`}
-                  ariaLabel="Account"
-                  required
-                  value={l.account_id}
-                  onChange={(next) => setLine(l.key, { account_id: next })}
-                  accounts={accounts}
-                  error={error}
-                  currentAccount={seedAccounts?.[l.key] ?? null}
-                  placeholder="Select account…"
-                />
+                <div className="min-w-0">
+                  <AccountPicker
+                    id={`adjustment-account-${l.key}`}
+                    ariaLabel="Account"
+                    required
+                    value={l.account_id}
+                    onChange={(next) => setLine(l.key, { account_id: next })}
+                    accounts={accounts}
+                    error={error}
+                    currentAccount={seedAccounts?.[l.key] ?? null}
+                    placeholder="Select account…"
+                  />
+                  {isInactive(l) && (
+                    <span className="mt-1 inline-block rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700">
+                      inactive
+                    </span>
+                  )}
+                </div>
                 <input
                   inputMode="decimal"
                   value={l.debit}
@@ -294,6 +316,11 @@ export const AdjustmentForm: FC<AdjustmentFormProps> = ({
           </div>
         </div>
 
+        {anyInactive && (
+          <p className="text-[12.5px] text-amber-700">
+            A line uses an inactive account — choose an active account to post.
+          </p>
+        )}
         {formError && <p className="text-sm text-red-600">{formError}</p>}
       </Card>
 

@@ -233,11 +233,36 @@ describe('RejectCorrectEditor account picker', () => {
     );
     expect(pickers()[0]).toHaveValue(L('1999', 'Old Clearing'));
 
-    // Left on the draft's own account, that is what is submitted.
+    // Control: nothing was submitted along the way.
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('tags a line on an inactive account and keeps Post disabled until every line is active (D-S85-19)', async () => {
+    const user = userEvent.setup();
+    // The engine refuses an inactive account (invalid_accounts), so the editor
+    // does not offer to post one. 1999 is absent from the active chart.
+    const onSubmit = renderEditor(
+      draft([
+        draftLine('d1', '1999', 'Old Clearing', '50.00', null, '', 0),
+        draftLine('d2', '1000', 'Cash', null, '50.00', '', 1),
+      ]),
+    );
+    await ready();
     await user.selectOptions(screen.getByDisplayValue('Select a reason…'), 'other');
+
+    // Everything else is valid; only the inactive account blocks.
+    expect(screen.getAllByText('inactive')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Post correction' })).toBeDisabled();
+
+    await user.click(pickers()[0]);
+    await user.keyboard('5000{Enter}');
+    expect(screen.queryByText('inactive')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Post correction' })).toBeEnabled();
+
     await user.click(screen.getByRole('button', { name: 'Post correction' }));
     await user.click(screen.getByRole('button', { name: 'Confirm' }));
-    expect(onSubmit.mock.calls[0][0].lines[0].account_id).toBe('acc-1999');
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit.mock.calls[0][0].lines[0].account_id).toBe('acc-5000');
   });
 
   it('creates a new account without a parent field or parent_account_id, and selects it (D-S85-8)', async () => {

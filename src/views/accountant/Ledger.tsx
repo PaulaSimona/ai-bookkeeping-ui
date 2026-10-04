@@ -21,6 +21,7 @@ import { formatIsoDate } from '@/utils/dates';
 import {
   REGISTRY_STATUS_OPTIONS,
   canAct,
+  effectiveTotal,
   entryDisplayStatus,
   entryStatusLabel,
 } from '@/utils/entryStatus';
@@ -219,7 +220,9 @@ const LedgerInner: FC = () => {
                         {row.description}
                       </span>
                       <span className={`justify-self-end whitespace-nowrap text-[13.5px] text-gray-900 ${MONO} ${strike}`}>
-                        {fmtMoney(row.total_debits)}
+                        {/* D-S85-18: a correction is totalled on its corrected
+                            lines; any other entry keeps the served total. */}
+                        {fmtMoney(effectiveTotal(row))}
                       </span>
                       <span>
                         {voided ? (

@@ -18,6 +18,12 @@
 // entry — the same rule the panel's Correct button uses (entryStatus). The
 // list/ledger row is never the gate — it can be stale.
 //
+// Prefill (D-S85-18): only the entry's OWN lines — the ones whose
+// reverses_line_id is null. An entry that is itself a correction also holds
+// the lines reversing the entry it corrected; those are never prefilled and
+// never sent, so a second correction cannot re-post the reversing half.
+// reverses_line_id is read-only: the request never carries it.
+//
 // One save (O-S84-2): "Post correction", then a confirm pop-up (D-S85-12).
 //
 // Client-side balance check mirrors the server (sum debits == sum credits,
@@ -44,6 +50,7 @@ import {
   entryStatusLabel,
   formatEntryNumber,
   isLiveEntry,
+  isOwnLine,
   liveEntryLink,
   nonLiveNote,
   type EntryRef,
@@ -118,12 +125,22 @@ export const PostedCorrectionEditor: FC<{
   const entryLabel =
     row?.entry_number_display ?? formatEntryNumber(entry.entry_number) ?? 'this entry';
 
-  // O-S70-3: prefill ONCE from the re-read detail lines (account, side from
-  // whichever figure is non-zero, amount as a 2-dp string, and the line's own
-  // description and tax code — D-S85-17).
+  // D-S85-18: the lines a correction starts from are the entry's OWN lines —
+  // the ones whose reverses_line_id is null. An entry that is itself a
+  // correction also holds the lines reversing the entry it corrected; the
+  // server reverses the own lines itself, so carrying the reversing ones into
+  // the corrected set would post them a second time. They are never prefilled.
+  const ownLines = useMemo(
+    () => (detail?.kind === 'ready' ? detail.row.lines.filter(isOwnLine) : []),
+    [detail],
+  );
+
+  // O-S70-3: prefill ONCE from the re-read detail's own lines (account, side
+  // from whichever figure is non-zero, amount as a 2-dp string, and the line's
+  // own description and tax code — D-S85-17).
   const original = useMemo<string[]>(() => {
     if (detail?.kind !== 'ready') return [];
-    return detail.row.lines
+    return ownLines
       .map((l) => {
         const debit = toCents(l.debit ?? '') ?? 0;
         const credit = toCents(l.credit ?? '') ?? 0;
@@ -132,12 +149,12 @@ export const PostedCorrectionEditor: FC<{
         return lineKey({ account_id: l.account_id, side, amount });
       })
       .sort();
-  }, [detail]);
+  }, [detail, ownLines]);
 
   useEffect(() => {
     if (detail?.kind !== 'ready' || seededFor === detail.row.id) return;
     setLines(
-      detail.row.lines.map((l, i) => {
+      ownLines.map((l, i) => {
         const debit = toCents(l.debit ?? '') ?? 0;
         const credit = toCents(l.credit ?? '') ?? 0;
         const side: Side = debit > 0 ? 'debit' : 'credit';
@@ -152,7 +169,7 @@ export const PostedCorrectionEditor: FC<{
       }),
     );
     setSeededFor(detail.row.id);
-  }, [detail, seededFor]);
+  }, [detail, ownLines, seededFor]);
 
   // Esc closes when nothing is in flight (the confirm first, then the editor).
   useEffect(() => {
@@ -174,15 +191,6 @@ export const PostedCorrectionEditor: FC<{
       ? null
       : nonLiveNote(row) ??
         `Only the live entry of a chain can be corrected (status: ${entryStatusLabel(row)}).`;
-
-  // A correction entry holds two sets of lines: the ones reversing the entry it
-  // corrects, then its corrected lines. The read does not say which is which,
-  // and only the corrected lines may be carried into a further correction —
-  // sending the reversing lines back would post them a second time. Until the
-  // read marks them, an entry that is itself a correction is not prefilled and
-  // cannot be corrected from here.
-  const isCorrection = row !== null && row.corrects_entry_id != null;
-  const correctable = isLive && !isCorrection;
 
   // A line's own account may be inactive (absent from the active chart). Each
   // prefilled line hands it to its picker as the current account, keyed like
@@ -250,7 +258,7 @@ export const PostedCorrectionEditor: FC<{
   const differs =
     current.length !== original.length || current.some((k, i) => k !== original[i]);
   const canSubmit =
-    correctable &&
+    isLive &&
     !!reason.trim() &&
     balanced &&
     differs &&
@@ -352,16 +360,7 @@ export const PostedCorrectionEditor: FC<{
         </div>
       )}
 
-      {row && isLive && isCorrection && (
-        <p className="text-sm text-amber-200/80">
-          {entryLabel} is itself a correction
-          {row.corrects_entry_number_display ? ` of ${row.corrects_entry_number_display}` : ''}. Its
-          lines include the ones that reverse the entry it corrects, and this screen cannot yet
-          tell them apart from its corrected lines — so it cannot be corrected from here.
-        </p>
-      )}
-
-      {row && correctable && (
+      {row && isLive && (
         <>
           <div>
             <label className="block text-xs font-medium text-white/60 mb-1">
@@ -490,7 +489,7 @@ export const PostedCorrectionEditor: FC<{
 
       {(row || detail?.kind === 'error') && (
         <div className="flex items-center gap-3">
-          {correctable && (
+          {isLive && (
             <PrimaryButton
               onClick={() => setConfirming(true)}
               disabled={!canSubmit}
@@ -500,7 +499,7 @@ export const PostedCorrectionEditor: FC<{
             </PrimaryButton>
           )}
           <SecondaryButton onClick={onClose} disabled={submitting}>
-            {correctable ? 'Cancel' : 'Close'}
+            {isLive ? 'Cancel' : 'Close'}
           </SecondaryButton>
         </div>
       )}

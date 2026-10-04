@@ -219,6 +219,85 @@ export const nonLiveNote = (row: EntryLinkSource): string | null => {
   return parts.length > 0 ? parts.join(' ') : null;
 };
 
+// ─── Effective lines and totals (D-S84-10, D-S85-18) ───────────────────────────
+// Every line of an entry read carries reverses_line_id: the id of the line it
+// REVERSES, or null. A one-entry correction holds two sets of lines — the ones
+// reversing the entry it corrects, then its corrected lines — and only the
+// lines that reverse nothing are the entry's own content. Those are the lines a
+// further correction starts from, and their debits are the total the entry
+// stands for.
+
+export interface EntryLineAmounts {
+  debit: string | null;
+  credit: string | null;
+  reverses_line_id?: string | null;
+}
+
+// A line that reverses another line.
+export const isReversingLine = (line: { reverses_line_id?: string | null }): boolean =>
+  typeof line.reverses_line_id === 'string' && line.reverses_line_id !== '';
+
+// A line KNOWN to reverse nothing: reverses_line_id is null. A read that does
+// not carry the field (undefined) says nothing either way, so such a line is
+// neither reversing nor known to be the entry's own — never assumed.
+export const isOwnLine = (line: { reverses_line_id?: string | null }): boolean =>
+  line.reverses_line_id === null;
+
+export interface EntryTotalsSource {
+  total_debits?: string | null;
+  total_credits?: string | null;
+  lines?: EntryLineAmounts[] | null;
+}
+
+const MONEY_RE = /^(\d+)(?:\.(\d{1,2}))?$/;
+
+// "100.5" → 10050 (integer cents, exact); '' / null → 0; anything else → null.
+const moneyToCents = (value: string | null | undefined): number | null => {
+  if (value == null || value === '') return 0;
+  const match = MONEY_RE.exec(String(value).trim());
+  if (!match) return null;
+  const cents = Number(match[1]) * 100 + Number((match[2] ?? '').padEnd(2, '0') || '0');
+  return Number.isSafeInteger(cents) ? cents : null;
+};
+
+const centsToMoney = (cents: number): string =>
+  `${Math.floor(cents / 100)}.${String(cents % 100).padStart(2, '0')}`;
+
+// The totals an entry is shown with. An entry with BOTH reversing and
+// non-reversing lines shows the totals of its non-reversing lines; every other
+// entry — an ordinary one, a reversal entry (all lines reversing), a row whose
+// lines are not loaded — keeps the totals the server sent. `effective` says
+// which of the two it is. Display only: summed in integer cents, never floats,
+// and any amount that does not parse leaves the served totals in place.
+export const effectiveTotals = (
+  entry: EntryTotalsSource,
+): { debits: string | null; credits: string | null; effective: boolean } => {
+  const served = {
+    debits: entry.total_debits ?? null,
+    credits: entry.total_credits ?? null,
+    effective: false,
+  };
+  const lines = entry.lines ?? [];
+  const own = lines.filter((line) => !isReversingLine(line));
+  if (own.length === 0 || own.length === lines.length) return served;
+
+  let debits = 0;
+  let credits = 0;
+  for (const line of own) {
+    const debit = moneyToCents(line.debit);
+    const credit = moneyToCents(line.credit);
+    if (debit === null || credit === null) return served;
+    debits += debit;
+    credits += credit;
+  }
+  if (!Number.isSafeInteger(debits) || !Number.isSafeInteger(credits)) return served;
+  return { debits: centsToMoney(debits), credits: centsToMoney(credits), effective: true };
+};
+
+// The one figure an entry "is for": the debit total of its own lines.
+export const effectiveTotal = (entry: EntryTotalsSource): string | null =>
+  effectiveTotals(entry).debits;
+
 // "JE-0071" for 71 — mirrors the backend's _format_entry_number (ledger_serializers.py)
 // for the rare caller that has only the integer. Prefer the API's *_number_display
 // strings whenever they are present.

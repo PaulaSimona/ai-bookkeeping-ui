@@ -24,6 +24,8 @@ import {
 } from '@/components/internal/ui';
 import {
   REGISTRY_STATUS_OPTIONS,
+  effectiveTotal,
+  effectiveTotals,
   entryDisplayStatus,
   entryStatusLabel,
   formatEntryNumber,
@@ -54,6 +56,7 @@ interface PanelLine {
   debit: string | null;
   credit: string | null;
   description?: string;
+  reverses_line_id?: string | null;
 }
 
 interface PanelEntry extends EntryLinkSource {
@@ -62,14 +65,21 @@ interface PanelEntry extends EntryLinkSource {
   entry_number_display?: string | null;
   counterparty?: { id: string; name: string } | null;
   total_debits?: string | null;
+  total_credits?: string | null;
   lines: PanelLine[];
 }
 
-// One side of a merge, as the confirm names it: the number and the total.
+// Whether an entry came with its lines — its effective total needs them.
+const hasLines = (e: PanelEntry): boolean => Array.isArray(e.lines) && e.lines.length > 0;
+
+// One side of a merge, as the confirm names it: the number and the EFFECTIVE
+// total (D-S85-18) — a correction's corrected lines, any other entry's own
+// total. Shown only: the merge is never blocked on it; the server's
+// amount_mismatch decides.
 const mergeParty = (e: PanelEntry): MergeParty => ({
   id: e.id,
   number: entryNo(e),
-  total: e.total_debits ?? null,
+  total: effectiveTotal(e),
 });
 
 // The expanded panel of one entry (O-S84-1, D-S85-13): its lines, its chain
@@ -169,9 +179,27 @@ export const InternalClientEntries: FC = () => {
   // it; while it is on, clicking a row picks the surviving entry instead of
   // expanding it. Only another LIVE entry can be picked — the server refuses
   // anything else.
-  const [merge, setMerge] = useState<{ duplicate: MergeParty; survivor: MergeParty | null } | null>(null);
+  // `survivorNeedsLines`: the picked row came without its lines, so its
+  // effective total is read from the entry's detail (below).
+  const [merge, setMerge] = useState<{
+    duplicate: MergeParty;
+    survivor: MergeParty | null;
+    survivorNeedsLines: boolean;
+  } | null>(null);
+  const { entry: survivorDetail } = useStaffEntryDetail(
+    merge?.survivor && merge.survivorNeedsLines ? merge.survivor.id : null,
+  );
+  // The survivor as the confirm shows it. Read by id when its row had no
+  // lines; until that read lands the row's own total stands in.
+  const mergeSurvivor: MergeParty | null =
+    merge?.survivor &&
+    merge.survivorNeedsLines &&
+    survivorDetail?.kind === 'ready' &&
+    survivorDetail.row.id === merge.survivor.id
+      ? { ...merge.survivor, total: effectiveTotal(survivorDetail.row) }
+      : merge?.survivor ?? null;
   const startMerge = (duplicate: MergeParty) => {
-    setMerge({ duplicate, survivor: null });
+    setMerge({ duplicate, survivor: null, survivorNeedsLines: false });
     setExpandedId(null);
   };
   const canSurvive = (e: PanelEntry): boolean =>
@@ -243,7 +271,7 @@ export const InternalClientEntries: FC = () => {
       {merge && (
         <MergeEditor
           duplicate={merge.duplicate}
-          survivor={merge.survivor}
+          survivor={mergeSurvivor}
           onCancel={() => setMerge(null)}
           onMerged={onMerged}
           onOpenEntry={openFromMerge}
@@ -280,6 +308,9 @@ export const InternalClientEntries: FC = () => {
                   // any entry that is not live cannot be picked.
                   const pickable = canSurvive(e);
                   const picked = merge?.survivor?.id === e.id;
+                  // D-S85-18: a correction is totalled on its corrected
+                  // lines; any other entry keeps the served totals.
+                  const totals = effectiveTotals(e);
                   const rowCls = merge
                     ? `${pickable ? 'cursor-pointer hover:bg-[#0066FF]/10' : 'opacity-40'} ${
                         picked ? 'bg-[#0066FF]/20' : ''
@@ -290,7 +321,9 @@ export const InternalClientEntries: FC = () => {
                       <tr
                         onClick={() => {
                           if (!merge) setExpandedId(expanded ? null : e.id);
-                          else if (pickable) setMerge({ ...merge, survivor: mergeParty(e) });
+                          else if (pickable) {
+                            setMerge({ ...merge, survivor: mergeParty(e), survivorNeedsLines: !hasLines(e) });
+                          }
                         }}
                         aria-selected={merge ? picked : undefined}
                         className={`border-b border-white/5 transition-colors align-top ${rowCls}`}
@@ -300,8 +333,8 @@ export const InternalClientEntries: FC = () => {
                         <td className="py-2.5 px-3 text-white/90 max-w-[16rem] truncate">
                           {e.description || '—'}
                         </td>
-                        <td className="py-2.5 px-3 text-right text-white/80">{formatMoney(e.total_debits)}</td>
-                        <td className="py-2.5 px-3 text-right text-white/80">{formatMoney(e.total_credits)}</td>
+                        <td className="py-2.5 px-3 text-right text-white/80">{formatMoney(totals.debits)}</td>
+                        <td className="py-2.5 px-3 text-right text-white/80">{formatMoney(totals.credits)}</td>
                         <td className="py-2.5 px-3">
                           {/* The registry's display status (D-S84-4): Posted,
                               Corrected, Reversed or Reversal. */}

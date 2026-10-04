@@ -19,7 +19,9 @@ import type { CurrentAccount } from '@/types/account';
  *
  * Accounts are picked from EVERY active account of the entry's org (the shared
  * AccountPicker over the staff accounts endpoint, grouped by type); a draft
- * line's own account stays valid even if inactive. A "+ New account" inline
+ * line's own account still shows if it is inactive, tagged "inactive", and
+ * posting waits until every line has an active account (D-S85-19 — the engine
+ * refuses an inactive one). A "+ New account" inline
  * creates one and selects it in the line. The ledger engine re-validates
  * balance + accounts on submit; backend 400s surface verbatim.
  *
@@ -228,11 +230,24 @@ export const RejectCorrectEditor: FC<{
     const hasCredit = l.credit.trim() !== '';
     return !!l.account_id && hasDebit !== hasCredit; // exactly one side
   };
+  // D-S85-19: the draft posts through the ledger engine, which refuses a line
+  // on an inactive account (invalid_accounts). The staff chart is active-only,
+  // so an account missing from it is inactive: the line is tagged, and posting
+  // waits until every line has an active account. Unknown while the chart is
+  // loading or failed to load — the engine still decides on submit.
+  const activeIds = useMemo(() => new Set(accounts.map((a) => a.id)), [accounts]);
+  const chartReady = !accountsLoading && !accountsError;
+  const isInactive = (l: EditLine): boolean =>
+    chartReady && !!l.account_id && !activeIds.has(l.account_id);
+  const anyInactive = lines.some(isInactive);
+
   const canSubmit =
     !!reasonCode &&
     lines.length >= 2 &&
     lines.every(lineValid) &&
     (cpMode !== 'set' || !!cpId) &&
+    !accountsLoading &&
+    !anyInactive &&
     !submitting;
 
   const submit = () => {
@@ -325,6 +340,11 @@ export const RejectCorrectEditor: FC<{
                 <tr key={l.key} className="border-t border-white/5 align-top">
                   <td className="py-1.5 pr-2 min-w-[11rem]">
                     {renderAccountPicker(l)}
+                    {isInactive(l) && (
+                      <span className="mt-1 mr-2 inline-block rounded bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-medium text-amber-200">
+                        inactive
+                      </span>
+                    )}
                     <button
                       type="button"
                       onClick={() => setNewAcctForKey(newAcctForKey === l.key ? null : l.key)}
@@ -404,6 +424,11 @@ export const RejectCorrectEditor: FC<{
           Each line takes exactly one of debit / credit. The ledger engine validates the
           accounts and balance on submit.
         </p>
+        {anyInactive && (
+          <p className="mt-1 text-[11px] text-amber-200/70">
+            A line uses an inactive account — choose an active account to post.
+          </p>
+        )}
       </div>
 
       {/* Counterparty (§14 14-C-2b) — tri-state */}

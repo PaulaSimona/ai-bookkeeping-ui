@@ -25,6 +25,10 @@ export interface AccountantLedgerLine {
   // carries it onto the corrected line (D-S85-17).
   tax_code?: string;
   line_order: number;
+  // The id of the line this one REVERSES, or null (S84 CW7, D-S85-18). Set on
+  // the reversing half of a one-entry correction and on every line of a
+  // reversal entry. Read-only: never sent back.
+  reverses_line_id: string | null;
 }
 
 // The registry fields (display_status, corrected_by, live_entry, chain_root,
@@ -116,6 +120,9 @@ export const toLedgerRow = (d: any): AccountantLedgerRow => ({
     description: l.description ?? '',
     tax_code: l.tax_code ?? '',
     line_order: l.line_order,
+    // Passed through as sent — NOT defaulted to null: a read that lacks the
+    // field must not make a reversing line look like the entry's own.
+    reverses_line_id: l.reverses_line_id,
   })),
 });
 /* eslint-enable @typescript-eslint/no-explicit-any */
