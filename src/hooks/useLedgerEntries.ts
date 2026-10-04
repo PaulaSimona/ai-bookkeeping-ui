@@ -5,6 +5,7 @@
 // ?tab= (present-but-empty is invalid), so we never send blank values.
 import { usePaginatedList } from '@/hooks/usePaginatedList';
 import api from '@/utils/api';
+import { type RegistryFields } from '@/utils/entryStatus';
 
 export type LedgerTab = 'revenue' | 'expenses' | 'payable' | 'receivable' | 'cash';
 
@@ -31,7 +32,10 @@ export interface LedgerEntryLine {
 }
 
 // Typed per JournalEntrySerializer (the C2 read contract, incl. needs_review).
-export interface LedgerEntryRow {
+// The registry fields (display_status, corrected_by, live_entry, chain_root,
+// chain, chain_truncated — S84 CW5) come from RegistryFields: every list row
+// and detail read carries them; the plain entry a write returns does not.
+export interface LedgerEntryRow extends RegistryFields {
   id: string;
   entry_number: number | null;
   entry_number_display: string | null;

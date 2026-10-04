@@ -8,6 +8,7 @@
 // already-clean book the accountant adjusts).
 import { useCallback, useEffect, useState } from 'react';
 import api from '@/utils/api';
+import { type RegistryFields } from '@/utils/entryStatus';
 
 export interface AccountantLedgerLine {
   id: string;
@@ -19,11 +20,19 @@ export interface AccountantLedgerLine {
   // Per-line memo (backend JournalLineSerializer.description). Optional here —
   // the drill-down shows it when present, but never depends on it.
   description?: string;
+  // Per-line tax code (JournalLineSerializer.tax_code). A staff correction
+  // carries it onto the corrected line (D-S85-17).
+  tax_code?: string;
   line_order: number;
 }
 
-export interface AccountantLedgerRow {
+// The registry fields (display_status, corrected_by, live_entry, chain_root,
+// chain, chain_truncated — S84 CW5) come from RegistryFields.
+export interface AccountantLedgerRow extends RegistryFields {
   id: string;
+  // Present on every list row and detail read; optional so older fixtures
+  // type-check.
+  entry_number?: number | null;
   entry_number_display: string | null;
   entry_date: string;
   description: string;
@@ -55,7 +64,60 @@ export interface AccountantLedgerRow {
   reverses_entry_number_display?: string | null;
   reversed_by_entry_number_display?: string | null;
   corrects_entry_number_display?: string | null;
+  // {id, name} when attributed, null otherwise (JournalEntrySerializer).
+  counterparty?: { id: string; name: string } | null;
 }
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// One entry as the API sends it (the registry serializer on a detail read, or
+// a list row) mapped onto the row the shared drawer renders. The ONE mapper for
+// the owner and the staff detail reads, so neither can drop a field the other
+// keeps — the six registry fields included.
+export const toLedgerRow = (d: any): AccountantLedgerRow => ({
+  id: d.id,
+  entry_number: d.entry_number ?? null,
+  entry_number_display: d.entry_number_display ?? null,
+  entry_date: d.entry_date,
+  description: d.description ?? '',
+  source: d.source,
+  status: d.status,
+  created_by: d.created_by,
+  voided_at: d.voided_at ?? null,
+  voided_by: d.voided_by ?? null,
+  void_reason: d.void_reason ?? '',
+  source_document_id: d.source_document_id ?? null,
+  total_debits: d.total_debits,
+  total_credits: d.total_credits,
+  counterparty: d.counterparty ?? null,
+  // F-S71-2 / O-S71-6: reversal + correction linkage (UUID-string ids and
+  // their "JE-nnnn" display twins, O-S73-1).
+  reverses_entry_id: d.reverses_entry_id ?? null,
+  reversed_by_entry_id: d.reversed_by_entry_id ?? null,
+  corrects_entry_id: d.corrects_entry_id ?? null,
+  reverses_entry_number_display: d.reverses_entry_number_display ?? null,
+  reversed_by_entry_number_display: d.reversed_by_entry_number_display ?? null,
+  corrects_entry_number_display: d.corrects_entry_number_display ?? null,
+  // S84 CW5: where the entry stands in its chain. Passed through as sent —
+  // absent stays absent, so a payload without them is never read as live.
+  display_status: d.display_status,
+  corrected_by: d.corrected_by,
+  live_entry: d.live_entry,
+  chain_root: d.chain_root,
+  chain: d.chain,
+  chain_truncated: d.chain_truncated,
+  lines: (d.lines ?? []).map((l: any) => ({
+    id: l.id,
+    account_id: l.account_id,
+    account_code: l.account_code ?? null,
+    account_name: l.account_name ?? null,
+    debit: l.debit ?? null,
+    credit: l.credit ?? null,
+    description: l.description ?? '',
+    tax_code: l.tax_code ?? '',
+    line_order: l.line_order,
+  })),
+});
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 interface Envelope {
   count: number;
