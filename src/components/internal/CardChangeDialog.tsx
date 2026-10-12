@@ -49,13 +49,15 @@ const noticeCls =
 const hintCls = 'text-xs text-amber-300';
 const asideCls = 'text-xs text-white/40';
 
-// An override amount is checked for its shape only, and the shape is the
-// server's: it reads the string with Decimal() and takes any finite value
-// (accounting/staff_resolution_views.py:1006-1017) — either sign, any number
-// of decimals, an exponent. It then rounds to cents and decides the rest
-// (accounting/feed_repoint_service.py:842-860): zero is refused, and the sign
-// must be that of the balance held, so a debit balance is moved by a negative.
-const AMOUNT_SHAPE = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
+// An override amount is checked for its shape only, and the shape is cents:
+// an optional leading minus, digits, and at most two decimals. That is
+// narrower than the server on purpose (owner ruling, U5b). The server reads
+// the string with Decimal() and takes any finite value — a third decimal, an
+// exponent (accounting/staff_resolution_views.py:1006-1017) — and rounds it to
+// cents; here nothing is sent that it would have to round. The minus stays:
+// the sign must be that of the balance held, so a debit balance is moved by a
+// negative (accounting/feed_repoint_service.py:855-856).
+const AMOUNT_SHAPE = /^-?\d+(\.\d{1,2})?$/;
 
 // What the feed is to move to: an offered target, the account it is on now
 // (a sweep), or the card's own account, to be created.
@@ -173,8 +175,9 @@ export const CardChangeDialog: FC<{
       ? `Check this account: ${chosenTarget.code} ${chosenTarget.name} is not named for this card (····${card.last4}).`
       : null;
 
-  // An override is what is typed while "Advanced" is open; empty is no override.
-  const typedAmount = advanced ? amount.trim() : '';
+  // An override is what is typed while "Advanced" is open; empty is no
+  // override. Taken as typed, spaces and all — a space is not part of an amount.
+  const typedAmount = advanced ? amount : '';
   const amountOk = typedAmount === '' || AMOUNT_SHAPE.test(typedAmount);
   const reasonOk = typedAmount === '' || reason.trim() !== '';
   const canPreview = choice !== null && amountOk && reasonOk && !busy;
@@ -361,7 +364,9 @@ export const CardChangeDialog: FC<{
                 disabled={busy}
                 className={fieldCls}
               />
-              {!amountOk && <p className={hintCls}>Enter the amount as a number, like 1234.50.</p>}
+              {!amountOk && (
+                <p className={hintCls}>Use digits with at most two decimals, like 1234.50.</p>
+              )}
               <textarea
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}

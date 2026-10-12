@@ -274,20 +274,20 @@ describe('card change: what the feed can move to', () => {
     await user.click(button('Advanced: override amount'));
     const amount = screen.getByLabelText('Override amount');
     const reason = screen.getByLabelText('Reason');
-    const SHAPE = 'Enter the amount as a number, like 1234.50.';
+    const SHAPE = 'Use digits with at most two decimals, like 1234.50.';
 
-    // Not a number as the server reads one: no preview.
-    for (const typed of ['about 50', '50,50', '1,234.50', '$50', '-', '.']) {
+    // Cents only: a third decimal, an exponent, a comma or a space is not an
+    // amount here, though the server would read some of them. No preview.
+    for (const typed of ['12.345', '1e2', '12,50', ' 12']) {
       await user.clear(amount);
       await user.type(amount, typed);
       expect(screen.getByText(SHAPE)).toBeInTheDocument();
       expect(button('Preview')).toBeDisabled();
     }
 
-    // What the server's Decimal() reads is let through to it: either sign (a
-    // debit balance is moved by a negative), any number of decimals (it
-    // rounds to cents), an exponent.
-    for (const typed of ['-50.5', '+50', '50.505', '.5', '50.', '1e2']) {
+    // An optional minus (a debit balance is moved by a negative), digits, and
+    // at most two decimals.
+    for (const typed of ['-12.5', '300', '0.05']) {
       await user.clear(amount);
       await user.type(amount, typed);
       expect(screen.queryByText(SHAPE)).not.toBeInTheDocument();
