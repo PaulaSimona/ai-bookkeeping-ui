@@ -24,6 +24,15 @@ const IconQueue = (
     />
   </svg>
 );
+const IconBank = (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0 0 12 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75Z"
+    />
+  </svg>
+);
 const IconClients = (
   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
     <path
@@ -127,6 +136,8 @@ export const InternalLayout: FC = () => {
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1">
           <NavItem to="/internal/queue" icon={IconQueue} label="Pending queue" />
+          {/* O-S87-8: bank rows waiting on staff, for every staff role. */}
+          <NavItem to="/internal/bank-rows" icon={IconBank} label="Bank rows" />
           <NavItem to="/internal/clients" icon={IconClients} label="Assigned clients" />
           {/* O-S85-3: no "Tier 1 review" section and no Reviewer management
               link, for any role. Staff and Assignments cover what Reviewer

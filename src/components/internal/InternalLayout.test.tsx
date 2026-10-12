@@ -1,7 +1,7 @@
-// Internal console menu by role (UI-C7, O-S85-3): a reviewer sees Pending
-// queue, Assigned clients, Change password and Log out; a super user also sees
-// Staff, Assignments and Back to client app. Nobody sees the Tier 1 review
-// section or Reviewer management.
+// Internal console menu by role (UI-C7, O-S85-3; Bank rows added by O-S87-8):
+// a reviewer sees Pending queue, Bank rows, Assigned clients, Change password
+// and Log out; a super user also sees Staff, Assignments and Back to client
+// app. Nobody sees the Tier 1 review section or Reviewer management.
 import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
@@ -65,13 +65,14 @@ beforeEach(() => {
 });
 
 describe('Internal console menu', () => {
-  it('shows a reviewer exactly Pending queue, Assigned clients, Change password, Log out', async () => {
+  it('shows a reviewer exactly Pending queue, Bank rows, Assigned clients, Change password, Log out', async () => {
     get.mockResolvedValue(staffMe(false));
     renderShell();
     const { links, buttons, sidebar } = await menu();
 
     expect(links).toEqual([
       ['Pending queue', '/internal/queue'],
+      ['Bank rows', '/internal/bank-rows'],
       ['Assigned clients', '/internal/clients'],
       ['Change password', '/forgot-password'],
     ]);
@@ -89,6 +90,7 @@ describe('Internal console menu', () => {
 
     expect(links).toEqual([
       ['Pending queue', '/internal/queue'],
+      ['Bank rows', '/internal/bank-rows'],
       ['Assigned clients', '/internal/clients'],
       ['Staff', '/internal/staff'],
       ['Assignments', '/internal/assignments'],
