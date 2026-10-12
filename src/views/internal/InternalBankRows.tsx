@@ -19,27 +19,53 @@
 // The org column shows only when the viewer's own org list (GET
 // /api/accounting/orgs/: a reviewer's assigned orgs, every org for a super
 // user) has more than one org. The pane always names the row's org.
+//
+// Actions (U4), on a row flagged as a possible duplicate:
+//   Merge: keep this row          → POST staff/bank-rows/<sibling>/merge/
+//                                   {surviving_row_id: this row} — offered
+//                                   only when the row has a sibling. The
+//                                   sibling is the STALE row: it carries the
+//                                   match, and it is the one marked duplicate.
+//   Not a duplicate: release flag → POST staff/bank-rows/<this row>/release-flag/
+// Each asks the server for its plan first (a dry run), shows that plan in the
+// confirm dialog (PlanPreview), and carries it out only on Confirm — the same
+// request with confirm true. The server decides what is allowed: a refusal is
+// shown by its code and in its own words. A confirm counts as carried out only
+// when the server says so (executed === true): then the pane closes and the
+// list is read again. A 200 that was not executed claims nothing — the page
+// says so, names the plan's rows and reads the list again. With no answer at
+// all (a lost connection) the dialog stays open, to be confirmed again.
 import { type FC, type ReactNode, useState } from 'react';
 
+import { MergePlanPreview, ReleasePlanPreview } from '@/components/internal/PlanPreview';
+import { RemediationRefusalView } from '@/components/internal/StaffEntryActions';
 import {
   CenteredSpinner,
+  ConfirmModal,
   EmptyState,
   ErrorBanner,
   PageContainer,
   Pill,
+  PrimaryButton,
   SecondaryButton,
   SectionCard,
+  Toast,
   humanizeCode,
+  useToast,
 } from '@/components/internal/ui';
+import { type PlanOutcome } from '@/hooks/staffPlan';
 import { useOrgsList } from '@/hooks/useInternalAdmin';
 import {
   BANK_ROW_TICKET_STATUSES,
   POSSIBLE_DUPLICATE_REASON,
+  mergeBankRow,
+  releaseBankRowFlag,
   useStaffBankRows,
   type BankRow,
   type BankRowFilters,
   type BankRowSibling,
 } from '@/hooks/useStaffBankRows';
+import { type RemediationRefusal } from '@/hooks/useStaffResolution';
 
 const fieldCls =
   'rounded-lg bg-[#0A1628] border border-white/15 px-3 py-2 text-sm text-white ' +
@@ -134,13 +160,204 @@ const RowCard: FC<{ label: string; heading: string; row: RowSide }> = ({ label, 
   </section>
 );
 
+// ─── Actions ───────────────────────────────────────────────────────────────────
+
+const noticeCls =
+  'rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200';
+
+// What came back instead of a plan, or instead of the confirmed action.
+//   404 — the row (or the sibling it would merge with) is gone: read the list again.
+//   429 — the action's hourly limit, in the hook's words. Never retried here.
+//   anything else — the server's refusal: its detail, and its code beneath.
+const ActionRefusal: FC<{ refusal: RemediationRefusal; onRefresh: () => void }> = ({
+  refusal,
+  onRefresh,
+}) => {
+  if (refusal.status === 404) {
+    return (
+      <div role="alert" className={`flex items-center justify-between gap-4 ${noticeCls}`}>
+        <p>This row is no longer available.</p>
+        <button
+          type="button"
+          onClick={onRefresh}
+          className="text-xs font-medium underline underline-offset-2 hover:text-white"
+        >
+          Refresh
+        </button>
+      </div>
+    );
+  }
+  if (refusal.status === 429) {
+    return (
+      <div role="alert" className={noticeCls}>
+        {refusal.detail}
+      </div>
+    );
+  }
+  return (
+    <RemediationRefusalView refusal={refusal}>
+      {refusal.code && <p className="font-mono text-xs">{refusal.code}</p>}
+    </RemediationRefusalView>
+  );
+};
+
+// A row a plan names, for the notice of a confirm the server did not carry out.
+interface PlanRow {
+  label: string;
+  id: string;
+}
+
+// A plan as the confirm dialog needs it: what to ask, the plan itself, what
+// to say once it is done, and the rows it names.
+interface PlanView {
+  title: string;
+  plan: ReactNode;
+  done: string;
+  rows: PlanRow[];
+}
+
+// An action waiting for its Confirm: the plan the dry run returned, and the
+// same request again with confirm true.
+interface PendingAction extends PlanView {
+  confirm: () => Promise<PlanOutcome<PlanView>>;
+}
+
+const RowActions: FC<{
+  row: BankRow;
+  // A confirmed action: say what was done, close the pane, read the list again.
+  onDone: (message: string) => void;
+  // A confirm the server answered without carrying it out: name the plan's
+  // rows and read the list again.
+  onNotCarriedOut: (rows: PlanRow[]) => void;
+  onRefresh: () => void;
+}> = ({ row, onDone, onNotCarriedOut, onRefresh }) => {
+  const [pending, setPending] = useState<PendingAction | null>(null);
+  const [refusal, setRefusal] = useState<RemediationRefusal | null>(null);
+  // A request is out: every button of the action waits for its answer.
+  const [busy, setBusy] = useState(false);
+  const sibling = row.duplicate_sibling;
+
+  if (row.routing_reason !== POSSIBLE_DUPLICATE_REASON) return null;
+
+  // `send(false)` asks what the action would do. Its plan goes into the
+  // confirm dialog, whose Confirm is `send(true)`: the same request.
+  const ask = async <P,>(
+    send: (confirm: boolean) => Promise<PlanOutcome<P>>,
+    view: (plan: P) => PlanView,
+  ) => {
+    setBusy(true);
+    setRefusal(null);
+    const outcome = await send(false);
+    setBusy(false);
+    if (!outcome.ok) {
+      setRefusal(outcome.refusal);
+      return;
+    }
+    setPending({
+      ...view(outcome.plan),
+      confirm: async () => {
+        const confirmed = await send(true);
+        return confirmed.ok ? { ...confirmed, plan: view(confirmed.plan) } : confirmed;
+      },
+    });
+  };
+
+  const confirm = async () => {
+    if (!pending) return;
+    setBusy(true);
+    setRefusal(null);
+    const outcome = await pending.confirm();
+    setBusy(false);
+    // No answer at all (a lost connection): the dialog stays, with the failure
+    // in it, and Confirm can be pressed again.
+    if (!outcome.ok && outcome.refusal.status === undefined) {
+      setRefusal(outcome.refusal);
+      return;
+    }
+    setPending(null);
+    if (!outcome.ok) setRefusal(outcome.refusal);
+    // A 200 is carried out only when the server says so (executed === true).
+    else if (outcome.executed) onDone(pending.done);
+    else onNotCarriedOut(outcome.plan.rows);
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-3">
+        {sibling && (
+          <PrimaryButton
+            onClick={() =>
+              void ask(
+                // The sibling is the stale row; this row is the one that stays.
+                (confirmed) => mergeBankRow(sibling.id, row.id, confirmed),
+                (plan) => ({
+                  title: 'Merge: keep this row?',
+                  plan: <MergePlanPreview plan={plan} />,
+                  done: 'Merged. The sibling is marked duplicate.',
+                  rows: [
+                    { label: 'Sibling', id: plan.stale_row_id },
+                    { label: 'This row', id: plan.surviving_row_id },
+                  ],
+                }),
+              )
+            }
+            disabled={busy}
+          >
+            Merge: keep this row
+          </PrimaryButton>
+        )}
+        <SecondaryButton
+          onClick={() =>
+            void ask(
+              (confirmed) => releaseBankRowFlag(row.id, confirmed),
+              (plan) => ({
+                title: 'Release the possible-duplicate flag?',
+                plan: <ReleasePlanPreview plan={plan} />,
+                done: 'Flag released. This row is not a duplicate.',
+                rows: [{ label: 'Row', id: plan.row_id }],
+              }),
+            )
+          }
+          disabled={busy}
+        >
+          Not a duplicate: release flag
+        </SecondaryButton>
+      </div>
+
+      {refusal && !pending && <ActionRefusal refusal={refusal} onRefresh={onRefresh} />}
+
+      {pending && (
+        <ConfirmModal title={pending.title} onClose={() => !busy && setPending(null)}>
+          {pending.plan}
+          {refusal && (
+            <div className="mt-4">
+              <ActionRefusal refusal={refusal} onRefresh={onRefresh} />
+            </div>
+          )}
+          <div className="mt-5 flex justify-end gap-2">
+            <SecondaryButton onClick={() => setPending(null)} disabled={busy}>
+              Cancel
+            </SecondaryButton>
+            <PrimaryButton onClick={() => void confirm()} disabled={busy} busy={busy}>
+              Confirm
+            </PrimaryButton>
+          </div>
+        </ConfirmModal>
+      )}
+    </div>
+  );
+};
+
 const DetailPane: FC<{
   row: BankRow;
   // The list is already narrowed to this row's feed.
   feedIsFilter: boolean;
   onOnlyThisFeed: () => void;
+  onDone: (message: string) => void;
+  onNotCarriedOut: (rows: PlanRow[]) => void;
+  onRefresh: () => void;
   onClose: () => void;
-}> = ({ row, feedIsFilter, onOnlyThisFeed, onClose }) => {
+}> = ({ row, feedIsFilter, onOnlyThisFeed, onDone, onNotCarriedOut, onRefresh, onClose }) => {
   const sibling = row.duplicate_sibling;
   const match = row.suggested_match;
   return (
@@ -163,6 +380,13 @@ const DetailPane: FC<{
               <p className="text-sm text-white/50">No duplicate sibling.</p>
             )}
           </div>
+
+          <RowActions
+            row={row}
+            onDone={onDone}
+            onNotCarriedOut={onNotCarriedOut}
+            onRefresh={onRefresh}
+          />
 
           <dl className="grid grid-cols-2 gap-3 text-sm">
             <Detail label="Org">
@@ -211,6 +435,28 @@ export const InternalBankRows: FC = () => {
   const spansOrgs = orgs.length > 1;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = items.find((row) => row.id === selectedId) ?? null;
+  // The page's toast: a confirmed action closes the pane, so the confirmation
+  // lives here.
+  const { toast, showToast } = useToast();
+
+  // The rows of a confirm the server answered without carrying it out. Kept
+  // here, not in the pane: reading the list again takes the pane down with it.
+  const [notCarriedOut, setNotCarriedOut] = useState<PlanRow[] | null>(null);
+
+  // A confirmed merge or release: say so, close the pane and read the list
+  // again — the row has changed, and after a merge it has usually left the list.
+  const onActionDone = (message: string) => {
+    showToast(message, 'success');
+    setNotCarriedOut(null);
+    setSelectedId(null);
+    refetch();
+  };
+  // Not carried out: nothing is claimed. The list is read again so the screen
+  // shows where the rows stand now.
+  const onActionNotCarriedOut = (rows: PlanRow[]) => {
+    setNotCarriedOut(rows);
+    refetch();
+  };
 
   // A change of filter starts again from the first page, with no row open.
   const restart = () => {
@@ -295,6 +541,19 @@ export const InternalBankRows: FC = () => {
       </div>
 
       {error && <ErrorBanner message={error} onRetry={refetch} />}
+
+      {notCarriedOut && (
+        <div role="alert" className={noticeCls}>
+          <p>The server did not carry this out.</p>
+          <p className="mt-1 flex flex-wrap gap-x-4 text-xs">
+            {notCarriedOut.map((planRow) => (
+              <span key={planRow.label}>
+                {planRow.label} <ShortId id={planRow.id} />
+              </span>
+            ))}
+          </p>
+        </div>
+      )}
 
       {isLoading ? (
         <SectionCard>
@@ -382,6 +641,9 @@ export const InternalBankRows: FC = () => {
                 onOnlyThisFeed={() =>
                   changeFeed({ id: selected.bank_account_id, label: feedLabel(selected) })
                 }
+                onDone={onActionDone}
+                onNotCarriedOut={onActionNotCarriedOut}
+                onRefresh={refetch}
                 onClose={() => setSelectedId(null)}
               />
             </div>
@@ -415,6 +677,8 @@ export const InternalBankRows: FC = () => {
           </div>
         </div>
       )}
+
+      <Toast toast={toast} />
     </PageContainer>
   );
 };
