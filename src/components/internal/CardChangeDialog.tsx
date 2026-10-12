@@ -25,8 +25,9 @@
 // up, to be confirmed again.
 import { type FC, useEffect, useId, useState } from 'react';
 
+import { ActionRefusal, noticeCls } from '@/components/internal/ActionRefusal';
 import { RepointPlanPreview } from '@/components/internal/PlanPreview';
-import { RemediationRefusalView } from '@/components/internal/StaffEntryActions';
+import { ShortId } from '@/components/internal/ShortId';
 import { CenteredSpinner, Pill, PrimaryButton, SecondaryButton } from '@/components/internal/ui';
 import {
   REPOINT_NEW_ACCOUNT,
@@ -44,8 +45,6 @@ const labelCls = 'text-[11px] font-semibold uppercase tracking-wide text-white/4
 const fieldCls =
   'w-full rounded-md bg-[#0f172a] border border-white/15 px-2 py-1.5 text-sm text-white ' +
   'placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-[#0066FF] disabled:opacity-50';
-const noticeCls =
-  'rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200';
 const hintCls = 'text-xs text-amber-300';
 const asideCls = 'text-xs text-white/40';
 
@@ -63,48 +62,9 @@ const AMOUNT_SHAPE = /^-?\d+(\.\d{1,2})?$/;
 // (a sweep), or the card's own account, to be created.
 type Choice = { kind: 'target'; code: string } | { kind: 'sweep' } | { kind: 'new' };
 
-// An id on screen: its first eight characters, the whole id kept in the title.
-const ShortId: FC<{ id: string }> = ({ id }) => (
-  <span title={id} className="font-mono">
-    {id.slice(0, 8)}
-  </span>
-);
-
-// What came back instead of the targets, a plan, or the confirmed re-point.
-//   404 — the feed is gone: read the cards again.
-//   429 — a rate limit, in the hook's words. Never retried here.
-//   anything else — the server's refusal: its detail, and its code beneath.
-const RepointRefusal: FC<{ refusal: RemediationRefusal; onRefresh: () => void }> = ({
-  refusal,
-  onRefresh,
-}) => {
-  if (refusal.status === 404) {
-    return (
-      <div role="alert" className={`flex items-center justify-between gap-4 ${noticeCls}`}>
-        <p>This card&apos;s feed is no longer available.</p>
-        <button
-          type="button"
-          onClick={onRefresh}
-          className="text-xs font-medium underline underline-offset-2 hover:text-white"
-        >
-          Refresh
-        </button>
-      </div>
-    );
-  }
-  if (refusal.status === 429) {
-    return (
-      <div role="alert" className={noticeCls}>
-        {refusal.detail}
-      </div>
-    );
-  }
-  return (
-    <RemediationRefusalView refusal={refusal}>
-      {refusal.code && <p className="font-mono text-xs">{refusal.code}</p>}
-    </RemediationRefusalView>
-  );
-};
+// What ActionRefusal says on a 404 — instead of the targets, a plan, or the
+// confirmed re-point: the feed is gone.
+const FEED_GONE = "This card's feed is no longer available.";
 
 // The entry a re-point posted: by its number once the staff entry detail has
 // been read; by its short id until then, and if that read fails.
@@ -263,7 +223,7 @@ export const CardChangeDialog: FC<{
         <div className="space-y-4">
           <RepointPlanPreview plan={plan} />
           {caution && <p className={hintCls}>{caution}</p>}
-          {refusal && <RepointRefusal refusal={refusal} onRefresh={refresh} />}
+          {refusal && <ActionRefusal refusal={refusal} gone={FEED_GONE} onRefresh={refresh} />}
           <div className="flex justify-end gap-2">
             <SecondaryButton
               onClick={() => {
@@ -287,7 +247,7 @@ export const CardChangeDialog: FC<{
     if (!targets) {
       return (
         <div className="space-y-4">
-          {refusal && <RepointRefusal refusal={refusal} onRefresh={refresh} />}
+          {refusal && <ActionRefusal refusal={refusal} gone={FEED_GONE} onRefresh={refresh} />}
           <div className="flex justify-end">
             <SecondaryButton onClick={onClose}>Close</SecondaryButton>
           </div>
@@ -385,7 +345,7 @@ export const CardChangeDialog: FC<{
           )}
         </div>
 
-        {refusal && <RepointRefusal refusal={refusal} onRefresh={refresh} />}
+        {refusal && <ActionRefusal refusal={refusal} gone={FEED_GONE} onRefresh={refresh} />}
 
         <div className="flex justify-end gap-2">
           <SecondaryButton onClick={close} disabled={busy}>

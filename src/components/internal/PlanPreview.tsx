@@ -13,6 +13,7 @@
 // numbers, not as the server's strings, and are never rendered here (F-S87-7).
 import { type FC, type ReactNode, useId } from 'react';
 
+import { ShortId } from '@/components/internal/ShortId';
 import {
   type BankMergePlan,
   type BankReleasePlan,
@@ -31,12 +32,8 @@ const amountCls = 'py-1.5 px-3 text-right tabular-nums whitespace-nowrap';
 const BALANCE_LEGEND =
   'Balances are credits minus debits on posted lines: a positive amount is owed on the card, a negative amount is a debit balance.';
 
-// An id on screen: its first eight characters, the whole id kept in the title.
-const ShortId: FC<{ id: string }> = ({ id }) => (
-  <span title={id} className="font-mono text-white/70">
-    {id.slice(0, 8)}
-  </span>
-);
+// An id in a plan (ShortId): a shade lighter than the text around it.
+const idCls = 'text-white/70';
 
 // A labelled field: the term and, beside it, its value.
 const Field: FC<{ label: string; children: ReactNode }> = ({ label, children }) => (
@@ -51,7 +48,7 @@ const EntryLabel: FC<{ id: string; entryNumber: number | null }> = ({ id, entryN
   const display = formatEntryNumber(entryNumber);
   return (
     <>
-      {display && `${display} · `}entry <ShortId id={id} />
+      {display && `${display} · `}entry <ShortId className={idCls} id={id} />
     </>
   );
 };
@@ -88,21 +85,21 @@ export const MergePlanPreview: FC<{ plan: BankMergePlan }> = ({ plan }) => (
     <p className="mt-1 text-white/50">No journal entry is changed.</p>
     <dl className="mt-3">
       <Field label="Marked duplicate (the sibling)">
-        <ShortId id={plan.stale_row_id} />
+        <ShortId className={idCls} id={plan.stale_row_id} />
       </Field>
       <Field label="Stays (this row)">
-        <ShortId id={plan.surviving_row_id} />
+        <ShortId className={idCls} id={plan.surviving_row_id} />
       </Field>
       <Field label="Exclusion reason">{plan.excluded_reason}</Field>
       <Field label="Match that moves">
         {plan.moves_match ? (
           <>
-            match <ShortId id={plan.moves_match.match_id} /> · {plan.moves_match.state} ·{' '}
+            match <ShortId className={idCls} id={plan.moves_match.match_id} /> · {plan.moves_match.state} ·{' '}
             <EntryLabel
               id={plan.moves_match.entry_id}
               entryNumber={plan.moves_match.entry_number}
             />{' '}
-            · line <ShortId id={plan.moves_match.journal_line_id} />
+            · line <ShortId className={idCls} id={plan.moves_match.journal_line_id} />
           </>
         ) : (
           'none'
@@ -128,16 +125,16 @@ export const ReleasePlanPreview: FC<{ plan: BankReleasePlan }> = ({ plan }) => (
     <p>The possible-duplicate flag on this row will be released.</p>
     <dl className="mt-3">
       <Field label="Row">
-        <ShortId id={plan.row_id} />
+        <ShortId className={idCls} id={plan.row_id} />
       </Field>
       <Field label="Flagged against">
-        {plan.sibling_id ? <ShortId id={plan.sibling_id} /> : 'not recorded'}
+        {plan.sibling_id ? <ShortId className={idCls} id={plan.sibling_id} /> : 'not recorded'}
       </Field>
       <Field label="Ticket">{ticketChange(plan.ticket)}</Field>
       <Field label="Match already on this row">
         {plan.matched ? (
           <>
-            match <ShortId id={plan.matched.match_id} /> · {plan.matched.state} ·{' '}
+            match <ShortId className={idCls} id={plan.matched.match_id} /> · {plan.matched.state} ·{' '}
             <EntryLabel id={plan.matched.entry_id} entryNumber={plan.matched.entry_number} />
           </>
         ) : (
@@ -156,7 +153,7 @@ export const RepointPlanPreview: FC<{ plan: RepointPlan }> = ({ plan }) => {
     <section aria-label="Re-point plan" className={planCls}>
       <dl>
         <Field label="Feed">
-          <ShortId id={plan.feed_id} />
+          <ShortId className={idCls} id={plan.feed_id} />
         </Field>
         <Field label="Mode">{plan.mode}</Field>
         <Field label="Option">{plan.option}</Field>
@@ -168,7 +165,7 @@ export const RepointPlanPreview: FC<{ plan: RepointPlan }> = ({ plan }) => {
         <Field label="Card">
           {plan.card_id ? (
             <>
-              <ShortId id={plan.card_id} />{' '}
+              <ShortId className={idCls} id={plan.card_id} />{' '}
               {plan.card_switches ? `switches to ${plan.target_account_code}` : 'not switched'}
             </>
           ) : (
@@ -178,7 +175,7 @@ export const RepointPlanPreview: FC<{ plan: RepointPlan }> = ({ plan }) => {
         <Field label="Computed">{plan.computed}</Field>
         <Field label="Amount to move">{plan.amount}</Field>
         <Field label="Override reason">{plan.override_reason ?? 'none'}</Field>
-        <Field label="Entry id">{plan.entry_id ? <ShortId id={plan.entry_id} /> : '—'}</Field>
+        <Field label="Entry id">{plan.entry_id ? <ShortId className={idCls} id={plan.entry_id} /> : '—'}</Field>
       </dl>
 
       {plan.legs.length > 0 && (
@@ -201,7 +198,7 @@ export const RepointPlanPreview: FC<{ plan: RepointPlan }> = ({ plan }) => {
               {plan.legs.map((leg) => (
                 <tr key={leg.from_account_id} className="border-t border-white/5">
                   <td className="py-1.5 pr-3 whitespace-nowrap">
-                    {leg.from_account_code} <ShortId id={leg.from_account_id} />
+                    {leg.from_account_code} <ShortId className={idCls} id={leg.from_account_id} />
                   </td>
                   <td className={amountCls}>{leg.feed_lines}</td>
                   <td className={amountCls}>{leg.settlement_debits}</td>

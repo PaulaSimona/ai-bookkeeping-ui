@@ -37,8 +37,9 @@
 // all (a lost connection) the dialog stays open, to be confirmed again.
 import { type FC, type ReactNode, useState } from 'react';
 
+import { ActionRefusal, noticeCls } from '@/components/internal/ActionRefusal';
 import { MergePlanPreview, ReleasePlanPreview } from '@/components/internal/PlanPreview';
-import { RemediationRefusalView } from '@/components/internal/StaffEntryActions';
+import { ShortId } from '@/components/internal/ShortId';
 import {
   CenteredSpinner,
   ConfirmModal,
@@ -94,12 +95,8 @@ const SIBLING_RELATION: Record<BankRowSibling['relation'], string> = {
   merged_into: 'Merged into',
 };
 
-// An id on screen: its first eight characters, the whole id kept in the title.
-const ShortId: FC<{ id: string }> = ({ id }) => (
-  <span title={id} className="font-mono text-xs text-white/40">
-    {id.slice(0, 8)}
-  </span>
-);
+// An id on this screen (ShortId): small, and quieter than what it sits beside.
+const idCls = 'text-xs text-white/40';
 
 const Detail: FC<{ label: string; children: ReactNode }> = ({ label, children }) => (
   <div>
@@ -145,7 +142,7 @@ const RowCard: FC<{ label: string; heading: string; row: RowSide }> = ({ label, 
   <section aria-label={label} className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
     <div className="flex items-center justify-between gap-2">
       <h3 className="text-sm font-semibold text-white">{heading}</h3>
-      <ShortId id={row.id} />
+      <ShortId className={idCls} id={row.id} />
     </div>
     <dl className="mt-2 space-y-2 text-sm">
       <Detail label="Date">{row.date}</Detail>
@@ -162,44 +159,9 @@ const RowCard: FC<{ label: string; heading: string; row: RowSide }> = ({ label, 
 
 // ─── Actions ───────────────────────────────────────────────────────────────────
 
-const noticeCls =
-  'rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200';
-
-// What came back instead of a plan, or instead of the confirmed action.
-//   404 — the row (or the sibling it would merge with) is gone: read the list again.
-//   429 — the action's hourly limit, in the hook's words. Never retried here.
-//   anything else — the server's refusal: its detail, and its code beneath.
-const ActionRefusal: FC<{ refusal: RemediationRefusal; onRefresh: () => void }> = ({
-  refusal,
-  onRefresh,
-}) => {
-  if (refusal.status === 404) {
-    return (
-      <div role="alert" className={`flex items-center justify-between gap-4 ${noticeCls}`}>
-        <p>This row is no longer available.</p>
-        <button
-          type="button"
-          onClick={onRefresh}
-          className="text-xs font-medium underline underline-offset-2 hover:text-white"
-        >
-          Refresh
-        </button>
-      </div>
-    );
-  }
-  if (refusal.status === 429) {
-    return (
-      <div role="alert" className={noticeCls}>
-        {refusal.detail}
-      </div>
-    );
-  }
-  return (
-    <RemediationRefusalView refusal={refusal}>
-      {refusal.code && <p className="font-mono text-xs">{refusal.code}</p>}
-    </RemediationRefusalView>
-  );
-};
+// What ActionRefusal says on a 404: the row, or the sibling it would merge
+// with, is gone.
+const ROW_GONE = 'This row is no longer available.';
 
 // A row a plan names, for the notice of a confirm the server did not carry out.
 interface PlanRow {
@@ -324,14 +286,14 @@ const RowActions: FC<{
         </SecondaryButton>
       </div>
 
-      {refusal && !pending && <ActionRefusal refusal={refusal} onRefresh={onRefresh} />}
+      {refusal && !pending && <ActionRefusal refusal={refusal} gone={ROW_GONE} onRefresh={onRefresh} />}
 
       {pending && (
         <ConfirmModal title={pending.title} onClose={() => !busy && setPending(null)}>
           {pending.plan}
           {refusal && (
             <div className="mt-4">
-              <ActionRefusal refusal={refusal} onRefresh={onRefresh} />
+              <ActionRefusal refusal={refusal} gone={ROW_GONE} onRefresh={onRefresh} />
             </div>
           )}
           <div className="mt-5 flex justify-end gap-2">
@@ -390,7 +352,7 @@ const DetailPane: FC<{
 
           <dl className="grid grid-cols-2 gap-3 text-sm">
             <Detail label="Org">
-              {row.org_name ?? '—'} {row.org_id && <ShortId id={row.org_id} />}
+              {row.org_name ?? '—'} {row.org_id && <ShortId className={idCls} id={row.org_id} />}
             </Detail>
             <Detail label="Feed">{feedLabel(row)}</Detail>
             <Detail label="Feed account">{row.feed_account_code ?? '—'}</Detail>
@@ -548,7 +510,7 @@ export const InternalBankRows: FC = () => {
           <p className="mt-1 flex flex-wrap gap-x-4 text-xs">
             {notCarriedOut.map((planRow) => (
               <span key={planRow.label}>
-                {planRow.label} <ShortId id={planRow.id} />
+                {planRow.label} <ShortId className={idCls} id={planRow.id} />
               </span>
             ))}
           </p>
