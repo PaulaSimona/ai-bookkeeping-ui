@@ -1,0 +1,259 @@
+// PlanPreview (S87 B2b U2, O-S87-8 / O-S87-9) — what the server says a staff
+// action will do, shown before staff confirm it: the bank-row merge, the flag
+// release (useStaffBankRows) and the feed re-point (useStaffRepoint).
+//
+// Every field of a plan is shown as returned. Amounts are the server's strings,
+// rendered untouched — never formatMoney: nothing regrouped, re-signed or given
+// a symbol. An id shows its first eight characters and keeps the whole id in
+// its title.
+//
+// The balance legend is true of a re-point's `balances` only, so it is shown
+// only with them: a leg's amounts carry no sign claim, and a merge or a release
+// moves no money. BankRowMatchSummary.line_debit / line_credit arrive as JSON
+// numbers, not as the server's strings, and are never rendered here (F-S87-7).
+import { type FC, type ReactNode, useId } from 'react';
+
+import {
+  type BankMergePlan,
+  type BankReleasePlan,
+  type BankTicketImage,
+} from '@/hooks/useStaffBankRows';
+import { type RepointPlan } from '@/hooks/useStaffRepoint';
+import { formatEntryNumber } from '@/utils/entryStatus';
+
+const planCls = 'text-sm text-white/80';
+const headingCls = 'text-xs font-medium uppercase tracking-wide text-white/40';
+const captionCls = `pb-1 text-left ${headingCls}`;
+const headCls = 'py-1 px-3 font-medium text-right';
+const amountCls = 'py-1.5 px-3 text-right tabular-nums whitespace-nowrap';
+
+// What a balance's sign means — said of `balances`, and of nothing else.
+const BALANCE_LEGEND =
+  'Balances are credits minus debits on posted lines: a positive amount is owed on the card, a negative amount is a debit balance.';
+
+// An id on screen: its first eight characters, the whole id kept in the title.
+const ShortId: FC<{ id: string }> = ({ id }) => (
+  <span title={id} className="font-mono text-white/70">
+    {id.slice(0, 8)}
+  </span>
+);
+
+// A labelled field: the term and, beside it, its value.
+const Field: FC<{ label: string; children: ReactNode }> = ({ label, children }) => (
+  <div className="flex gap-3 py-1">
+    <dt className="w-52 shrink-0 text-white/50">{label}</dt>
+    <dd className="min-w-0 break-words">{children}</dd>
+  </div>
+);
+
+// An entry: its number when it has one ("JE-0068"), and its id.
+const EntryLabel: FC<{ id: string; entryNumber: number | null }> = ({ id, entryNumber }) => {
+  const display = formatEntryNumber(entryNumber);
+  return (
+    <>
+      {display && `${display} · `}entry <ShortId id={id} />
+    </>
+  );
+};
+
+// A ticket where it stands: its status, and its routing reason when it has one.
+const ticketText = (ticket: BankTicketImage | null): string => {
+  if (ticket == null) return 'none';
+  return ticket.routing_reason ? `${ticket.status} (${ticket.routing_reason})` : ticket.status;
+};
+
+// A ticket before and after the action — "none" when there is no ticket at all.
+const ticketChange = (
+  change: { before: BankTicketImage | null; after: BankTicketImage | null } | null,
+): string =>
+  change == null || (change.before == null && change.after == null)
+    ? 'none'
+    : `${ticketText(change.before)} → ${ticketText(change.after)}`;
+
+// ─── Merge ─────────────────────────────────────────────────────────────────────
+
+// What reaches this row from the sibling: its match, its entry, both or nothing.
+const mergeSentence = ({ moves_match, moves_entry }: BankMergePlan): string => {
+  if (moves_match && moves_entry) {
+    return 'The sibling will be marked duplicate, and its match and its entry move to this row.';
+  }
+  if (moves_match) return 'The sibling will be marked duplicate, and its match moves to this row.';
+  if (moves_entry) return 'The sibling will be marked duplicate, and its entry moves to this row.';
+  return 'The sibling will be marked duplicate. Nothing moves to this row.';
+};
+
+export const MergePlanPreview: FC<{ plan: BankMergePlan }> = ({ plan }) => (
+  <section aria-label="Merge plan" className={planCls}>
+    <p>{mergeSentence(plan)}</p>
+    <p className="mt-1 text-white/50">No journal entry is changed.</p>
+    <dl className="mt-3">
+      <Field label="Marked duplicate (the sibling)">
+        <ShortId id={plan.stale_row_id} />
+      </Field>
+      <Field label="Stays (this row)">
+        <ShortId id={plan.surviving_row_id} />
+      </Field>
+      <Field label="Exclusion reason">{plan.excluded_reason}</Field>
+      <Field label="Match that moves">
+        {plan.moves_match ? (
+          <>
+            match <ShortId id={plan.moves_match.match_id} /> · {plan.moves_match.state} ·{' '}
+            <EntryLabel
+              id={plan.moves_match.entry_id}
+              entryNumber={plan.moves_match.entry_number}
+            />{' '}
+            · line <ShortId id={plan.moves_match.journal_line_id} />
+          </>
+        ) : (
+          'none'
+        )}
+      </Field>
+      <Field label="Entry that moves">
+        {plan.moves_entry ? (
+          <EntryLabel id={plan.moves_entry.entry_id} entryNumber={plan.moves_entry.entry_number} />
+        ) : (
+          'none'
+        )}
+      </Field>
+      <Field label="Sibling's ticket">{ticketChange(plan.stale_ticket)}</Field>
+      <Field label="This row's ticket">{ticketChange(plan.surviving_ticket)}</Field>
+    </dl>
+  </section>
+);
+
+// ─── Release flag ──────────────────────────────────────────────────────────────
+
+export const ReleasePlanPreview: FC<{ plan: BankReleasePlan }> = ({ plan }) => (
+  <section aria-label="Release plan" className={planCls}>
+    <p>The possible-duplicate flag on this row will be released.</p>
+    <dl className="mt-3">
+      <Field label="Row">
+        <ShortId id={plan.row_id} />
+      </Field>
+      <Field label="Flagged against">
+        {plan.sibling_id ? <ShortId id={plan.sibling_id} /> : 'not recorded'}
+      </Field>
+      <Field label="Ticket">{ticketChange(plan.ticket)}</Field>
+      <Field label="Match already on this row">
+        {plan.matched ? (
+          <>
+            match <ShortId id={plan.matched.match_id} /> · {plan.matched.state} ·{' '}
+            <EntryLabel id={plan.matched.entry_id} entryNumber={plan.matched.entry_number} />
+          </>
+        ) : (
+          'none'
+        )}
+      </Field>
+    </dl>
+  </section>
+);
+
+// ─── Re-point ──────────────────────────────────────────────────────────────────
+
+export const RepointPlanPreview: FC<{ plan: RepointPlan }> = ({ plan }) => {
+  const noticesId = useId();
+  return (
+    <section aria-label="Re-point plan" className={planCls}>
+      <dl>
+        <Field label="Feed">
+          <ShortId id={plan.feed_id} />
+        </Field>
+        <Field label="Mode">{plan.mode}</Field>
+        <Field label="Option">{plan.option}</Field>
+        <Field label="From account">{plan.from_account_code ?? '—'}</Field>
+        <Field label="Target account">
+          {`${plan.target_account_code} ${plan.target_account_name}`}
+          {plan.target_is_new && ' (new account)'}
+        </Field>
+        <Field label="Card">
+          {plan.card_id ? (
+            <>
+              <ShortId id={plan.card_id} />{' '}
+              {plan.card_switches ? `switches to ${plan.target_account_code}` : 'not switched'}
+            </>
+          ) : (
+            'none'
+          )}
+        </Field>
+        <Field label="Computed">{plan.computed}</Field>
+        <Field label="Amount to move">{plan.amount}</Field>
+        <Field label="Override reason">{plan.override_reason ?? 'none'}</Field>
+        <Field label="Entry id">{plan.entry_id ? <ShortId id={plan.entry_id} /> : '—'}</Field>
+      </dl>
+
+      {plan.legs.length > 0 && (
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full">
+            <caption className={captionCls}>Parts by account</caption>
+            <thead>
+              <tr className="text-xs text-white/40">
+                <th className="py-1 pr-3 font-medium text-left">Account</th>
+                <th className={headCls}>Feed lines</th>
+                <th className={headCls}>Card settlements</th>
+                <th className={headCls}>Earlier re-points</th>
+                <th className={headCls}>Everything else</th>
+                <th className={headCls}>Basis</th>
+                <th className={headCls}>Computed</th>
+                <th className={headCls}>Moved</th>
+              </tr>
+            </thead>
+            <tbody>
+              {plan.legs.map((leg) => (
+                <tr key={leg.from_account_id} className="border-t border-white/5">
+                  <td className="py-1.5 pr-3 whitespace-nowrap">
+                    {leg.from_account_code} <ShortId id={leg.from_account_id} />
+                  </td>
+                  <td className={amountCls}>{leg.feed_lines}</td>
+                  <td className={amountCls}>{leg.settlement_debits}</td>
+                  <td className={amountCls}>{leg.earlier_moves}</td>
+                  <td className={amountCls}>{leg.rest}</td>
+                  <td className={amountCls}>{leg.basis}</td>
+                  <td className={amountCls}>{leg.computed}</td>
+                  <td className={amountCls}>{leg.moved}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {plan.balances.length > 0 && (
+        <div className="mt-4">
+          <table>
+            <caption className={captionCls}>Balances</caption>
+            <thead>
+              <tr className="text-xs text-white/40">
+                <th className="py-1 pr-3 font-medium text-left">Account</th>
+                <th className={headCls}>Before</th>
+                <th className={headCls}>After</th>
+              </tr>
+            </thead>
+            <tbody>
+              {plan.balances.map((balance) => (
+                <tr key={balance.account_code} className="border-t border-white/5">
+                  <td className="py-1.5 pr-3">{balance.account_code}</td>
+                  <td className={amountCls}>{balance.before}</td>
+                  <td className={amountCls}>{balance.after}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="mt-2 text-xs text-white/50">{BALANCE_LEGEND}</p>
+        </div>
+      )}
+
+      {plan.notices.length > 0 && (
+        <div className="mt-4">
+          <p id={noticesId} className={headingCls}>
+            Notices
+          </p>
+          <ul aria-labelledby={noticesId} className="mt-1 list-disc space-y-1 pl-5 text-amber-200">
+            {plan.notices.map((notice, index) => (
+              <li key={index}>{notice}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
+};
