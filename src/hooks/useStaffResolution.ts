@@ -456,6 +456,8 @@ export interface StaffCard {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  feed_id?: string | null; // O-S87-5: the feed a re-point is addressed by
+  feed_unlinked_reason?: 'no_feed' | 'ambiguous' | null; // why feed_id is null
 }
 
 export const useStaffOrgCards = (orgId: string) =>
@@ -528,3 +530,4 @@ export const resendCardNotification = async (cardId: string): Promise<ResendResu
     return { ok: false, errorDetail: 'Could not re-send the notification.' };
   }
 };
+export { refusalCode, extractDetail };

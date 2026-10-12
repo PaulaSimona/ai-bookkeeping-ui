@@ -27,6 +27,10 @@ vi.mock('@/views/internal/InternalQueue', () => ({
 vi.mock('@/views/internal/InternalStaff', () => ({
   InternalStaff: () => <p>internal staff page</p>,
 }));
+vi.mock('@/views/internal/InternalBankRows', () => ({
+  InternalBankRows: () => <p>internal bank rows page</p>,
+}));
+vi.mock('@/views/dashboard', () => ({ Dashboard: () => <p>client dashboard page</p> }));
 vi.mock('@/views/settings', () => ({ Settings: () => <p>settings page</p> }));
 vi.mock('@/views/reviewer', () => ({
   ReviewerDashboard: () => <p>tier 1 reviewer page</p>,
@@ -115,5 +119,35 @@ describe('retired legacy staff paths', () => {
     renderAt('/reviewer');
     expect(await screen.findByText('tier 1 reviewer page')).toBeInTheDocument();
     expect(location()).toBe('/reviewer');
+  });
+});
+
+// The staff bank-rows screen (S87 B2b U3, O-S87-8) is a page of the internal
+// console: any internal staff member reaches it, nobody else does.
+describe('/internal/bank-rows', () => {
+  it('shows a reviewer the bank rows screen', async () => {
+    get.mockImplementation((url) =>
+      Promise.resolve(
+        url === '/api/accounting/staff/me/'
+          ? {
+              status: 200,
+              data: { is_staff_member: true, is_super_user: false, role_type: 'reviewer' },
+            }
+          : { status: 404, data: {} },
+      ),
+    );
+    renderAt('/internal/bank-rows');
+
+    expect(await screen.findByText('internal bank rows page')).toBeInTheDocument();
+    expect(location()).toBe('/internal/bank-rows');
+  });
+
+  it('sends a visitor who is not internal staff to the client app instead', async () => {
+    get.mockResolvedValue({ status: 404, data: { detail: 'Not found.' } });
+    renderAt('/internal/bank-rows');
+
+    expect(await screen.findByText('client dashboard page')).toBeInTheDocument();
+    expect(location()).toBe('/dashboard');
+    expect(screen.queryByText('internal bank rows page')).not.toBeInTheDocument();
   });
 });

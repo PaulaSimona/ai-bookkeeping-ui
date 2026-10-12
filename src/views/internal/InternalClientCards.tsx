@@ -10,8 +10,14 @@
 //   POST     /staff/cards/<pk>/resend-notification/   (C2)
 // The staff lane carries no require_tier2 — the StaffProfile + can_access_org
 // gate is the whole gate, and every deny is the byte-identical §16 404.
+//
+// S87 B2b (O-S87-9): a classified business card whose bank feed the server
+// names (feed_id) gets "Change" — CardChangeDialog re-points that feed. A
+// business card with no feed says why instead (feed_unlinked_reason). Personal
+// and unidentified cards are as they were.
 import { type FC, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { CardChangeDialog } from '@/components/internal/CardChangeDialog';
 import {
   useStaffOrgCards,
   createStaffCard,
@@ -81,6 +87,13 @@ const PICKER_NOTE: Record<'business' | 'personal', string> = {
   // Jurisdiction-neutral: the owner account differs by country (the CA and US
   // charts use different codes for it), so name the purpose, not the account.
   personal: 'A personal card maps to the org’s owner-loan or owner-equity account.',
+};
+
+// Why a business card has no "Change" (O-S87-9): the server could not name
+// one feed for it.
+const UNLINKED_NOTE: Record<NonNullable<StaffCard['feed_unlinked_reason']>, string> = {
+  no_feed: 'No bank feed is linked to this card, so there is nothing to re-point.',
+  ambiguous: "More than one feed could be this card's, so it cannot be changed here.",
 };
 
 const fmtDate = (s: string) =>
@@ -311,8 +324,10 @@ const CardRow: FC<{
   accountsLoading: boolean;
   accountsError: string | null;
   onChanged: () => void;
+  // Opens the re-point dialog for this card (the page owns it).
+  onChange: () => void;
   notify: (m: string, t: 'success' | 'error') => void;
-}> = ({ card, accounts, accountsLoading, accountsError, onChanged, notify }) => {
+}> = ({ card, accounts, accountsLoading, accountsError, onChanged, onChange, notify }) => {
   const [classifying, setClassifying] = useState(false);
   const [resending, setResending] = useState(false);
   // 429 is not an error — it is the cooldown working. Rendered inline and calm,
@@ -322,6 +337,15 @@ const CardRow: FC<{
 
   const unidentified = card.classification === 'unidentified';
   const chip = CHIP[card.classification] ?? CHIP.unidentified;
+  // O-S87-9: only a classified business card is re-pointed, and only by the
+  // feed the server names for it; with none, the card says why. A retired
+  // card has no Change, whatever its feed.
+  const business = card.classification === 'business';
+  const canChange = business && card.is_active && !!card.feed_id;
+  const unlinkedNote =
+    business && !card.feed_id && card.feed_unlinked_reason
+      ? UNLINKED_NOTE[card.feed_unlinked_reason]
+      : null;
 
   const resend = async () => {
     if (resending) return;
@@ -381,10 +405,20 @@ const CardRow: FC<{
                 {card.mapped_account_name ? ` ${card.mapped_account_name}` : ''}</>
             )}
           </p>
+          {unlinkedNote && <p className="mt-1.5 text-[11px] text-white/50">{unlinkedNote}</p>}
           {cooldown && <p className="mt-1.5 text-[11px] text-amber-300">{cooldown}</p>}
         </div>
 
         <div className="flex shrink-0 items-center gap-3">
+          {canChange && (
+            <button
+              type="button"
+              onClick={onChange}
+              className="text-xs font-semibold text-[#4DA6FF] hover:underline"
+            >
+              Change
+            </button>
+          )}
           {unidentified && card.is_active && !classifying && (
             <>
               <button
@@ -445,6 +479,10 @@ export const InternalClientCards: FC = () => {
   } = useAllAccounts('staff', orgId || null);
   const { toast, showToast } = useToast();
   const [adding, setAdding] = useState(false);
+  // The card whose feed is being re-pointed. The dialog lives here, not in
+  // the row: it has the cards read again, which takes the rows down while it
+  // is still saying what happened.
+  const [changing, setChanging] = useState<StaffCard | null>(null);
 
   // The server orders by (classification, created_at); alphabetically
   // 'business' < 'personal' < 'unidentified', so the cards that need action
@@ -511,6 +549,7 @@ export const InternalClientCards: FC = () => {
                 accountsLoading={accountsLoading}
                 accountsError={accountsError}
                 onChanged={refetch}
+                onChange={() => setChanging(card)}
                 notify={showToast}
               />
             ))}
@@ -526,6 +565,15 @@ export const InternalClientCards: FC = () => {
             <SecondaryButton onClick={() => setPage(page + 1)} disabled={page >= totalPages}>Next</SecondaryButton>
           </div>
         </div>
+      )}
+
+      {changing && (
+        <CardChangeDialog
+          key={changing.id}
+          card={changing}
+          onChanged={refetch}
+          onClose={() => setChanging(null)}
+        />
       )}
     </PageContainer>
   );

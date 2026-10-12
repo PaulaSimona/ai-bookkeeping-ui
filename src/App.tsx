@@ -60,6 +60,7 @@ import { NotFound } from '@/views/not-found';
 import { InternalLayout } from '@/components/internal/InternalLayout';
 import { RequireInternalStaff, RequireInternalSuper } from '@/components/internal/InternalGuards';
 import { InternalQueue } from '@/views/internal/InternalQueue';
+import { InternalBankRows } from '@/views/internal/InternalBankRows';
 import { InternalClients } from '@/views/internal/InternalClients';
 import { InternalClientEntries } from '@/views/internal/InternalClientEntries';
 import { InternalClientCards } from '@/views/internal/InternalClientCards';
@@ -219,6 +220,8 @@ const App: FC = () => {
       <Route path="/internal" element={<Navigate to="/internal/queue" replace />} />
       <Route element={<InternalLayout />}>
         <Route path="/internal/queue"       element={<RequireInternalStaff><InternalQueue /></RequireInternalStaff>} />
+        {/* S87 B2b (O-S87-8): the staff bank-rows screen. */}
+        <Route path="/internal/bank-rows"   element={<RequireInternalStaff><InternalBankRows /></RequireInternalStaff>} />
         <Route path="/internal/clients"     element={<RequireInternalStaff><InternalClients /></RequireInternalStaff>} />
         <Route path="/internal/clients/:orgId/entries" element={<RequireInternalStaff><InternalClientEntries /></RequireInternalStaff>} />
         {/* O-S31-1 C4: per-org drill-in, same shape as the s28 entries surface

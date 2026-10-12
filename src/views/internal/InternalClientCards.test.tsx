@@ -191,3 +191,146 @@ describe('InternalClientCards account picker', () => {
     expect(screen.queryByRole('combobox', { name: 'Account' })).not.toBeInTheDocument();
   });
 });
+
+// ─── Change (S87 B2b U5, O-S87-9) ─────────────────────────────────────────────
+// "Change" re-points a business card's bank feed. It needs the feed the server
+// names for the card (feed_id); without one, the card says why.
+
+const FEED = 'f1f1f1f1-0000-4000-8000-000000000001';
+const TARGETS_URL = `/api/accounting/staff/bank-accounts/${FEED}/repoint-targets/`;
+
+const NO_FEED_NOTE = 'No bank feed is linked to this card, so there is nothing to re-point.';
+const AMBIGUOUS_NOTE = "More than one feed could be this card's, so it cannot be changed here.";
+
+const cardOf = (over: Record<string, unknown>) => ({ ...CARD, ...over });
+const business = (over: Record<string, unknown>) =>
+  cardOf({
+    classification: 'business',
+    mapped_account: 'acc-2110',
+    mapped_account_code: '2110',
+    mapped_account_name: 'Visa Card Payable',
+    ...over,
+  });
+
+const LINKED = business({
+  id: 'a1a1a1a1-0000-4000-8000-000000000001',
+  last4: '3277',
+  feed_id: FEED,
+  feed_unlinked_reason: null,
+});
+const UNLINKED = business({
+  id: 'a2a2a2a2-0000-4000-8000-000000000002',
+  last4: '1111',
+  feed_id: null,
+  feed_unlinked_reason: 'no_feed',
+});
+const AMBIGUOUS = business({
+  id: 'a3a3a3a3-0000-4000-8000-000000000003',
+  last4: '2222',
+  feed_id: null,
+  feed_unlinked_reason: 'ambiguous',
+});
+// The server names a feed for any card it can; only a business card gets Change.
+const PERSONAL = cardOf({
+  id: 'a4a4a4a4-0000-4000-8000-000000000004',
+  last4: '4444',
+  classification: 'personal',
+  mapped_account: 'acc-3100',
+  mapped_account_code: '3100',
+  mapped_account_name: 'Owner Loan',
+  feed_id: 'f2f2f2f2-0000-4000-8000-000000000002',
+  feed_unlinked_reason: null,
+});
+const UNIDENTIFIED = cardOf({ last4: '5555', feed_id: null, feed_unlinked_reason: 'no_feed' });
+
+// The part of a card's row that holds its details and its actions.
+const cardRow = (last4: string) => {
+  let node = screen.getByText(`····${last4}`) as HTMLElement;
+  while (node.parentElement && !node.querySelector('button')) node = node.parentElement;
+  return node;
+};
+const actionsOf = (last4: string) =>
+  within(cardRow(last4))
+    .getAllByRole('button')
+    .map((b) => b.textContent);
+
+describe('InternalClientCards Change', () => {
+  it('offers Change only on a business card with a feed, says why a business card has none, and leaves the other cards as they were', async () => {
+    const user = userEvent.setup();
+    get.mockImplementation((url) => {
+      if (url === CARDS_URL) {
+        return Promise.resolve(page([LINKED, UNLINKED, AMBIGUOUS, PERSONAL, UNIDENTIFIED]));
+      }
+      if (url === ACCOUNTS_URL) return Promise.resolve(page(ACCOUNTS));
+      if (url === TARGETS_URL) {
+        return Promise.resolve({
+          status: 200,
+          data: {
+            feed_id: FEED,
+            current_account: { code: '2110', name: 'Visa Card Payable' },
+            targets: [{ code: '2150', name: 'Mastercard 3277' }],
+            new_account_available: false,
+          },
+        });
+      }
+      return Promise.resolve({ status: 404, data: { detail: 'Not found.' } });
+    });
+    renderPage();
+
+    // One Change on the page: the business card whose feed the server named.
+    expect(await screen.findAllByRole('button', { name: 'Change' })).toHaveLength(1);
+    expect(actionsOf('3277')).toEqual(['Change', 'Retire']);
+
+    // A business card with no feed, or more than one candidate, says why.
+    expect(actionsOf('1111')).toEqual(['Retire']);
+    expect(within(cardRow('1111')).getByText(NO_FEED_NOTE)).toBeInTheDocument();
+    expect(actionsOf('2222')).toEqual(['Retire']);
+    expect(within(cardRow('2222')).getByText(AMBIGUOUS_NOTE)).toBeInTheDocument();
+
+    // Personal and unidentified cards: their own actions, and no note.
+    expect(actionsOf('4444')).toEqual(['Retire']);
+    expect(actionsOf('5555')).toEqual(['Classify', 'Re-send notification', 'Retire']);
+    expect(screen.getAllByText(NO_FEED_NOTE)).toHaveLength(1);
+    expect(screen.getAllByText(AMBIGUOUS_NOTE)).toHaveLength(1);
+
+    // Change opens the dialog on that card's feed, filled from its targets —
+    // not from the chart the page loaded for classifying.
+    await user.click(screen.getByRole('button', { name: 'Change' }));
+    expect(
+      await screen.findByRole('dialog', { name: 'Change account for the card ending 3277' }),
+    ).toBeInTheDocument();
+    expect(await screen.findByRole('radio', { name: '2150 Mastercard 3277' })).toBeInTheDocument();
+    expect(get).toHaveBeenCalledWith(TARGETS_URL);
+    expect(screen.queryByRole('radio', { name: /2100/ })).not.toBeInTheDocument();
+  });
+
+  it('hides Change on a retired business card, whatever its feed', async () => {
+    // Retired, though the server still names a feed for it.
+    const RETIRED = business({
+      id: 'a5a5a5a5-0000-4000-8000-000000000005',
+      last4: '7777',
+      is_active: false,
+      feed_id: 'f3f3f3f3-0000-4000-8000-000000000003',
+      feed_unlinked_reason: null,
+    });
+    get.mockImplementation((url) => {
+      if (url === CARDS_URL) return Promise.resolve(page([LINKED, RETIRED]));
+      if (url === ACCOUNTS_URL) return Promise.resolve(page(ACCOUNTS));
+      return Promise.resolve({ status: 404, data: { detail: 'Not found.' } });
+    });
+    renderPage();
+
+    // The active card keeps its Change; the retired one has none.
+    const change = await screen.findAllByRole('button', { name: 'Change' });
+    expect(change).toHaveLength(1);
+    expect(cardRow('3277')).toContainElement(change[0]);
+    expect(screen.getByText('····7777')).toBeInTheDocument();
+    expect(screen.getByText('Retired')).toBeInTheDocument();
+    // Every button on the page: the retired card contributes none.
+    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual([
+      'Add card',
+      'Change',
+      'Retire',
+    ]);
+  });
+});

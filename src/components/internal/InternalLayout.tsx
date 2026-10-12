@@ -1,8 +1,10 @@
 import { type FC, type ReactNode, useState } from 'react';
 import { NavLink, Link, Navigate, Outlet, useNavigate } from 'react-router-dom';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
+import { type RootState } from '@/store/store';
 import { PageLoader } from '@/components/Loader';
 import { useStaffMe } from '@/hooks/useStaffMe';
+import { authedHomePath } from '@/utils/activeOrg';
 import { removeAuth } from '@/utils/auth';
 import { revokeRefreshToken } from '@/utils/api';
 import { setUser, setInProgress } from '@/store/features/authSlice';
@@ -21,6 +23,15 @@ const IconQueue = (
       strokeLinecap="round"
       strokeLinejoin="round"
       d="M3.75 5.25h16.5m-16.5 4.5h16.5m-16.5 4.5h16.5m-16.5 4.5h16.5"
+    />
+  </svg>
+);
+const IconBank = (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0 0 12 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75Z"
     />
   </svg>
 );
@@ -97,6 +108,8 @@ export const InternalLayout: FC = () => {
   const { loading, staff } = useStaffMe();
   const navigate = useNavigate();
   const dispatch = useDispatch();
+  // The signed-in user, for where "Back to client app" leads (O-S87-7).
+  const { user } = useSelector((s: RootState) => s.auth);
   // R-S27-I: Log out gets the same confirm step as the client Sidebar variant.
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
 
@@ -127,6 +140,8 @@ export const InternalLayout: FC = () => {
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1">
           <NavItem to="/internal/queue" icon={IconQueue} label="Pending queue" />
+          {/* O-S87-8: bank rows waiting on staff, for every staff role. */}
+          <NavItem to="/internal/bank-rows" icon={IconBank} label="Bank rows" />
           <NavItem to="/internal/clients" icon={IconClients} label="Assigned clients" />
           {/* O-S85-3: no "Tier 1 review" section and no Reviewer management
               link, for any role. Staff and Assignments cover what Reviewer
@@ -147,9 +162,11 @@ export const InternalLayout: FC = () => {
             flow (no new backend/form); Log out reuses the client mechanics. */}
         <div className="px-3 py-4 border-t border-white/10 space-y-1">
           {/* Exit back to the client app (R-S27-E) — shown to super users
-              only (O-S85-3). */}
+              only (O-S85-3). O-S87-7: it leads to the user's own home there,
+              by the resolver the guards' deny-bounce uses (authedHomePath,
+              /dashboard for an account with no Tier 2) — not a fixed page. */}
           {staff.isSuperUser && (
-            <Link to="/dashboard" className={footerItemCls}>
+            <Link to={authedHomePath(user, '/dashboard')} className={footerItemCls}>
               {IconBack}
               <span>Back to client app</span>
             </Link>
