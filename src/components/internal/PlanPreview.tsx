@@ -1,7 +1,7 @@
 // PlanPreview (S87 B2b U2, O-S87-8 / O-S87-9) — what the server says a staff
 // action will do, shown before staff confirm it: the bank-row merge, the flag
-// release, the "no document needed" close and its reopen (useStaffBankRows)
-// and the feed re-point (useStaffRepoint).
+// release, the "no document needed" close and its reopen, the match actions
+// of Release D2 (useStaffBankRows) and the feed re-point (useStaffRepoint).
 //
 // Every field of a plan is shown as returned. Amounts are the server's strings,
 // rendered untouched — never formatMoney: nothing regrouped, re-signed or given
@@ -17,6 +17,7 @@ import { type FC, type ReactNode, useId } from 'react';
 import { ShortId } from '@/components/internal/ShortId';
 import {
   labelOrCode,
+  type BankMatchPlan,
   type BankMergePlan,
   type BankNoDocumentPlan,
   type BankReleasePlan,
@@ -212,6 +213,70 @@ export const ReopenPlanPreview: FC<{ plan: BankReopenPlan }> = ({ plan }) => (
     </dl>
   </section>
 );
+
+// ─── Match actions (Release D2; backend Release D1, O-S89-4 / O-S89-5) ─────────
+
+// What each action does, in one sentence.
+const MATCH_SENTENCE: Record<BankMatchPlan['action'], string> = {
+  confirm: 'The suggested match will be confirmed.',
+  reject: 'The suggested match will be rejected.',
+  manual_match: 'This row will be matched to the line below by hand.',
+  unmatch: 'The settled match will be taken off this row.',
+};
+
+// What follows for the ticket (plan.follow), in one sentence; a value this
+// screen does not know is shown as sent.
+const FOLLOW_SENTENCE: Record<string, string> = {
+  account_rule: 'The ticket closes: every other line of the entry is on a no-document account.',
+  waiting_document: 'The ticket waits for its document.',
+  needs_review: 'The ticket goes to review.',
+  pending: 'The ticket goes back to the drafting queue.',
+  no_ticket: 'This row has no ticket.',
+};
+
+// A match action: the match before and after, the line it points at with its
+// amounts as the server's strings, the entry the row is re-linked to when a
+// rejection has one, the reason or note given, and the ticket's path.
+export const MatchPlanPreview: FC<{ plan: BankMatchPlan }> = ({ plan }) => {
+  const { match, relink, ticket } = plan;
+  return (
+    <section aria-label="Match plan" className={planCls}>
+      <p>{MATCH_SENTENCE[plan.action] ?? plan.action}</p>
+      <p className="mt-1 text-white/50">No journal entry is changed.</p>
+      <dl className="mt-3">
+        <TicketPlanRow plan={plan} />
+        <Field label="Match">
+          {match.match_id && (
+            <>
+              <ShortId className={idCls} id={match.match_id} />
+              {' · '}
+            </>
+          )}
+          {`${match.state.before ?? 'new'} → ${match.state.after}`}
+        </Field>
+        <TicketPlanEntry entry={match.entry} />
+        <Field label="Line">
+          {`${match.account_code} · debit ${match.line_debit ?? '—'} · credit ${match.line_credit ?? '—'}`}
+        </Field>
+        {relink && (
+          <Field label="Re-linked to">
+            <EntryLabel id={relink.entry.entry_id} entryNumber={relink.entry.entry_number} /> ·{' '}
+            {relink.entry.entry_date} · line on {relink.account_code}
+          </Field>
+        )}
+        {plan.reason != null && <Field label="Reason">{plan.reason}</Field>}
+        {plan.note != null && <Field label="Note">{plan.note}</Field>}
+        <Field label="Ticket">{ticketChange(ticket)}</Field>
+        {ticket.after?.routing_reason && (
+          <Field label="Routing reason">
+            {labelOrCode(plan.routing_reason_label, ticket.after.routing_reason)}
+          </Field>
+        )}
+        <Field label="Then">{FOLLOW_SENTENCE[plan.follow] ?? plan.follow}</Field>
+      </dl>
+    </section>
+  );
+};
 
 // ─── Re-point ──────────────────────────────────────────────────────────────────
 

@@ -5,6 +5,7 @@
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import {
+  type BankMatchPlan,
   type BankMergePlan,
   type BankNoDocumentPlan,
   type BankReleasePlan,
@@ -12,6 +13,7 @@ import {
 } from '@/hooks/useStaffBankRows';
 import { type RepointPlan } from '@/hooks/useStaffRepoint';
 import {
+  MatchPlanPreview,
   MergePlanPreview,
   NoDocumentPlanPreview,
   ReleasePlanPreview,
@@ -484,5 +486,149 @@ describe('re-point plan', () => {
     expectShortId(field('Card'), CARD);
     expect(value('Card').textContent).toBe('a5a5a5a5 not switched');
     expect(field('Card')).not.toHaveTextContent('switches to');
+  });
+});
+
+// ─── Match actions (Release D2) ────────────────────────────────────────────────
+
+// A confirm plan as the server sends it (bank_match_actions.py
+// MatchActionPlan._image).
+const CONFIRM: BankMatchPlan = {
+  action: 'confirm',
+  row_id: ROW,
+  row: { date: '2026-09-20', direction: 'money_out', amount: '6.00', currency: 'CAD' },
+  match: {
+    match_id: MATCH,
+    state: { before: 'suggested', after: 'confirmed' },
+    journal_line_id: LINE,
+    account_code: '1010',
+    line_debit: null,
+    line_credit: '6.00',
+    entry: { entry_id: ENTRY, entry_number: 66, entry_date: '2026-09-19' },
+  },
+  ticket: {
+    before: { status: 'needs_review', routing_reason: 'suggested_match_review' },
+    after: { status: 'no_document_needed', routing_reason: 'account_rule' },
+  },
+  follow: 'account_rule',
+  relink: null,
+  reason: null,
+  note: null,
+  routing_reason_label: 'No-document account',
+};
+
+describe('match plan', () => {
+  it('shows a confirm as returned: the row, the match and its states, the entry, the line amounts as strings, the ticket change and what follows', () => {
+    render(<MatchPlanPreview plan={CONFIRM} />);
+    const plan = screen.getByRole('region', { name: 'Match plan' });
+
+    expect(within(plan).getByText('The suggested match will be confirmed.')).toBeInTheDocument();
+    expect(within(plan).getByText('No journal entry is changed.')).toBeInTheDocument();
+    expectShortId(field('Row'), ROW);
+    expect(value('Amount').textContent).toBe('Money out 6.00 CAD');
+    const match = field('Match');
+    expectShortId(match, MATCH);
+    expect(match).toHaveTextContent('suggested → confirmed');
+    const entry = field('Entry');
+    expect(entry).toHaveTextContent('JE-0066');
+    expect(entry).toHaveTextContent('2026-09-19');
+    expectShortId(entry, ENTRY);
+    // The line's amounts are the server's strings; the side it does not carry is a dash.
+    expect(value('Line').textContent).toBe('1010 · debit — · credit 6.00');
+    expect(value('Ticket').textContent).toBe(
+      'needs_review (suggested_match_review) → no_document_needed (account_rule)',
+    );
+    // The routing reason after, in the server's words.
+    expect(value('Routing reason').textContent).toBe('No-document account');
+    expect(value('Then').textContent).toBe(
+      'The ticket closes: every other line of the entry is on a no-document account.',
+    );
+    expect(screen.queryByText('Re-linked to', { selector: 'dt' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Reason', { selector: 'dt' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Note', { selector: 'dt' })).not.toBeInTheDocument();
+  });
+
+  it('shows a rejection with the entry the row is re-linked to and the reason given', () => {
+    render(
+      <MatchPlanPreview
+        plan={{
+          ...CONFIRM,
+          action: 'reject',
+          match: { ...CONFIRM.match, state: { before: 'suggested', after: 'rejected' } },
+          ticket: {
+            before: { status: 'needs_review', routing_reason: 'bank_draft_match_race' },
+            after: { status: 'waiting_document', routing_reason: null },
+          },
+          follow: 'waiting_document',
+          relink: {
+            entry: { entry_id: OTHER_ENTRY, entry_number: 70, entry_date: '2026-09-20' },
+            journal_line_id: 'd8d8d8d8-0000-4000-8000-000000000008',
+            account_code: '1010',
+          },
+          reason: 'not this entry',
+          routing_reason_label: null,
+        }}
+      />,
+    );
+    const plan = screen.getByRole('region', { name: 'Match plan' });
+
+    expect(within(plan).getByText('The suggested match will be rejected.')).toBeInTheDocument();
+    expect(field('Match')).toHaveTextContent('suggested → rejected');
+    const relink = field('Re-linked to');
+    expect(relink).toHaveTextContent('JE-0070');
+    expect(relink).toHaveTextContent('line on 1010');
+    expectShortId(relink, OTHER_ENTRY);
+    expect(value('Reason').textContent).toBe('not this entry');
+    expect(value('Ticket').textContent).toBe('needs_review (bank_draft_match_race) → waiting_document');
+    expect(screen.queryByText('Routing reason', { selector: 'dt' })).not.toBeInTheDocument();
+    expect(value('Then').textContent).toBe('The ticket waits for its document.');
+  });
+
+  it('shows a match made by hand as new, with its note, and an unmatch with its reason and the review that follows', () => {
+    const manual = render(
+      <MatchPlanPreview
+        plan={{
+          ...CONFIRM,
+          action: 'manual_match',
+          match: { ...CONFIRM.match, match_id: null, state: { before: null, after: 'manually_matched' } },
+          ticket: {
+            before: { status: 'pending', routing_reason: null },
+            after: { status: 'waiting_document', routing_reason: null },
+          },
+          follow: 'waiting_document',
+          note: 'by hand',
+          routing_reason_label: null,
+        }}
+      />,
+    );
+    expect(
+      screen.getByText('This row will be matched to the line below by hand.'),
+    ).toBeInTheDocument();
+    expect(value('Match').textContent).toBe('new → manually_matched');
+    expect(value('Note').textContent).toBe('by hand');
+    expect(value('Ticket').textContent).toBe('pending → waiting_document');
+    manual.unmount();
+
+    render(
+      <MatchPlanPreview
+        plan={{
+          ...CONFIRM,
+          action: 'unmatch',
+          match: { ...CONFIRM.match, state: { before: 'auto_matched', after: 'unmatched' } },
+          ticket: {
+            before: { status: 'waiting_document', routing_reason: null },
+            after: { status: 'needs_review', routing_reason: 'unmatched_by_staff' },
+          },
+          follow: 'needs_review',
+          reason: 'Matched to the wrong entry.',
+          routing_reason_label: 'Unmatched by staff',
+        }}
+      />,
+    );
+    expect(screen.getByText('The settled match will be taken off this row.')).toBeInTheDocument();
+    expect(field('Match')).toHaveTextContent('auto_matched → unmatched');
+    expect(value('Reason').textContent).toBe('Matched to the wrong entry.');
+    expect(value('Routing reason').textContent).toBe('Unmatched by staff');
+    expect(value('Then').textContent).toBe('The ticket goes to review.');
   });
 });
