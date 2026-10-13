@@ -216,7 +216,7 @@ export const DocumentsPage: FC = () => {
             no data tiles). */}
         <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
           <div className="lg:col-span-2">
-            <Tier2UploadZone onUploaded={refresh} />
+            <Tier2UploadZone onUploaded={refresh} onOpenDocument={(id) => update({ open: id })} />
           </div>
           <Card padding className="lg:col-span-1">
             <div className="text-[11.5px] font-semibold uppercase tracking-wider text-gray-500">

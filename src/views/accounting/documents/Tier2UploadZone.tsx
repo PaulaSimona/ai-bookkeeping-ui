@@ -5,12 +5,21 @@
 // chain per file — POST the document (Tier 1 endpoint, shared), then trigger
 // the Tier 2 accounting extraction so the agent picks the document up.
 //
+// Release E2 (O-S89-E6): before the POST, the file's SHA-256 is computed in
+// the browser and the server is asked whether the same bytes are already in
+// the org's books. An exact copy is stopped — 'Already uploaded as <name> on
+// <date>', with a way to open that document — and never posted. When the
+// check has no answer (no WebCrypto, a limit, a lost connection) the upload
+// proceeds as before: the server's own hard-duplicate check still applies.
+//
 // Files are processed STRICTLY SEQUENTIALLY: each upload decrements the plan
 // quota and each extract is charged against the per-org daily extraction
 // throttle, so a burst would both over-spend and trip the throttle. One file
 // at a time, awaited end-to-end.
 import { type FC, type DragEvent, type ChangeEvent, useRef, useState } from 'react';
 import api from '@/utils/api';
+import { fileSha256 } from '@/utils/fileSha256';
+import { precheckDocument } from '@/hooks/useDocumentList';
 
 // Same accept list as the Tier 1 live input.
 const ACCEPT = 'image/jpeg,image/png,image/webp,application/pdf,image/heic,image/heif,.heic,.heif';
@@ -37,7 +46,7 @@ const MSG = {
   errUpload: 'Upload failed — please try again',
 } as const;
 
-type Tone = 'pending' | 'ok' | 'warn' | 'error';
+type Tone = 'pending' | 'ok' | 'warn' | 'error' | 'duplicate';
 type CardState = 'uploading' | 'done';
 
 interface FileCard {
@@ -46,15 +55,22 @@ interface FileCard {
   state: CardState;
   message: string;
   tone: Tone;
+  // The document a stopped copy was already uploaded as (O-S89-E6).
+  duplicateOf?: { id: number; name: string };
 }
 
 interface Props {
   // Called after each successful upload+extract chain (a document reached the
   // server). Commit 3 wires it to the status-list refetch; unused-safe now.
   onUploaded?: () => void;
+  // O-S89-E6: open the document a stopped copy was already uploaded as.
+  onOpenDocument?: (documentId: number) => void;
 }
 
-export const Tier2UploadZone: FC<Props> = ({ onUploaded }) => {
+// The upload date as the message reads it: the server's ISO instant, day only.
+const dayOf = (iso: string): string => (iso || '').slice(0, 10);
+
+export const Tier2UploadZone: FC<Props> = ({ onUploaded, onOpenDocument }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -71,8 +87,8 @@ export const Tier2UploadZone: FC<Props> = ({ onUploaded }) => {
     setCards((prev) => [{ id, name, state, message, tone }, ...prev]);
     return id;
   };
-  const updateCard = (id: number, message: string, tone: Tone) => {
-    setCards((prev) => prev.map((c) => (c.id === id ? { ...c, state: 'done', message, tone } : c)));
+  const updateCard = (id: number, message: string, tone: Tone, duplicateOf?: FileCard['duplicateOf']) => {
+    setCards((prev) => prev.map((c) => (c.id === id ? { ...c, state: 'done', message, tone, duplicateOf } : c)));
   };
 
   // The api interceptor resolves non-401 HTTP errors (returns error.response)
@@ -122,6 +138,23 @@ export const Tier2UploadZone: FC<Props> = ({ onUploaded }) => {
     }
 
     const id = addCard(file.name, 'uploading', MSG.uploading, 'pending');
+
+    // O-S89-E6: is this exact file already in the books? Asked with a hash,
+    // never the bytes; skipped when there is no hash; never a blocker when
+    // there is no answer.
+    const sha = await fileSha256(file);
+    if (sha) {
+      const answer = await precheckDocument(sha);
+      if (answer?.exists) {
+        updateCard(
+          id,
+          `Already uploaded as ${answer.name} on ${dayOf(answer.uploaded_at)}`,
+          'duplicate',
+          { id: answer.document_id, name: answer.name },
+        );
+        return; // never sent
+      }
+    }
 
     let b64: string;
     try {
@@ -177,6 +210,7 @@ export const Tier2UploadZone: FC<Props> = ({ onUploaded }) => {
     ok: 'text-emerald-600',
     warn: 'text-amber-600',
     error: 'text-red-600',
+    duplicate: 'text-amber-700',
   };
 
   return (
@@ -228,6 +262,16 @@ export const Tier2UploadZone: FC<Props> = ({ onUploaded }) => {
                   <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
                 )}
                 {card.message}
+                {card.duplicateOf && onOpenDocument && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenDocument(card.duplicateOf!.id)}
+                    aria-label={`Open ${card.duplicateOf.name}`}
+                    className="font-semibold underline underline-offset-2 hover:text-gray-900"
+                  >
+                    Open
+                  </button>
+                )}
               </span>
             </li>
           ))}

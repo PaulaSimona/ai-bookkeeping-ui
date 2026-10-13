@@ -403,3 +403,58 @@ describe('rename', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
   });
 });
+
+// ─── Duplicates (Release E2-5, O-S89-E6) ───────────────────────────────────────
+//
+// A document the server links to an earlier one says so under its name — in
+// the server's words for the original — and the name opens that document.
+
+describe('duplicates', () => {
+  it('says "Possible duplicate of <name>" under a document the soft rule suspects, and the name opens the original', async () => {
+    const user = userEvent.setup();
+    const onOpen = vi.fn();
+    const suspect = row({
+      document_id: 44,
+      display_name: 'suspect.pdf',
+      display_name_source: 'filename',
+      counterparty: null,
+      read_as: null,
+      accounting_status: 'needs_review',
+      duplicate_of: { id: 41, name: 'Costco Wholesale' },
+    });
+    render(<DocumentStatusList {...base} items={[suspect]} onOpen={onOpen} />);
+    const tr = rowOf('suspect.pdf');
+    expect(tr).toHaveTextContent('Possible duplicate of Costco Wholesale');
+    expect(tr).not.toHaveTextContent('Already uploaded');
+    await user.click(within(tr).getByRole('button', { name: 'Costco Wholesale' }));
+    expect(onOpen).toHaveBeenLastCalledWith(41);
+    // The click opened the original, not this row.
+    expect(onOpen).not.toHaveBeenCalledWith(44);
+  });
+
+  it('says "Already uploaded as <name>" under a copy the server rejected', () => {
+    const copy = row({
+      document_id: 45,
+      display_name: 'copy.pdf',
+      display_name_source: 'filename',
+      counterparty: null,
+      read_as: null,
+      accounting_status: 'rejected',
+      duplicate_of: { id: 41, name: 'Costco Wholesale' },
+    });
+    render(<DocumentStatusList {...base} items={[copy]} />);
+    const tr = rowOf('copy.pdf');
+    expect(tr).toHaveTextContent('Already uploaded as Costco Wholesale');
+    expect(tr).not.toHaveTextContent('Possible duplicate');
+    expect(cellsOf(tr)[4]).toBe('Rejected');
+  });
+
+  it('says nothing about duplicates on a document the server links to none', () => {
+    render(<DocumentStatusList {...base} items={[SUPPLIER_ROW, FILENAME_ROW, MANUAL_ROW]} />);
+    for (const name of ['Costco Wholesale', 'scan-0007.pdf', 'May rent']) {
+      const tr = rowOf(name);
+      expect(tr).not.toHaveTextContent('duplicate');
+      expect(tr).not.toHaveTextContent('Already uploaded');
+    }
+  });
+});

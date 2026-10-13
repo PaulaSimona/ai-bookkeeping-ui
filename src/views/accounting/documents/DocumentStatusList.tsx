@@ -110,6 +110,27 @@ const NameDetail: FC<{ row: DocumentRow }> = ({ row }) => {
   return null;
 };
 
+// O-S89-E6: the document this one duplicates, by the name the page shows for
+// it — "Already uploaded as" when this one was rejected for it, "Possible
+// duplicate of" while it is still the soft rule's suspicion — and a way to
+// open the original (the page's open row).
+const DuplicateLine: FC<{ row: DocumentRow; onOpen?: (documentId: number | null) => void }> = ({ row, onOpen }) => {
+  if (!row.duplicate_of) return null;
+  const wording = row.accounting_status === 'rejected' ? 'Already uploaded as' : 'Possible duplicate of';
+  return (
+    <div className="truncate text-xs text-amber-700">
+      {wording}{' '}
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onOpen?.(row.duplicate_of!.id); }}
+        className="font-semibold underline underline-offset-2 hover:text-gray-900"
+      >
+        {row.duplicate_of.name}
+      </button>
+    </div>
+  );
+};
+
 const SkeletonRow: FC = () => (
   <tr>
     {[80, 200, 70, 60, 70, 40].map((w, i) => (
@@ -329,6 +350,7 @@ export const DocumentStatusList: FC<Props> = ({
                             {row.display_name}
                           </div>
                           <NameDetail row={row} />
+                          <DuplicateLine row={row} onOpen={onOpen} />
                         </>
                       )}
                     </td>
