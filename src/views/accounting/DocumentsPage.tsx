@@ -19,10 +19,12 @@
 // Two-layer gating mirrors the other Tier 2 pages: the route is wrapped in
 // <RequireTier2> (§21 gate swap, D-21-4), and this page redirects on the real
 // org-role check — same structural pattern as CardsPage.
-import { type FC, useCallback, useEffect } from 'react';
+import { type FC, type ReactNode, useCallback, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useOrgMe } from '@/hooks/useAccounts';
-import { useDocumentList, useDocumentListState } from '@/hooks/useDocumentList';
+import { documentTypeLabel, useDocumentList, useDocumentListState, type DocumentRow } from '@/hooks/useDocumentList';
+import api from '@/utils/api';
+import { useToast } from '@/hooks/useToast';
 import { useCounterparties } from '@/hooks/useCounterparties';
 import { PageLoader } from '@/components/Loader';
 import { PageHeader } from '@/components/t2/PageHeader';
@@ -30,7 +32,7 @@ import { Card } from '@/components/t2/Card';
 import { StatCard } from '@/components/t2/StatCard';
 import { FilterChip } from '@/components/t2/FilterChip';
 import { Tier2UploadZone } from './documents/Tier2UploadZone';
-import { DocumentStatusList } from './documents/DocumentStatusList';
+import { DocumentStatusList, badgeFor } from './documents/DocumentStatusList';
 import { DocumentFilters } from './documents/DocumentFilters';
 import {
   useDocumentStatusCounts,
@@ -129,6 +131,91 @@ const StatusChips: FC<{ active: string | null; onToggle: (v: string) => void }> 
   </div>
 );
 
+// A labelled field of the drawer: the term and, beside it, its value.
+const Detail: FC<{ label: string; children: ReactNode }> = ({ label, children }) => (
+  <div>
+    <dt className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">{label}</dt>
+    <dd className="break-words text-sm text-gray-900">{children}</dd>
+  </div>
+);
+
+// The open row (O-S89-E7): a drawer over the right edge of the page with the
+// document's fields as the server sent them, the document it duplicates (a
+// way to open that one instead), and Open file (the signed URL, fetched on
+// click only). Closing it takes the open row out of the URL.
+const DocumentDrawer: FC<{
+  row: DocumentRow;
+  onOpen: (documentId: number | null) => void;
+}> = ({ row, onOpen }) => {
+  const { showToast } = useToast();
+  const openFile = async () => {
+    const tab = window.open('about:blank', '_blank');
+    if (tab) tab.opener = null;
+    try {
+      const res = await api.get(`/api/accounting/documents/${row.document_id}/file-url/`);
+      const url = res?.status === 200 ? res.data?.url : null;
+      if (url) {
+        if (tab) tab.location.href = url;
+        else window.open(url, '_blank', 'noopener,noreferrer');
+      } else {
+        if (tab) tab.close();
+        showToast({ title: 'Could not open document', message: res?.data?.detail ?? 'Please try again in a moment.', variant: 'danger' });
+      }
+    } catch (e: any) {
+      if (tab) tab.close();
+      showToast({ title: 'Could not open document', message: e?.response?.data?.detail ?? 'Please try again in a moment.', variant: 'danger' });
+    }
+  };
+  const duplicateWording = row.accounting_status === 'rejected' ? 'Already uploaded as' : 'Possible duplicate of';
+  return (
+    <section
+      aria-label="Document detail"
+      className="fixed inset-y-0 right-0 z-40 w-full max-w-md overflow-y-auto border-l border-gray-200 bg-white p-6 shadow-2xl"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <h3 className="min-w-0 truncate text-base font-semibold text-gray-900" title={row.display_name}>
+          {row.display_name}
+        </h3>
+        <button type="button" onClick={() => onOpen(null)} aria-label="Close" className="text-gray-400 hover:text-gray-900">
+          ✕
+        </button>
+      </div>
+      <dl className="mt-4 grid grid-cols-1 gap-3">
+        <Detail label="Name">{row.display_name}</Detail>
+        <Detail label="Filename">{row.name}</Detail>
+        {row.counterparty && <Detail label="Supplier">{row.counterparty.name}</Detail>}
+        {row.read_as && <Detail label="Read as">{row.read_as}</Detail>}
+        <Detail label="Document date">{row.document_date ?? '—'}</Detail>
+        <Detail label="Uploaded">{row.uploaded_at.slice(0, 10)}</Detail>
+        <Detail label="Type">{documentTypeLabel(row.document_type)}</Detail>
+        <Detail label="Total">{row.total != null ? `${row.total} ${row.currency ?? ''}`.trim() : '—'}</Detail>
+        <Detail label="Status">{badgeFor(row).label}</Detail>
+        {row.duplicate_of && (
+          <Detail label="Duplicate of">
+            {duplicateWording}{' '}
+            <button
+              type="button"
+              onClick={() => onOpen(row.duplicate_of!.id)}
+              className="font-semibold text-[var(--color-primary)] underline underline-offset-2"
+            >
+              {row.duplicate_of.name}
+            </button>
+          </Detail>
+        )}
+      </dl>
+      <div className="mt-6">
+        <button
+          type="button"
+          onClick={() => void openFile()}
+          className="h-9 rounded-lg bg-[var(--color-primary)] px-4 text-sm font-semibold text-white hover:opacity-90"
+        >
+          Open file
+        </button>
+      </div>
+    </section>
+  );
+};
+
 export const DocumentsPage: FC = () => {
   const navigate = useNavigate();
   const { role, isLoading: orgLoading } = useOrgMe();
@@ -180,6 +267,9 @@ export const DocumentsPage: FC = () => {
   const clearStatus = useCallback(() => {
     update({ status: undefined });
   }, [update]);
+
+  // The open row, from the page the list is showing (O-S89-E7).
+  const openRow = state.open != null ? items.find((r) => r.document_id === state.open) ?? null : null;
 
   // Human label of the active chip (drives the filtered empty-state copy).
   const activeChipLabel = STATUS_CHIPS.find((c) => c.value === statusFilter)?.label ?? null;
@@ -298,6 +388,11 @@ export const DocumentsPage: FC = () => {
             onOpen={(id) => update({ open: id })}
           />
         </section>
+
+        {/* The open row (O-S89-E7): the URL names it; the row comes from the
+            page the list is showing. A row the page does not hold (another
+            page, deleted) shows nothing. */}
+        {openRow && <DocumentDrawer row={openRow} onOpen={(id) => update({ open: id })} />}
 
       </div>
     </div>
