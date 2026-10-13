@@ -34,6 +34,13 @@
 //                                   sibling is the STALE row: it carries the
 //                                   match, and it is the one marked duplicate.
 //   Not a duplicate: release flag → POST staff/bank-rows/<this row>/release-flag/
+// and (Release C2, O-S88-3) on a row whose ticket waits for a document and
+// which is matched, settled at the bank and in the books:
+//   No document needed            → POST staff/bank-rows/<this row>/no-document/
+//                                   {reason, note?} — one of seven reasons;
+//                                   "Other" needs a note (at most 200
+//                                   characters). The form comes first, then
+//                                   Preview asks for the plan.
 // Each asks the server for its plan first (a dry run), shows that plan in the
 // confirm dialog (PlanPreview), and carries it out only on Confirm — the same
 // request with confirm true. The server decides what is allowed: a refusal is
@@ -45,7 +52,11 @@
 import { type FC, type ReactNode, useState } from 'react';
 
 import { ActionRefusal, noticeCls } from '@/components/internal/ActionRefusal';
-import { MergePlanPreview, ReleasePlanPreview } from '@/components/internal/PlanPreview';
+import {
+  MergePlanPreview,
+  NoDocumentPlanPreview,
+  ReleasePlanPreview,
+} from '@/components/internal/PlanPreview';
 import { ShortId } from '@/components/internal/ShortId';
 import {
   CenteredSpinner,
@@ -66,8 +77,13 @@ import { useOrgsList } from '@/hooks/useInternalAdmin';
 import {
   BANK_ROW_TICKET_STATUSES,
   BANK_ROW_TICKET_STATUS_LABELS,
+  NO_DOCUMENT_NOTE_MAX,
+  NO_DOCUMENT_REASONS,
+  NO_DOCUMENT_REASON_OTHER,
   POSSIBLE_DUPLICATE_REASON,
+  canMarkNoDocument,
   labelOrCode,
+  markNoDocument,
   mergeBankRow,
   releaseBankRowFlag,
   useStaffBankRows,
@@ -206,9 +222,21 @@ const RowActions: FC<{
   const [refusal, setRefusal] = useState<RemediationRefusal | null>(null);
   // A request is out: every button of the action waits for its answer.
   const [busy, setBusy] = useState(false);
+  // "No document needed": its form is open, with the reason and the note staff
+  // have given so far. They are kept while the plan is looked at, so a
+  // cancelled plan comes back to the form as it was left.
+  const [closing, setClosing] = useState(false);
+  const [reason, setReason] = useState('');
+  const [note, setNote] = useState('');
   const sibling = row.duplicate_sibling;
 
-  if (row.routing_reason !== POSSIBLE_DUPLICATE_REASON) return null;
+  const flagged = row.routing_reason === POSSIBLE_DUPLICATE_REASON;
+  const canClose = canMarkNoDocument(row);
+  if (!flagged && !canClose) return null;
+
+  // "Other" needs a note (spaces are not one); any other reason stands alone.
+  const noteRequired = reason === NO_DOCUMENT_REASON_OTHER;
+  const canPreview = reason !== '' && (!noteRequired || note.trim() !== '');
 
   // `send(false)` asks what the action would do. Its plan goes into the
   // confirm dialog, whose Confirm is `send(true)`: the same request.
@@ -255,7 +283,7 @@ const RowActions: FC<{
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
-        {sibling && (
+        {flagged && sibling && (
           <PrimaryButton
             onClick={() =>
               void ask(
@@ -277,23 +305,88 @@ const RowActions: FC<{
             Merge: keep this row
           </PrimaryButton>
         )}
-        <SecondaryButton
-          onClick={() =>
-            void ask(
-              (confirmed) => releaseBankRowFlag(row.id, confirmed),
-              (plan) => ({
-                title: 'Release the possible-duplicate flag?',
-                plan: <ReleasePlanPreview plan={plan} />,
-                done: 'Flag released. This row is not a duplicate.',
-                rows: [{ label: 'Row', id: plan.row_id }],
-              }),
-            )
-          }
-          disabled={busy}
-        >
-          Not a duplicate: release flag
-        </SecondaryButton>
+        {flagged && (
+          <SecondaryButton
+            onClick={() =>
+              void ask(
+                (confirmed) => releaseBankRowFlag(row.id, confirmed),
+                (plan) => ({
+                  title: 'Release the possible-duplicate flag?',
+                  plan: <ReleasePlanPreview plan={plan} />,
+                  done: 'Flag released. This row is not a duplicate.',
+                  rows: [{ label: 'Row', id: plan.row_id }],
+                }),
+              )
+            }
+            disabled={busy}
+          >
+            Not a duplicate: release flag
+          </SecondaryButton>
+        )}
+        {canClose && (
+          <SecondaryButton onClick={() => setClosing(true)} disabled={busy}>
+            No document needed
+          </SecondaryButton>
+        )}
       </div>
+
+      {/* The reason first; the plan is asked for with Preview. Put away while
+          the plan is on screen, and back as it was left if that is cancelled. */}
+      {canClose && closing && !pending && (
+        <div className="space-y-3 rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+          <p className="text-sm text-white/70">
+            Close this ticket: no document will be asked for this row.
+          </p>
+          <select
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            disabled={busy}
+            aria-label="Reason"
+            className={`${fieldCls} w-full`}
+          >
+            <option value="">Choose a reason</option>
+            {NO_DOCUMENT_REASONS.map((option) => (
+              <option key={option.code} value={option.code}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            disabled={busy}
+            maxLength={NO_DOCUMENT_NOTE_MAX}
+            rows={2}
+            aria-label="Note"
+            placeholder="Note"
+            className={`${fieldCls} w-full`}
+          />
+          <p className="text-xs text-white/40">
+            {noteRequired ? 'A note is required for the reason "Other".' : 'A note is optional.'}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <PrimaryButton
+              onClick={() =>
+                void ask(
+                  (confirmed) => markNoDocument(row.id, reason, note, confirmed),
+                  (plan) => ({
+                    title: 'Close this ticket: no document needed?',
+                    plan: <NoDocumentPlanPreview plan={plan} />,
+                    done: 'Closed: no document needed.',
+                    rows: [{ label: 'Row', id: plan.row_id }],
+                  }),
+                )
+              }
+              disabled={busy || !canPreview}
+            >
+              Preview
+            </PrimaryButton>
+            <SecondaryButton onClick={() => setClosing(false)} disabled={busy}>
+              Cancel
+            </SecondaryButton>
+          </div>
+        </div>
+      )}
 
       {refusal && !pending && <ActionRefusal refusal={refusal} gone={ROW_GONE} onRefresh={onRefresh} />}
 

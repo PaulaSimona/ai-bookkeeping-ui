@@ -7,11 +7,15 @@ import api from '@/utils/api';
 import {
   BANK_ROW_TICKET_STATUSES,
   BANK_ROW_TICKET_STATUS_LABELS,
+  NO_DOCUMENT_NOTE_MAX,
+  NO_DOCUMENT_REASONS,
   bankRowParams,
   labelOrCode,
+  markNoDocument,
   mergeBankRow,
   releaseBankRowFlag,
   type BankMergePlan,
+  type BankNoDocumentPlan,
   type BankReleasePlan,
 } from './useStaffBankRows';
 
@@ -55,6 +59,27 @@ const RELEASE_PLAN: BankReleasePlan = {
     after: { status: 'pending', routing_reason: null },
   },
   matched: null,
+};
+
+// Release C2: the plan of "no document needed", exactly as the server sends it
+// (accounting/bank_ticket_service.py NoDocumentPlan._image).
+const NO_DOCUMENT_URL = `/api/accounting/staff/bank-rows/${SURVIVING}/no-document/`;
+const NO_DOCUMENT_PLAN: BankNoDocumentPlan = {
+  row_id: SURVIVING,
+  row: { date: '2026-09-20', direction: 'money_out', amount: '80.00', currency: 'CAD' },
+  ticket: {
+    before: { status: 'waiting_document', routing_reason: null },
+    after: { status: 'no_document_needed', routing_reason: 'other' },
+  },
+  reason: 'other',
+  reason_label: 'Other',
+  note: 'Paid in cash',
+  entry: {
+    entry_id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+    entry_number: 68,
+    entry_date: '2026-09-21',
+  },
+  matched: { match_id: 'mmmmmmmm-mmmm-4mmm-8mmm-mmmmmmmmmmmm', state: 'auto_matched' },
 };
 
 const ok = (executed: boolean, plan: unknown) => ({ status: 200, data: { executed, plan } });
@@ -231,5 +256,100 @@ describe('release a possible-duplicate flag', () => {
         detail: 'This row is not flagged as a possible duplicate.',
       },
     });
+  });
+});
+
+// Release C2 (O-S88-3): POST staff/bank-rows/<id>/no-document/
+// {reason, note?, confirm} — a dry run unless confirm is true.
+describe('close a ticket: no document needed', () => {
+  it('asks for the plan first: the reason and the note in the body, confirm false', async () => {
+    post.mockResolvedValue(ok(false, NO_DOCUMENT_PLAN));
+
+    const outcome = await markNoDocument(SURVIVING, 'other', '  Paid in cash  ', false);
+
+    expect(post).toHaveBeenCalledTimes(1);
+    // The note travels trimmed, as the server would store it.
+    expect(post).toHaveBeenCalledWith(NO_DOCUMENT_URL, {
+      reason: 'other',
+      note: 'Paid in cash',
+      confirm: false,
+    });
+    expect(outcome).toEqual({ ok: true, executed: false, plan: NO_DOCUMENT_PLAN });
+  });
+
+  it('confirms with the same reason and note and confirm true', async () => {
+    post.mockResolvedValue(ok(true, NO_DOCUMENT_PLAN));
+
+    const outcome = await markNoDocument(SURVIVING, 'other', 'Paid in cash', true);
+
+    expect(post).toHaveBeenCalledWith(NO_DOCUMENT_URL, {
+      reason: 'other',
+      note: 'Paid in cash',
+      confirm: true,
+    });
+    expect(outcome).toEqual({ ok: true, executed: true, plan: NO_DOCUMENT_PLAN });
+  });
+
+  it('leaves the note out of the body when it is blank', async () => {
+    post.mockResolvedValue(ok(false, NO_DOCUMENT_PLAN));
+
+    await markNoDocument(SURVIVING, 'bank_fee', '', false);
+    expect(post).toHaveBeenLastCalledWith(NO_DOCUMENT_URL, { reason: 'bank_fee', confirm: false });
+
+    await markNoDocument(SURVIVING, 'bank_fee', '   ', true);
+    expect(post).toHaveBeenLastCalledWith(NO_DOCUMENT_URL, { reason: 'bank_fee', confirm: true });
+  });
+
+  it('hands back a refusal with the server code and its own words', async () => {
+    const detail = 'This row is not waiting for a document.';
+    post.mockResolvedValue({ status: 409, data: { code: 'not_waiting_document', detail } });
+
+    const outcome = await markNoDocument(SURVIVING, 'bank_fee', '', true);
+
+    expect(outcome).toEqual({
+      ok: false,
+      refusal: {
+        status: 409,
+        code: 'not_waiting_document',
+        detail,
+        context: { code: 'not_waiting_document', detail },
+      },
+    });
+  });
+
+  it("hands back the server's words when it turns the reason or the note down", async () => {
+    // A 400 names the field, with no code: the message is what staff read.
+    post.mockResolvedValueOnce({ status: 400, data: { note: 'The reason "other" needs a note.' } });
+    const noNote = await markNoDocument(SURVIVING, 'other', '', false);
+    expect(noNote).toEqual({
+      ok: false,
+      refusal: {
+        status: 400,
+        code: undefined,
+        detail: 'The reason "other" needs a note.',
+        context: { note: 'The reason "other" needs a note.' },
+      },
+    });
+
+    const reasons =
+      'Must be one of: bank_fee, interest, transfer, card_payment, loan, tax_remittance, other.';
+    post.mockResolvedValueOnce({ status: 400, data: { reason: reasons } });
+    const badReason = await markNoDocument(SURVIVING, 'rent', '', false);
+    expect(badReason).toMatchObject({ ok: false, refusal: { status: 400, detail: reasons } });
+  });
+
+  it("names the seven staff reasons in the server's order, each with its label for the picker", () => {
+    // accounting/bank_ticket_service.py STAFF_REASONS, with the labels of
+    // accounting/bank_ticket_labels.py.
+    expect(NO_DOCUMENT_REASONS).toEqual([
+      { code: 'bank_fee', label: 'Bank fee' },
+      { code: 'interest', label: 'Interest' },
+      { code: 'transfer', label: 'Transfer between own accounts' },
+      { code: 'card_payment', label: 'Card payment' },
+      { code: 'loan', label: 'Loan' },
+      { code: 'tax_remittance', label: 'Tax remittance' },
+      { code: 'other', label: 'Other' },
+    ]);
+    expect(NO_DOCUMENT_NOTE_MAX).toBe(200);
   });
 });

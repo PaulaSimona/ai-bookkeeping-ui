@@ -6,8 +6,9 @@ import { type PlanOutcome, postForPlan } from '@/hooks/staffPlan';
  *   GET  /api/accounting/review/bank/                        (paginated)
  *   POST /api/accounting/staff/bank-rows/<id>/merge/         {surviving_row_id, confirm}
  *   POST /api/accounting/staff/bank-rows/<id>/release-flag/  {confirm}
- * The list returns the rows of every org the viewer may see. The two POSTs
- * are dry runs unless confirm is true: both answer {executed, plan}, and the
+ *   POST /api/accounting/staff/bank-rows/<id>/no-document/   {reason, note?, confirm}  (Release C2)
+ * The list returns the rows of every org the viewer may see. The POSTs
+ * are dry runs unless confirm is true: each answers {executed, plan}, and the
  * plan of a dry run is what the confirm run then carries out (PlanOutcome).
  * Amounts are the server's strings and stay strings — display only.
  */
@@ -212,3 +213,71 @@ export const releaseBankRowFlag = (
     { confirm },
     'Could not release the flag.',
   );
+
+// ─── No document needed (Release C2; backend Release C1, O-S88-3) ──────────────
+//   POST /api/accounting/staff/bank-rows/<id>/no-document/  {reason, note?, confirm}
+// A posted row waiting for its document is closed for good: no document will
+// be asked for it. Dry run unless confirm is true, like the two above.
+
+// The seven reasons a staff member may give, in the server's order
+// (accounting/bank_ticket_service.py STAFF_REASONS), by the server's labels
+// (accounting/bank_ticket_labels.py) — kept here because no endpoint lists
+// them (Release C2, conflict 3). For the picker ONLY: the plan carries the
+// label the server gives the chosen reason (reason_label), and that is what
+// the confirm dialog shows.
+export const NO_DOCUMENT_REASONS = [
+  { code: 'bank_fee', label: 'Bank fee' },
+  { code: 'interest', label: 'Interest' },
+  { code: 'transfer', label: 'Transfer between own accounts' },
+  { code: 'card_payment', label: 'Card payment' },
+  { code: 'loan', label: 'Loan' },
+  { code: 'tax_remittance', label: 'Tax remittance' },
+  { code: 'other', label: 'Other' },
+] as const;
+
+// The one reason that needs a note, and how long a note may be
+// (bank_ticket_service.py REASON_OTHER, NOTE_MAX_LENGTH).
+export const NO_DOCUMENT_REASON_OTHER = 'other';
+export const NO_DOCUMENT_NOTE_MAX = 200;
+
+// Whether the screen offers the action on a row: its ticket waits for a
+// document, and the row is matched to its entry, settled at the bank and in
+// the books. The server remains the judge (it also checks that the entry is
+// posted and live) and refuses in its own words.
+export const canMarkNoDocument = (row: BankRow): boolean =>
+  row.ticket_status === 'waiting_document' &&
+  row.settled_match != null &&
+  !row.pending &&
+  !row.excluded;
+
+// Mirrors accounting/bank_ticket_service.py NoDocumentPlan._image — ids,
+// statuses, codes, a date and the amount as the server's string.
+export interface BankNoDocumentPlan {
+  row_id: string;
+  row: { date: string; direction: string; amount: string; currency: string };
+  ticket: { before: BankTicketImage | null; after: BankTicketImage };
+  reason: string;
+  reason_label: string | null; // the server's words for the reason
+  note: string | null;
+  entry: { entry_id: string; entry_number: number | null; entry_date: string };
+  matched: { match_id: string; state: string };
+}
+
+// Close a waiting ticket as "no document needed". The note travels trimmed
+// and is left out when blank. Refusals: 400 {reason} / {note} for a body the
+// server rejects; 409 {code, detail} — row_excluded, row_pending,
+// not_waiting_document, no_entry, entry_not_posted, entry_not_live,
+// row_not_matched.
+export const markNoDocument = (
+  rowId: string,
+  reason: string,
+  note: string,
+  confirm: boolean,
+): Promise<PlanOutcome<BankNoDocumentPlan>> => {
+  const trimmed = note.trim();
+  return postForPlan<BankNoDocumentPlan>(
+    `/api/accounting/staff/bank-rows/${rowId}/no-document/`,
+    trimmed ? { reason, note: trimmed, confirm } : { reason, confirm },
+    'Could not close the ticket.',
+  );
+};

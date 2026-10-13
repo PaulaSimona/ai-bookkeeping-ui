@@ -4,9 +4,18 @@
 // kept, and the balance legend only where the re-point balances are.
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { type BankMergePlan, type BankReleasePlan } from '@/hooks/useStaffBankRows';
+import {
+  type BankMergePlan,
+  type BankNoDocumentPlan,
+  type BankReleasePlan,
+} from '@/hooks/useStaffBankRows';
 import { type RepointPlan } from '@/hooks/useStaffRepoint';
-import { MergePlanPreview, ReleasePlanPreview, RepointPlanPreview } from './PlanPreview';
+import {
+  MergePlanPreview,
+  NoDocumentPlanPreview,
+  ReleasePlanPreview,
+  RepointPlanPreview,
+} from './PlanPreview';
 
 // Every id starts differently, so its short form names exactly one of them.
 const SIBLING = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -52,6 +61,22 @@ const RELEASE: BankReleasePlan = {
     after: { status: 'pending', routing_reason: null },
   },
   matched: null,
+};
+
+// Release C2: a waiting ticket closed as "no document needed"
+// (bank_ticket_service.py NoDocumentPlan._image).
+const NO_DOCUMENT: BankNoDocumentPlan = {
+  row_id: ROW,
+  row: { date: '2026-09-20', direction: 'money_out', amount: '1234.50', currency: 'CAD' },
+  ticket: {
+    before: { status: 'waiting_document', routing_reason: null },
+    after: { status: 'no_document_needed', routing_reason: 'other' },
+  },
+  reason: 'other',
+  reason_label: 'Other',
+  note: 'Paid in cash, no receipt',
+  entry: { entry_id: ENTRY, entry_number: 68, entry_date: '2026-09-21' },
+  matched: { match_id: MATCH, state: 'auto_matched' },
 };
 
 // An override: the server computed 1234.50 and staff move 1000.00.
@@ -278,6 +303,55 @@ describe('release plan', () => {
     expect(match).toHaveTextContent('JE-0068');
     expectShortId(match, MATCH);
     expectShortId(match, ENTRY);
+  });
+});
+
+describe('no-document plan', () => {
+  it("shows the row, the server's reason label, the note, the entry and the match as returned", () => {
+    render(<NoDocumentPlanPreview plan={NO_DOCUMENT} />);
+    const plan = screen.getByRole('region', { name: 'No document needed plan' });
+
+    expect(
+      within(plan).getByText('This ticket will be closed: no document will be asked for this row.'),
+    ).toBeInTheDocument();
+    expect(within(plan).getByText('No journal entry is changed.')).toBeInTheDocument();
+    expectShortId(field('Row'), ROW);
+    // The reason in the server's words — its label, not its code.
+    expect(value('Reason').textContent).toBe('Other');
+    expect(value('Note').textContent).toBe('Paid in cash, no receipt');
+    const entry = field('Entry');
+    expect(entry).toHaveTextContent('JE-0068');
+    expect(entry).toHaveTextContent('2026-09-21');
+    expectShortId(entry, ENTRY);
+    const match = field('Match');
+    expect(match).toHaveTextContent('auto_matched');
+    expectShortId(match, MATCH);
+  });
+
+  it("shows the amount as the server's string and the ticket change as returned, and says when there is no note", () => {
+    render(
+      <NoDocumentPlanPreview
+        plan={{
+          ...NO_DOCUMENT,
+          reason: 'bank_fee',
+          reason_label: 'Bank fee',
+          note: null,
+          ticket: {
+            before: NO_DOCUMENT.ticket.before,
+            after: { status: 'no_document_needed', routing_reason: 'bank_fee' },
+          },
+        }}
+      />,
+    );
+    const plan = screen.getByRole('region', { name: 'No document needed plan' });
+
+    expect(value('Date').textContent).toBe('2026-09-20');
+    expect(value('Amount').textContent).toBe('Money out 1234.50 CAD');
+    expect(plan).not.toHaveTextContent('1,234.50');
+    expect(plan).not.toHaveTextContent('$');
+    expect(value('Reason').textContent).toBe('Bank fee');
+    expect(value('Note').textContent).toBe('none');
+    expect(value('Ticket').textContent).toBe('waiting_document → no_document_needed (bank_fee)');
   });
 });
 

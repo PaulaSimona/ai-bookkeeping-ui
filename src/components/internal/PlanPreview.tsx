@@ -1,6 +1,7 @@
 // PlanPreview (S87 B2b U2, O-S87-8 / O-S87-9) — what the server says a staff
 // action will do, shown before staff confirm it: the bank-row merge, the flag
-// release (useStaffBankRows) and the feed re-point (useStaffRepoint).
+// release, the "no document needed" close (useStaffBankRows) and the feed
+// re-point (useStaffRepoint).
 //
 // Every field of a plan is shown as returned. Amounts are the server's strings,
 // rendered untouched — never formatMoney: nothing regrouped, re-signed or given
@@ -15,7 +16,9 @@ import { type FC, type ReactNode, useId } from 'react';
 
 import { ShortId } from '@/components/internal/ShortId';
 import {
+  labelOrCode,
   type BankMergePlan,
+  type BankNoDocumentPlan,
   type BankReleasePlan,
   type BankTicketImage,
 } from '@/hooks/useStaffBankRows';
@@ -141,6 +144,56 @@ export const ReleasePlanPreview: FC<{ plan: BankReleasePlan }> = ({ plan }) => (
           'none'
         )}
       </Field>
+    </dl>
+  </section>
+);
+
+// ─── No document needed (Release C2) ───────────────────────────────────────────
+
+// money_in / money_out in the words the bank-rows screen uses; anything else
+// as the server sent it.
+const directionText = (direction: string): string => {
+  if (direction === 'money_in') return 'Money in';
+  if (direction === 'money_out') return 'Money out';
+  return direction;
+};
+
+// The row a ticket plan is about: its id, its date and its amount — the
+// amount as the server's string.
+const TicketPlanRow: FC<{ plan: Pick<BankNoDocumentPlan, 'row_id' | 'row'> }> = ({ plan }) => (
+  <>
+    <Field label="Row">
+      <ShortId className={idCls} id={plan.row_id} />
+    </Field>
+    <Field label="Date">{plan.row.date}</Field>
+    <Field label="Amount">
+      {`${directionText(plan.row.direction)} ${plan.row.amount} ${plan.row.currency}`}
+    </Field>
+  </>
+);
+
+// The ticket's own entry: its number, its id and its date.
+const TicketPlanEntry: FC<{ entry: BankNoDocumentPlan['entry'] }> = ({ entry }) => (
+  <Field label="Entry">
+    <EntryLabel id={entry.entry_id} entryNumber={entry.entry_number} /> · {entry.entry_date}
+  </Field>
+);
+
+// The reason is shown by the label the SERVER gives it (reason_label), never
+// by the picker's own wording (Release C2, conflict 5).
+export const NoDocumentPlanPreview: FC<{ plan: BankNoDocumentPlan }> = ({ plan }) => (
+  <section aria-label="No document needed plan" className={planCls}>
+    <p>This ticket will be closed: no document will be asked for this row.</p>
+    <p className="mt-1 text-white/50">No journal entry is changed.</p>
+    <dl className="mt-3">
+      <TicketPlanRow plan={plan} />
+      <Field label="Reason">{labelOrCode(plan.reason_label, plan.reason)}</Field>
+      <Field label="Note">{plan.note ?? 'none'}</Field>
+      <TicketPlanEntry entry={plan.entry} />
+      <Field label="Match">
+        match <ShortId className={idCls} id={plan.matched.match_id} /> · {plan.matched.state}
+      </Field>
+      <Field label="Ticket">{ticketChange(plan.ticket)}</Field>
     </dl>
   </section>
 );

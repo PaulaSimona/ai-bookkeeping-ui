@@ -15,6 +15,7 @@ import api from '@/utils/api';
 import {
   BANK_ROW_TICKET_STATUSES,
   type BankMergePlan,
+  type BankNoDocumentPlan,
   type BankReleasePlan,
   type BankRow,
 } from '@/hooks/useStaffBankRows';
@@ -1021,5 +1022,445 @@ describe('bank row actions', () => {
     expect(await screen.findByText('Merged. The sibling is marked duplicate.')).toBeInTheDocument();
     expect(post).toHaveBeenCalledTimes(3);
     expect(post).toHaveBeenLastCalledWith(MERGE_URL, { surviving_row_id: FLAGGED_ID, confirm: true });
+  });
+});
+
+// ─── No document needed (Release C2, O-S88-3) ──────────────────────────────────
+//
+// A posted row waiting for its document can be closed for good: staff give one
+// of seven reasons (a note is required for "Other"), look at the server's plan,
+// and confirm it. The server decides whether the ticket may be closed.
+
+const WAITING_ID = '34343434-3434-4343-8343-343434343434';
+
+// A row waiting for its document: settled at the bank, in the books, and
+// matched to its entry (F-S88-6).
+const WAITING = bankRow({
+  id: WAITING_ID,
+  direction: 'money_out',
+  counterparty_name: 'First Bank',
+  description: 'MONTHLY FEE',
+  ticket_status: 'waiting_document',
+  ticket_status_label: 'Waiting for Document',
+  row_kind: 'matched',
+  settled_match: {
+    id: '31313131-0000-4000-8000-000000000001',
+    state: 'auto_matched',
+    similarity: null,
+    date_delta_days: 1,
+    rationale: '',
+    created_at: '2026-09-21T10:00:00Z',
+    journal_line_id: '41414141-0000-4000-8000-000000000002',
+    entry_id: '51515151-0000-4000-8000-000000000003',
+    entry_date: '2026-09-21',
+    entry_description: 'Monthly bank charges',
+    line_debit: null,
+    line_credit: '80.00',
+    account_code: '1010',
+  },
+});
+
+const NO_DOC_URL = `/api/accounting/staff/bank-rows/${WAITING_ID}/no-document/`;
+
+// The plan as the server sends it (bank_ticket_service.py NoDocumentPlan._image).
+const NO_DOC_PLAN: BankNoDocumentPlan = {
+  row_id: WAITING_ID,
+  row: { date: '2026-09-20', direction: 'money_out', amount: '80.00', currency: 'CAD' },
+  ticket: {
+    before: { status: 'waiting_document', routing_reason: null },
+    after: { status: 'no_document_needed', routing_reason: 'bank_fee' },
+  },
+  reason: 'bank_fee',
+  reason_label: 'Bank fee',
+  note: null,
+  entry: {
+    entry_id: '51515151-0000-4000-8000-000000000003',
+    entry_number: 68,
+    entry_date: '2026-09-21',
+  },
+  matched: { match_id: '31313131-0000-4000-8000-000000000001', state: 'auto_matched' },
+};
+
+const NO_DOC = 'No document needed';
+const NO_DOC_TITLE = 'Close this ticket: no document needed?';
+const NO_DOC_DONE = 'Closed: no document needed.';
+
+const reasonPicker = () => screen.getByRole('combobox', { name: 'Reason' });
+const noteField = () => screen.getByRole('textbox', { name: 'Note' });
+
+// Opens the waiting row, asks for the form, gives a reason (and a note) and
+// asks the server for its plan.
+const previewNoDocument = async (
+  user: ReturnType<typeof userEvent.setup>,
+  reason = 'Bank fee',
+  note = '',
+) => {
+  await openRow(user, 'MONTHLY FEE');
+  await user.click(button(NO_DOC));
+  await user.selectOptions(reasonPicker(), reason);
+  if (note) await user.type(noteField(), note);
+  await user.click(button('Preview'));
+};
+
+describe('bank row: no document needed', () => {
+  it('offers No document needed only on a waiting ticket that is matched, settled at the bank and in the books', async () => {
+    const user = userEvent.setup();
+    serve({
+      rows: [
+        WAITING,
+        {
+          ...WAITING,
+          id: '61616161-0000-4000-8000-000000000001',
+          description: 'WAITING UNMATCHED',
+          row_kind: 'unmatched',
+          settled_match: null,
+        },
+        { ...WAITING, id: '61616161-0000-4000-8000-000000000002', description: 'WAITING PENDING', pending: true },
+        {
+          ...WAITING,
+          id: '61616161-0000-4000-8000-000000000003',
+          description: 'WAITING EXCLUDED',
+          excluded: true,
+          excluded_reason: 'duplicate',
+        },
+        {
+          ...WAITING,
+          id: '61616161-0000-4000-8000-000000000004',
+          description: 'DOCUMENTED ROW',
+          ticket_status: 'documented',
+          ticket_status_label: 'Documented',
+        },
+        FLAGGED,
+        PLAIN,
+      ],
+    });
+    render(<InternalBankRows />);
+
+    await openRow(user, 'MONTHLY FEE');
+    expect(button(NO_DOC)).toBeEnabled();
+    // It is not a duplicate: neither of the duplicate actions is offered.
+    expect(screen.queryByRole('button', { name: MERGE })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: RELEASE })).not.toBeInTheDocument();
+
+    for (const description of [
+      'WAITING UNMATCHED',
+      'WAITING PENDING',
+      'WAITING EXCLUDED',
+      'DOCUMENTED ROW',
+      'STAPLES STORE #114 TORONTO',
+      'REFUND 0042',
+    ]) {
+      await openRow(user, description);
+      expect(screen.queryByRole('button', { name: NO_DOC })).not.toBeInTheDocument();
+    }
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('asks for a reason first: the seven reasons by their labels, and Preview waits for one', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [WAITING] });
+    render(<InternalBankRows />);
+    await openRow(user, 'MONTHLY FEE');
+
+    // The form is not there until it is asked for.
+    expect(screen.queryByRole('combobox', { name: 'Reason' })).not.toBeInTheDocument();
+    await user.click(button(NO_DOC));
+    expect(within(reasonPicker()).getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'Choose a reason',
+      'Bank fee',
+      'Interest',
+      'Transfer between own accounts',
+      'Card payment',
+      'Loan',
+      'Tax remittance',
+      'Other',
+    ]);
+    expect(button('Preview')).toBeDisabled();
+
+    await user.selectOptions(reasonPicker(), 'Bank fee');
+    expect(button('Preview')).toBeEnabled();
+
+    // Choosing sends nothing, and Cancel puts the form away.
+    await user.click(button('Cancel'));
+    expect(screen.queryByRole('combobox', { name: 'Reason' })).not.toBeInTheDocument();
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('needs a note for the reason Other, and holds a note to 200 characters', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [WAITING] });
+    render(<InternalBankRows />);
+    await openRow(user, 'MONTHLY FEE');
+    await user.click(button(NO_DOC));
+
+    await user.selectOptions(reasonPicker(), 'Other');
+    expect(button('Preview')).toBeDisabled();
+    expect(screen.getByText('A note is required for the reason "Other".')).toBeInTheDocument();
+
+    // Spaces are not a note.
+    await user.type(noteField(), '   ');
+    expect(button('Preview')).toBeDisabled();
+    await user.type(noteField(), 'Paid in cash');
+    expect(button('Preview')).toBeEnabled();
+    expect(noteField()).toHaveAttribute('maxlength', '200');
+
+    // With any other reason the note is optional.
+    await user.clear(noteField());
+    expect(button('Preview')).toBeDisabled();
+    await user.selectOptions(reasonPicker(), 'Interest');
+    expect(button('Preview')).toBeEnabled();
+    expect(screen.queryByText('A note is required for the reason "Other".')).not.toBeInTheDocument();
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it("asks for the plan first with the reason and the note, and shows the server's plan and its reason label", async () => {
+    const user = userEvent.setup();
+    serve({ rows: [WAITING] });
+    // The label in the plan is the server's own — worded apart from the
+    // picker's here, to show which of the two the dialog prints.
+    post.mockResolvedValue(
+      planned(false, {
+        ...NO_DOC_PLAN,
+        reason: 'other',
+        reason_label: 'Other (as the server names it)',
+        note: 'Paid in cash',
+      }),
+    );
+    render(<InternalBankRows />);
+
+    await previewNoDocument(user, 'Other', ' Paid in cash ');
+    expect(await screen.findByRole('heading', { name: NO_DOC_TITLE })).toBeInTheDocument();
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(post).toHaveBeenCalledWith(NO_DOC_URL, {
+      reason: 'other',
+      note: 'Paid in cash',
+      confirm: false,
+    });
+
+    const plan = screen.getByRole('region', { name: 'No document needed plan' });
+    expect(within(plan).getByText('Other (as the server names it)')).toBeInTheDocument();
+    expect(within(plan).getByText('Paid in cash')).toBeInTheDocument();
+    expect(within(plan).getByText('34343434')).toHaveAttribute('title', WAITING_ID);
+    expect(within(plan).getByText('No journal entry is changed.')).toBeInTheDocument();
+
+    // Nothing is carried out by looking: Cancel sends nothing more, and the
+    // form is back as it was left.
+    await user.click(button('Cancel'));
+    expect(screen.queryByRole('heading', { name: NO_DOC_TITLE })).not.toBeInTheDocument();
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(rowRequests()).toHaveLength(1);
+    expect(pane()).toBeInTheDocument();
+    expect(reasonPicker()).toHaveValue('other');
+    expect(noteField()).toHaveValue(' Paid in cash ');
+  });
+
+  it('confirms with the same request and confirm true, then reads the list again and closes the pane', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [WAITING, PLAIN] });
+    post
+      .mockResolvedValueOnce(planned(false, NO_DOC_PLAN))
+      .mockResolvedValueOnce(planned(true, NO_DOC_PLAN));
+    render(<InternalBankRows />);
+    await previewNoDocument(user);
+    await screen.findByRole('heading', { name: NO_DOC_TITLE });
+
+    // What the server lists once the ticket is closed: the row has left.
+    serve({ rows: [PLAIN] });
+    await user.click(button('Confirm'));
+
+    expect(await screen.findByText(NO_DOC_DONE)).toBeInTheDocument();
+    expect(post).toHaveBeenCalledTimes(2);
+    expect(post).toHaveBeenNthCalledWith(1, NO_DOC_URL, { reason: 'bank_fee', confirm: false });
+    expect(post).toHaveBeenNthCalledWith(2, NO_DOC_URL, { reason: 'bank_fee', confirm: true });
+    await waitFor(() => expect(rowRequests()).toHaveLength(2));
+    expect(await screen.findByText('REFUND 0042')).toBeInTheDocument();
+    expect(screen.queryByText('MONTHLY FEE')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: NO_DOC_TITLE })).not.toBeInTheDocument();
+    expect(pane()).not.toBeInTheDocument();
+  });
+
+  it('counts the close as carried out only when the server says so: otherwise names the row, claims nothing and reads the list again', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [WAITING, PLAIN] });
+    // The confirm comes back 200, but as a plan that was NOT executed.
+    post
+      .mockResolvedValueOnce(planned(false, NO_DOC_PLAN))
+      .mockResolvedValueOnce(planned(false, NO_DOC_PLAN));
+    render(<InternalBankRows />);
+    await previewNoDocument(user);
+    await screen.findByRole('heading', { name: NO_DOC_TITLE });
+
+    await user.click(button('Confirm'));
+
+    const notice = (await screen.findByText('The server did not carry this out.')).closest(
+      '[role="alert"]',
+    ) as HTMLElement;
+    expect(within(notice).getByText('34343434')).toHaveAttribute('title', WAITING_ID);
+    expect(post).toHaveBeenCalledTimes(2);
+    expect(post).toHaveBeenLastCalledWith(NO_DOC_URL, { reason: 'bank_fee', confirm: true });
+    expect(screen.queryByText(NO_DOC_DONE)).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: NO_DOC_TITLE })).not.toBeInTheDocument();
+
+    // The list is read again, and the notice is still there once it is back.
+    await waitFor(() => expect(rowRequests()).toHaveLength(2));
+    expect(await screen.findByText('REFUND 0042')).toBeInTheDocument();
+    expect(screen.getByText('The server did not carry this out.')).toBeInTheDocument();
+    expect(screen.queryByText(NO_DOC_DONE)).not.toBeInTheDocument();
+  });
+
+  it("shows a refusal by the server's code and in its own words, before the plan or at the confirm", async () => {
+    const user = userEvent.setup();
+    serve({ rows: [WAITING] });
+    render(<InternalBankRows />);
+
+    // Refused at the dry run: no plan, no confirm dialog.
+    const notLive =
+      "This row's entry is no longer live (reversed or corrected), so its ticket cannot be changed here.";
+    post.mockResolvedValueOnce({ status: 409, data: { code: 'entry_not_live', detail: notLive } });
+    await previewNoDocument(user);
+    const first = await screen.findByRole('alert');
+    expect(first).toHaveTextContent(notLive);
+    expect(within(first).getByText('entry_not_live')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: NO_DOC_TITLE })).not.toBeInTheDocument();
+
+    // Refused at the confirm: the dialog closes and the refusal takes its place.
+    const notWaiting = 'This row is not waiting for a document.';
+    post
+      .mockResolvedValueOnce(planned(false, NO_DOC_PLAN))
+      .mockResolvedValueOnce({
+        status: 409,
+        data: { code: 'not_waiting_document', detail: notWaiting },
+      });
+    await user.click(button('Preview'));
+    await screen.findByRole('heading', { name: NO_DOC_TITLE });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    await user.click(button('Confirm'));
+    const second = await screen.findByRole('alert');
+    expect(second).toHaveTextContent(notWaiting);
+    expect(within(second).getByText('not_waiting_document')).toBeInTheDocument();
+    expect(second).not.toHaveTextContent(notLive);
+    expect(screen.queryByRole('heading', { name: NO_DOC_TITLE })).not.toBeInTheDocument();
+
+    // Nothing was carried out: the pane stays and the list is not read again.
+    expect(pane()).toBeInTheDocument();
+    expect(rowRequests()).toHaveLength(1);
+    expect(screen.queryByText(NO_DOC_DONE)).not.toBeInTheDocument();
+  });
+
+  it('says the row is no longer available on a 404, with a refresh', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [WAITING, PLAIN] });
+    post.mockResolvedValue({ status: 404, data: { detail: 'Not found.' } });
+    render(<InternalBankRows />);
+
+    await previewNoDocument(user);
+    expect(await screen.findByText('This row is no longer available.')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: NO_DOC_TITLE })).not.toBeInTheDocument();
+    expect(rowRequests()).toHaveLength(1);
+
+    // Refresh reads the list again; a row that is gone takes its pane with it.
+    serve({ rows: [PLAIN] });
+    await user.click(button('Refresh'));
+    await waitFor(() => expect(rowRequests()).toHaveLength(2));
+    await rowOf('REFUND 0042');
+    expect(screen.queryByText('This row is no longer available.')).not.toBeInTheDocument();
+    expect(pane()).not.toBeInTheDocument();
+    expect(post).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the hourly limit on a 429 and does not try again by itself', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [WAITING] });
+    post.mockResolvedValue({ status: 429, data: { detail: 'Request was throttled.' } });
+    render(<InternalBankRows />);
+
+    await previewNoDocument(user);
+    expect(await screen.findByText(LIMIT)).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: NO_DOC_TITLE })).not.toBeInTheDocument();
+
+    await settle();
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(rowRequests()).toHaveLength(1);
+    // Asking again is the reviewer's own choice.
+    expect(button('Preview')).toBeEnabled();
+  });
+
+  it('keeps the confirm open when the connection is lost: the failure with no code, Confirm ready again, nothing said to be done', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [WAITING] });
+    post
+      .mockResolvedValueOnce(planned(false, NO_DOC_PLAN))
+      .mockRejectedValueOnce(new Error('network down'));
+    render(<InternalBankRows />);
+    await previewNoDocument(user);
+    await screen.findByRole('heading', { name: NO_DOC_TITLE });
+
+    await user.click(button('Confirm'));
+
+    // The refusal view, in the hook's words and with no code beneath.
+    const failure = await screen.findByRole('alert');
+    expect(failure.textContent).toBe('Could not close the ticket.');
+    expect(screen.getByRole('heading', { name: NO_DOC_TITLE })).toBeInTheDocument();
+    expect(button('Confirm')).toBeEnabled();
+    expect(button('Cancel')).toBeEnabled();
+    expect(screen.queryByText(NO_DOC_DONE)).not.toBeInTheDocument();
+    expect(screen.queryByText('The server did not carry this out.')).not.toBeInTheDocument();
+    expect(rowRequests()).toHaveLength(1);
+
+    // Confirm again is the same request again.
+    post.mockResolvedValueOnce(planned(true, NO_DOC_PLAN));
+    await user.click(button('Confirm'));
+    expect(await screen.findByText(NO_DOC_DONE)).toBeInTheDocument();
+    expect(post).toHaveBeenCalledTimes(3);
+    expect(post).toHaveBeenLastCalledWith(NO_DOC_URL, { reason: 'bank_fee', confirm: true });
+  });
+
+  it('sends one request at a time: no second dry run or confirm while one is in flight', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [WAITING] });
+    const answers: ((value: unknown) => void)[] = [];
+    post.mockImplementation(() => new Promise((resolve) => answers.push(resolve)));
+    render(<InternalBankRows />);
+
+    // The dry run is out: it cannot be asked for again, nor its reason changed.
+    await previewNoDocument(user);
+    expect(button('Preview')).toBeDisabled();
+    expect(button(NO_DOC)).toBeDisabled();
+    expect(reasonPicker()).toBeDisabled();
+    expect(noteField()).toBeDisabled();
+    await user.click(button('Preview'));
+    expect(post).toHaveBeenCalledTimes(1);
+
+    await act(async () => answers[0](planned(false, NO_DOC_PLAN)));
+    await screen.findByRole('heading', { name: NO_DOC_TITLE });
+
+    // The confirm is out: it cannot be sent twice, nor cancelled half way.
+    await user.click(button('Confirm'));
+    expect(button('Confirm')).toBeDisabled();
+    expect(button('Cancel')).toBeDisabled();
+    await user.click(button('Confirm'));
+    expect(post).toHaveBeenCalledTimes(2);
+
+    await act(async () => answers[1](planned(true, NO_DOC_PLAN)));
+    expect(await screen.findByText(NO_DOC_DONE)).toBeInTheDocument();
+    expect(post).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows the server's own words when it turns the reason or the note down", async () => {
+    const user = userEvent.setup();
+    serve({ rows: [WAITING] });
+    // A 400 names the field and carries no code.
+    const tooLong = 'The note may not exceed 200 characters.';
+    post.mockResolvedValue({ status: 400, data: { note: tooLong } });
+    render(<InternalBankRows />);
+
+    await previewNoDocument(user, 'Other', 'Paid in cash');
+    const refusal = await screen.findByRole('alert');
+    expect(refusal.textContent).toBe(tooLong);
+    expect(screen.queryByRole('heading', { name: NO_DOC_TITLE })).not.toBeInTheDocument();
+    // The form stays, to be put right and asked again.
+    expect(reasonPicker()).toHaveValue('other');
+    expect(button('Preview')).toBeEnabled();
+    expect(rowRequests()).toHaveLength(1);
   });
 });
