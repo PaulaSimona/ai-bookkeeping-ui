@@ -30,6 +30,9 @@ vi.mock('@/views/internal/InternalStaff', () => ({
 vi.mock('@/views/internal/InternalBankRows', () => ({
   InternalBankRows: () => <p>internal bank rows page</p>,
 }));
+vi.mock('@/views/internal/InternalClientNoDocumentAccounts', () => ({
+  InternalClientNoDocumentAccounts: () => <p>no-document accounts page</p>,
+}));
 vi.mock('@/views/dashboard', () => ({ Dashboard: () => <p>client dashboard page</p> }));
 vi.mock('@/views/settings', () => ({ Settings: () => <p>settings page</p> }));
 vi.mock('@/views/reviewer', () => ({
@@ -149,5 +152,27 @@ describe('/internal/bank-rows', () => {
     expect(await screen.findByText('client dashboard page')).toBeInTheDocument();
     expect(location()).toBe('/dashboard');
     expect(screen.queryByText('internal bank rows page')).not.toBeInTheDocument();
+  });
+});
+
+// A client's no-document accounts (Release C2 U7, O-S88-4) is a per-org page
+// of the internal console: reviewers and super users both reach it.
+describe('/internal/clients/:orgId/no-document-accounts', () => {
+  it("shows a reviewer a client's no-document accounts page", async () => {
+    const path = '/internal/clients/11111111-1111-4111-8111-111111111111/no-document-accounts';
+    get.mockImplementation((url) =>
+      Promise.resolve(
+        url === '/api/accounting/staff/me/'
+          ? {
+              status: 200,
+              data: { is_staff_member: true, is_super_user: false, role_type: 'reviewer' },
+            }
+          : { status: 404, data: {} },
+      ),
+    );
+    renderAt(path);
+
+    expect(await screen.findByText('no-document accounts page')).toBeInTheDocument();
+    expect(location()).toBe(path);
   });
 });

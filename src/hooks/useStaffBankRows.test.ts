@@ -5,11 +5,23 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import api from '@/utils/api';
 import {
+  BANK_ROW_TICKET_STATUSES,
+  BANK_ROW_TICKET_STATUS_LABELS,
+  NO_DOCUMENT_NOTE_MAX,
+  NO_DOCUMENT_REASONS,
+  REOPEN_REASON_MAX,
   bankRowParams,
+  collectFeeds,
+  labelOrCode,
+  markNoDocument,
   mergeBankRow,
   releaseBankRowFlag,
+  reopenBankRow,
   type BankMergePlan,
+  type BankNoDocumentPlan,
   type BankReleasePlan,
+  type BankReopenPlan,
+  type BankRow,
 } from './useStaffBankRows';
 
 vi.mock('@/utils/api', () => ({ default: { get: vi.fn(), post: vi.fn() } }));
@@ -54,6 +66,44 @@ const RELEASE_PLAN: BankReleasePlan = {
   matched: null,
 };
 
+// Release C2: the plan of "no document needed", exactly as the server sends it
+// (accounting/bank_ticket_service.py NoDocumentPlan._image).
+const NO_DOCUMENT_URL = `/api/accounting/staff/bank-rows/${SURVIVING}/no-document/`;
+const NO_DOCUMENT_PLAN: BankNoDocumentPlan = {
+  row_id: SURVIVING,
+  row: { date: '2026-09-20', direction: 'money_out', amount: '80.00', currency: 'CAD' },
+  ticket: {
+    before: { status: 'waiting_document', routing_reason: null },
+    after: { status: 'no_document_needed', routing_reason: 'other' },
+  },
+  reason: 'other',
+  reason_label: 'Other',
+  note: 'Paid in cash',
+  entry: {
+    entry_id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+    entry_number: 68,
+    entry_date: '2026-09-21',
+  },
+  matched: { match_id: 'mmmmmmmm-mmmm-4mmm-8mmm-mmmmmmmmmmmm', state: 'auto_matched' },
+};
+
+// The plan of a reopen (accounting/bank_ticket_service.py ReopenPlan._image).
+const REOPEN_URL = `/api/accounting/staff/bank-rows/${SURVIVING}/reopen/`;
+const REOPEN_PLAN: BankReopenPlan = {
+  row_id: SURVIVING,
+  row: { date: '2026-09-20', direction: 'money_out', amount: '80.00', currency: 'CAD' },
+  ticket: {
+    before: { status: 'no_document_needed', routing_reason: 'bank_fee' },
+    after: { status: 'waiting_document', routing_reason: null },
+  },
+  reason: 'Receipt turned up',
+  entry: {
+    entry_id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+    entry_number: 68,
+    entry_date: '2026-09-21',
+  },
+};
+
 const ok = (executed: boolean, plan: unknown) => ({ status: 200, data: { executed, plan } });
 
 beforeEach(() => {
@@ -93,6 +143,107 @@ describe('bank row list filters', () => {
     // One at a time: nothing else rides along.
     expect(bankRowParams({ possibleDuplicate: true })).toEqual({ possible_duplicate: '1' });
     expect(bankRowParams({ dateTo: '2026-10-05' })).toEqual({ date_to: '2026-10-05' });
+  });
+});
+
+// Release C2 (N-S88-2): the feed filter's options are the feeds of the rows the
+// list has shown — no endpoint lists the feeds a staff viewer may see.
+describe('feeds seen in the list', () => {
+  const OTHER_FEED = '0f0f0f0f-0000-4000-8000-00000000000f';
+
+  // A row as the list sends it, on the given feed.
+  const rowOn = (id: string, feed: string, name: string | null, mask: string | null): BankRow => ({
+    id,
+    org_id: '11111111-1111-4111-8111-111111111111',
+    org_name: 'Acme Ltd',
+    bank_account_id: feed,
+    bank_account_name: name,
+    feed_mask: mask,
+    feed_account_code: '1010',
+    date: '2026-09-20',
+    direction: 'money_out',
+    amount: '80.00',
+    currency: 'CAD',
+    counterparty_name: '',
+    description: '',
+    source: 'plaid',
+    suggested_match: null,
+    settled_match: null,
+    row_kind: 'unmatched',
+    pending: false,
+    excluded: false,
+    excluded_reason: '',
+    ticket_status: 'pending',
+    ticket_status_label: 'Pending',
+    routing_reason: null,
+    routing_reason_label: null,
+    resolution_note: null,
+    duplicate_sibling: null,
+  });
+
+  it('collects each feed once from the rows it has seen, in the order first seen', () => {
+    const feeds = collectFeeds(
+      [],
+      [
+        rowOn(STALE, FEED, 'Business Mastercard', '3277'),
+        rowOn(SURVIVING, OTHER_FEED, 'Operating Chequing', null),
+        rowOn('cccccccc-cccc-4ccc-8ccc-cccccccccccc', FEED, 'Business Mastercard', '3277'),
+      ],
+    );
+
+    expect(feeds).toEqual([
+      { id: FEED, name: 'Business Mastercard', mask: '3277', orgName: 'Acme Ltd' },
+      { id: OTHER_FEED, name: 'Operating Chequing', mask: null, orgName: 'Acme Ltd' },
+    ]);
+  });
+
+  it('keeps the feeds it already knows when a later page has none of them', () => {
+    const first = collectFeeds([], [rowOn(STALE, FEED, 'Business Mastercard', '3277')]);
+
+    // A page narrowed to another feed adds that feed and drops nothing.
+    const second = collectFeeds(first, [rowOn(SURVIVING, OTHER_FEED, 'Operating Chequing', null)]);
+    expect(second.map((feed) => feed.id)).toEqual([FEED, OTHER_FEED]);
+
+    // An empty page, or one with nothing new, leaves the very same list.
+    expect(collectFeeds(second, [])).toBe(second);
+    expect(collectFeeds(second, [rowOn(STALE, FEED, 'Renamed since', '0000')])).toBe(second);
+  });
+});
+
+// Release C2 (N-S88-3): a status or a reason is shown by the server's label.
+describe('ticket statuses and labels', () => {
+  it("names the server's eight ticket statuses, each with its label for the filter", () => {
+    // accounting/models.py BankTransactionAccountingState.Status, in its order.
+    expect(BANK_ROW_TICKET_STATUSES).toEqual([
+      'pending',
+      'processing',
+      'needs_review',
+      'failed',
+      'waiting_document',
+      'documented',
+      'closed',
+      'no_document_needed',
+    ]);
+    expect(BANK_ROW_TICKET_STATUS_LABELS).toEqual({
+      pending: 'Pending',
+      processing: 'Processing',
+      needs_review: 'Needs Review',
+      failed: 'Failed',
+      waiting_document: 'Waiting for Document',
+      documented: 'Documented',
+      closed: 'Closed',
+      no_document_needed: 'No document needed',
+    });
+  });
+
+  it("gives the server's label, the code as sent when there is none, and a dash when there is neither", () => {
+    expect(labelOrCode('Waiting for Document', 'waiting_document')).toBe('Waiting for Document');
+    // No label: the code, exactly as it was sent — never reworded here.
+    expect(labelOrCode(null, 'needs_review')).toBe('needs_review');
+    expect(labelOrCode(undefined, 'period_locked')).toBe('period_locked');
+    expect(labelOrCode('', 'needs_review')).toBe('needs_review');
+    expect(labelOrCode(null, null)).toBe('—');
+    expect(labelOrCode(undefined, undefined)).toBe('—');
   });
 });
 
@@ -190,6 +341,156 @@ describe('release a possible-duplicate flag', () => {
         code: 'not_flagged',
         detail: 'This row is not flagged as a possible duplicate.',
       },
+    });
+  });
+});
+
+// Release C2 (O-S88-3): POST staff/bank-rows/<id>/no-document/
+// {reason, note?, confirm} — a dry run unless confirm is true.
+describe('close a ticket: no document needed', () => {
+  it('asks for the plan first: the reason and the note in the body, confirm false', async () => {
+    post.mockResolvedValue(ok(false, NO_DOCUMENT_PLAN));
+
+    const outcome = await markNoDocument(SURVIVING, 'other', '  Paid in cash  ', false);
+
+    expect(post).toHaveBeenCalledTimes(1);
+    // The note travels trimmed, as the server would store it.
+    expect(post).toHaveBeenCalledWith(NO_DOCUMENT_URL, {
+      reason: 'other',
+      note: 'Paid in cash',
+      confirm: false,
+    });
+    expect(outcome).toEqual({ ok: true, executed: false, plan: NO_DOCUMENT_PLAN });
+  });
+
+  it('confirms with the same reason and note and confirm true', async () => {
+    post.mockResolvedValue(ok(true, NO_DOCUMENT_PLAN));
+
+    const outcome = await markNoDocument(SURVIVING, 'other', 'Paid in cash', true);
+
+    expect(post).toHaveBeenCalledWith(NO_DOCUMENT_URL, {
+      reason: 'other',
+      note: 'Paid in cash',
+      confirm: true,
+    });
+    expect(outcome).toEqual({ ok: true, executed: true, plan: NO_DOCUMENT_PLAN });
+  });
+
+  it('leaves the note out of the body when it is blank', async () => {
+    post.mockResolvedValue(ok(false, NO_DOCUMENT_PLAN));
+
+    await markNoDocument(SURVIVING, 'bank_fee', '', false);
+    expect(post).toHaveBeenLastCalledWith(NO_DOCUMENT_URL, { reason: 'bank_fee', confirm: false });
+
+    await markNoDocument(SURVIVING, 'bank_fee', '   ', true);
+    expect(post).toHaveBeenLastCalledWith(NO_DOCUMENT_URL, { reason: 'bank_fee', confirm: true });
+  });
+
+  it('hands back a refusal with the server code and its own words', async () => {
+    const detail = 'This row is not waiting for a document.';
+    post.mockResolvedValue({ status: 409, data: { code: 'not_waiting_document', detail } });
+
+    const outcome = await markNoDocument(SURVIVING, 'bank_fee', '', true);
+
+    expect(outcome).toEqual({
+      ok: false,
+      refusal: {
+        status: 409,
+        code: 'not_waiting_document',
+        detail,
+        context: { code: 'not_waiting_document', detail },
+      },
+    });
+  });
+
+  it("hands back the server's words when it turns the reason or the note down", async () => {
+    // A 400 names the field, with no code: the message is what staff read.
+    post.mockResolvedValueOnce({ status: 400, data: { note: 'The reason "other" needs a note.' } });
+    const noNote = await markNoDocument(SURVIVING, 'other', '', false);
+    expect(noNote).toEqual({
+      ok: false,
+      refusal: {
+        status: 400,
+        code: undefined,
+        detail: 'The reason "other" needs a note.',
+        context: { note: 'The reason "other" needs a note.' },
+      },
+    });
+
+    const reasons =
+      'Must be one of: bank_fee, interest, transfer, card_payment, loan, tax_remittance, other.';
+    post.mockResolvedValueOnce({ status: 400, data: { reason: reasons } });
+    const badReason = await markNoDocument(SURVIVING, 'rent', '', false);
+    expect(badReason).toMatchObject({ ok: false, refusal: { status: 400, detail: reasons } });
+  });
+
+  it("names the seven staff reasons in the server's order, each with its label for the picker", () => {
+    // accounting/bank_ticket_service.py STAFF_REASONS, with the labels of
+    // accounting/bank_ticket_labels.py.
+    expect(NO_DOCUMENT_REASONS).toEqual([
+      { code: 'bank_fee', label: 'Bank fee' },
+      { code: 'interest', label: 'Interest' },
+      { code: 'transfer', label: 'Transfer between own accounts' },
+      { code: 'card_payment', label: 'Card payment' },
+      { code: 'loan', label: 'Loan' },
+      { code: 'tax_remittance', label: 'Tax remittance' },
+      { code: 'other', label: 'Other' },
+    ]);
+    expect(NO_DOCUMENT_NOTE_MAX).toBe(200);
+  });
+});
+
+// Release C2 (O-S88-3): POST staff/bank-rows/<id>/reopen/ {reason, confirm} —
+// super users only; the server answers anyone else with its 404.
+describe('reopen a ticket closed as no document needed', () => {
+  it('asks for the plan first: the reason in the body, confirm false', async () => {
+    post.mockResolvedValue(ok(false, REOPEN_PLAN));
+
+    const outcome = await reopenBankRow(SURVIVING, '  Receipt turned up ', false);
+
+    expect(post).toHaveBeenCalledTimes(1);
+    // The reason travels trimmed, as the server would record it.
+    expect(post).toHaveBeenCalledWith(REOPEN_URL, { reason: 'Receipt turned up', confirm: false });
+    expect(outcome).toEqual({ ok: true, executed: false, plan: REOPEN_PLAN });
+  });
+
+  it('confirms with the same reason and confirm true', async () => {
+    post.mockResolvedValue(ok(true, REOPEN_PLAN));
+
+    const outcome = await reopenBankRow(SURVIVING, 'Receipt turned up', true);
+
+    expect(post).toHaveBeenCalledWith(REOPEN_URL, { reason: 'Receipt turned up', confirm: true });
+    expect(outcome).toEqual({ ok: true, executed: true, plan: REOPEN_PLAN });
+    expect(REOPEN_REASON_MAX).toBe(200);
+  });
+
+  it('hands back a refusal with the server code and its own words', async () => {
+    const detail = 'This row is not closed as "no document needed".';
+    post.mockResolvedValue({ status: 409, data: { code: 'not_no_document_needed', detail } });
+
+    const outcome = await reopenBankRow(SURVIVING, 'Receipt turned up', true);
+
+    expect(outcome).toEqual({
+      ok: false,
+      refusal: {
+        status: 409,
+        code: 'not_no_document_needed',
+        detail,
+        context: { code: 'not_no_document_needed', detail },
+      },
+    });
+  });
+
+  it('reports a 404 as not found, whoever asked, and invents no plan', async () => {
+    // A reviewer, a row of another client and a row that is gone all get the
+    // same answer from the server; nothing here tells them apart.
+    post.mockResolvedValue({ status: 404, data: { detail: 'Not found.' } });
+
+    const outcome = await reopenBankRow(SURVIVING, 'Receipt turned up', false);
+
+    expect(outcome).toEqual({
+      ok: false,
+      refusal: { status: 404, detail: 'Not found', context: { detail: 'Not found.' } },
     });
   });
 });

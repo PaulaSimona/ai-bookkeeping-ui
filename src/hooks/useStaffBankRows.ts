@@ -6,8 +6,10 @@ import { type PlanOutcome, postForPlan } from '@/hooks/staffPlan';
  *   GET  /api/accounting/review/bank/                        (paginated)
  *   POST /api/accounting/staff/bank-rows/<id>/merge/         {surviving_row_id, confirm}
  *   POST /api/accounting/staff/bank-rows/<id>/release-flag/  {confirm}
- * The list returns the rows of every org the viewer may see. The two POSTs
- * are dry runs unless confirm is true: both answer {executed, plan}, and the
+ *   POST /api/accounting/staff/bank-rows/<id>/no-document/   {reason, note?, confirm}  (Release C2)
+ *   POST /api/accounting/staff/bank-rows/<id>/reopen/        {reason, confirm}         (Release C2, super users)
+ * The list returns the rows of every org the viewer may see. The POSTs
+ * are dry runs unless confirm is true: each answers {executed, plan}, and the
  * plan of a dry run is what the confirm run then carries out (PlanOutcome).
  * Amounts are the server's strings and stay strings — display only.
  */
@@ -24,10 +26,10 @@ export interface BankRowMatchSummary {
   entry_id: string | null;
   entry_date: string | null;
   entry_description: string | null;
-  // The server sends these two as JSON numbers, not strings (a raw Decimal out
-  // of a SerializerMethodField) — so they are not money to render as sent.
-  line_debit: number | null;
-  line_credit: number | null;
+  // The server's exact two-decimal strings (Release C1, F-S87-7); the side the
+  // line does not carry is null. Shown as sent — nothing is computed from them.
+  line_debit: string | null;
+  line_credit: string | null;
   account_code: string | null;
 }
 
@@ -63,12 +65,19 @@ export interface BankRow {
   description: string;
   source: string; // manual | csv | plaid
   suggested_match: BankRowMatchSummary | null;
-  row_kind: 'suggested' | 'unmatched';
+  // The match that settled the row. A settled row is listed only while its
+  // ticket waits for its document (F-S88-6), or closed as "no document
+  // needed" when that status is asked for (O-S88-11).
+  settled_match: BankRowMatchSummary | null;
+  row_kind: 'suggested' | 'matched' | 'unmatched';
   pending: boolean;
   excluded: boolean;
   excluded_reason: string;
   ticket_status: string | null;
+  ticket_status_label: string | null; // the server's words for the status
   routing_reason: string | null;
+  routing_reason_label: string | null; // the server's words for the reason
+  resolution_note: string | null; // the staff note of a closed ticket
   duplicate_sibling: BankRowSibling | null;
 }
 
@@ -77,7 +86,8 @@ export interface BankRow {
 export const POSSIBLE_DUPLICATE_REASON = 'possible_duplicate_bank_row';
 
 // The ticket statuses the list filters on — mirrors the server's own set
-// (accounting/bank_review_views.py); any other value is a 400 there.
+// (accounting/models.py BankTransactionAccountingState.Status, in its
+// order); any other value is a 400 there.
 export const BANK_ROW_TICKET_STATUSES = [
   'pending',
   'processing',
@@ -86,7 +96,33 @@ export const BANK_ROW_TICKET_STATUSES = [
   'waiting_document',
   'documented',
   'closed',
+  'no_document_needed',
 ] as const;
+
+// What the status filter calls each of them — the model's own labels, kept
+// here because no endpoint lists them (Release C2, conflict 3). For the
+// filter's options ONLY: a row always shows the label the server sent with it.
+export const BANK_ROW_TICKET_STATUS_LABELS: Record<
+  (typeof BANK_ROW_TICKET_STATUSES)[number],
+  string
+> = {
+  pending: 'Pending',
+  processing: 'Processing',
+  needs_review: 'Needs Review',
+  failed: 'Failed',
+  waiting_document: 'Waiting for Document',
+  documented: 'Documented',
+  closed: 'Closed',
+  no_document_needed: 'No document needed',
+};
+
+// A status or a routing reason as the screen shows it (N-S88-3): the server's
+// label. With no label, the code exactly as it was sent — never reworded
+// here; with neither, a dash.
+export const labelOrCode = (
+  label: string | null | undefined,
+  code: string | null | undefined,
+): string => label || code || '—';
 
 export interface BankRowFilters {
   ticketStatus?: string;
@@ -106,6 +142,35 @@ export const bankRowParams = (filters: BankRowFilters): Record<string, string> =
   if (filters.dateFrom) params.date_from = filters.dateFrom;
   if (filters.dateTo) params.date_to = filters.dateTo;
   return params;
+};
+
+// A feed as the feed filter offers it (Release C2, N-S88-2).
+export interface BankFeedOption {
+  id: string;
+  name: string | null;
+  mask: string | null; // the feed's last four digits, never more
+  orgName: string | null;
+}
+
+// The feeds of the rows the list has shown so far. No endpoint lists the feeds
+// a staff viewer may see (a staff feed list is queued as N-S88-8), so the
+// filter offers the ones it has met: each feed once, in the order first seen,
+// and a feed already known stays as it was. With nothing new, the same list
+// comes back — so keeping it in state causes no extra render.
+export const collectFeeds = (known: BankFeedOption[], rows: BankRow[]): BankFeedOption[] => {
+  const seen = new Set(known.map((feed) => feed.id));
+  const added: BankFeedOption[] = [];
+  for (const row of rows) {
+    if (!row.bank_account_id || seen.has(row.bank_account_id)) continue;
+    seen.add(row.bank_account_id);
+    added.push({
+      id: row.bank_account_id,
+      name: row.bank_account_name,
+      mask: row.feed_mask,
+      orgName: row.org_name,
+    });
+  }
+  return added.length > 0 ? [...known, ...added] : known;
 };
 
 export const BANK_ROWS_URL = '/api/accounting/review/bank/';
@@ -177,4 +242,111 @@ export const releaseBankRowFlag = (
     `/api/accounting/staff/bank-rows/${rowId}/release-flag/`,
     { confirm },
     'Could not release the flag.',
+  );
+
+// ─── No document needed (Release C2; backend Release C1, O-S88-3) ──────────────
+//   POST /api/accounting/staff/bank-rows/<id>/no-document/  {reason, note?, confirm}
+// A posted row waiting for its document is closed for good: no document will
+// be asked for it. Dry run unless confirm is true, like the two above.
+
+// The seven reasons a staff member may give, in the server's order
+// (accounting/bank_ticket_service.py STAFF_REASONS), by the server's labels
+// (accounting/bank_ticket_labels.py) — kept here because no endpoint lists
+// them (Release C2, conflict 3). For the picker ONLY: the plan carries the
+// label the server gives the chosen reason (reason_label), and that is what
+// the confirm dialog shows.
+export const NO_DOCUMENT_REASONS = [
+  { code: 'bank_fee', label: 'Bank fee' },
+  { code: 'interest', label: 'Interest' },
+  { code: 'transfer', label: 'Transfer between own accounts' },
+  { code: 'card_payment', label: 'Card payment' },
+  { code: 'loan', label: 'Loan' },
+  { code: 'tax_remittance', label: 'Tax remittance' },
+  { code: 'other', label: 'Other' },
+] as const;
+
+// The one reason that needs a note, and how long a note may be
+// (bank_ticket_service.py REASON_OTHER, NOTE_MAX_LENGTH).
+export const NO_DOCUMENT_REASON_OTHER = 'other';
+export const NO_DOCUMENT_NOTE_MAX = 200;
+
+// Whether the screen offers the action on a row: its ticket waits for a
+// document, and the row is matched to its entry, settled at the bank and in
+// the books. The server remains the judge (it also checks that the entry is
+// posted and live) and refuses in its own words.
+export const canMarkNoDocument = (row: BankRow): boolean =>
+  row.ticket_status === 'waiting_document' &&
+  row.settled_match != null &&
+  !row.pending &&
+  !row.excluded;
+
+// Mirrors accounting/bank_ticket_service.py NoDocumentPlan._image — ids,
+// statuses, codes, a date and the amount as the server's string.
+export interface BankNoDocumentPlan {
+  row_id: string;
+  row: { date: string; direction: string; amount: string; currency: string };
+  ticket: { before: BankTicketImage | null; after: BankTicketImage };
+  reason: string;
+  reason_label: string | null; // the server's words for the reason
+  note: string | null;
+  entry: { entry_id: string; entry_number: number | null; entry_date: string };
+  matched: { match_id: string; state: string };
+}
+
+// Close a waiting ticket as "no document needed". The note travels trimmed
+// and is left out when blank. Refusals: 400 {reason} / {note} for a body the
+// server rejects; 409 {code, detail} — row_excluded, row_pending,
+// not_waiting_document, no_entry, entry_not_posted, entry_not_live,
+// row_not_matched.
+export const markNoDocument = (
+  rowId: string,
+  reason: string,
+  note: string,
+  confirm: boolean,
+): Promise<PlanOutcome<BankNoDocumentPlan>> => {
+  const trimmed = note.trim();
+  return postForPlan<BankNoDocumentPlan>(
+    `/api/accounting/staff/bank-rows/${rowId}/no-document/`,
+    trimmed ? { reason, note: trimmed, confirm } : { reason, confirm },
+    'Could not close the ticket.',
+  );
+};
+
+// ─── Reopen (Release C2; backend Release C1, O-S88-3) ──────────────────────────
+//   POST /api/accounting/staff/bank-rows/<id>/reopen/  {reason, confirm}
+// SUPER USERS ONLY: a ticket closed as "no document needed" goes back to wait
+// for its document. The server answers anyone else with the same 404 as a row
+// that is not there, so the screen does not show the action to anyone else.
+
+// How long the reason for a reopen may be (bank_ticket_service.py
+// clean_reopen_reason: NOTE_MAX_LENGTH).
+export const REOPEN_REASON_MAX = 200;
+
+// Whether a row's ticket is one that can be reopened: closed as "no document
+// needed", on a row that is still in the books. Who may do it is the caller's
+// question (useStaffMe), and the server's.
+export const canReopenTicket = (row: BankRow): boolean =>
+  row.ticket_status === 'no_document_needed' && !row.excluded;
+
+// Mirrors accounting/bank_ticket_service.py ReopenPlan._image.
+export interface BankReopenPlan {
+  row_id: string;
+  row: { date: string; direction: string; amount: string; currency: string };
+  ticket: { before: BankTicketImage | null; after: BankTicketImage };
+  reason: string; // why it is reopened, as staff wrote it
+  entry: { entry_id: string; entry_number: number | null; entry_date: string };
+}
+
+// Reopen a closed ticket. The reason travels trimmed. Refusals: 400 {reason}
+// for a missing or too long reason; 409 {code, detail} — row_excluded,
+// not_no_document_needed, no_entry, entry_not_posted, entry_not_live.
+export const reopenBankRow = (
+  rowId: string,
+  reason: string,
+  confirm: boolean,
+): Promise<PlanOutcome<BankReopenPlan>> =>
+  postForPlan<BankReopenPlan>(
+    `/api/accounting/staff/bank-rows/${rowId}/reopen/`,
+    { reason: reason.trim(), confirm },
+    'Could not reopen the ticket.',
   );

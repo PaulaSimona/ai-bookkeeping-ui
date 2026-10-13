@@ -64,6 +64,7 @@ import { InternalBankRows } from '@/views/internal/InternalBankRows';
 import { InternalClients } from '@/views/internal/InternalClients';
 import { InternalClientEntries } from '@/views/internal/InternalClientEntries';
 import { InternalClientCards } from '@/views/internal/InternalClientCards';
+import { InternalClientNoDocumentAccounts } from '@/views/internal/InternalClientNoDocumentAccounts';
 import { InternalClientReports } from '@/views/internal/InternalClientReports';
 import { InternalClientAccountLedger } from '@/views/internal/InternalClientAccountLedger';
 import { InternalStaff } from '@/views/internal/InternalStaff';
@@ -228,6 +229,9 @@ const App: FC = () => {
             above — cards are org-scoped data, so they live in the org context
             rather than the cross-org global nav. */}
         <Route path="/internal/clients/:orgId/cards" element={<RequireInternalStaff><InternalClientCards /></RequireInternalStaff>} />
+        {/* Release C2 U7 (O-S88-4): the org's "no document" accounts — a per-org
+            drill-in like the cards above, for reviewers and super users. */}
+        <Route path="/internal/clients/:orgId/no-document-accounts" element={<RequireInternalStaff><InternalClientNoDocumentAccounts /></RequireInternalStaff>} />
         {/* S69 E5-UI / E8 (O-S69-16): a client's reports + account drill-down as
             seen by staff — read-only, org-addressed staff endpoints only. The
             router ranks by specificity, so declaration order is not relied on. */}

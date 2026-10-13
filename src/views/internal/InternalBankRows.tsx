@@ -1,20 +1,36 @@
 // InternalBankRows (S87 B2b U3, O-S87-8) — the staff bank-rows screen: every
 // bank row waiting on staff, across the orgs the viewer may see
-// (GET /api/accounting/review/bank/). The InternalQueue pattern: the list, and
-// the open row in a pane beside it — the row and the row it may be a copy of,
-// side by side.
+// (GET /api/accounting/review/bank/). The list, and the open row in a pane —
+// the row and the row it may be a copy of, side by side.
+//
+// Layout (Release C2, F-S88-1): the page takes the whole content width
+// (PageContainer wide) and so does the list, whether or not a row is open. The
+// table has a minimum width of 64rem: it scrolls sideways, inside its own
+// frame, only when that frame is narrower. Bank text is the column that gives
+// way; a long feed name is cut short and keeps its last four digits. The open
+// row is a drawer over the right edge of the page, with its own scroll.
 //
 // The screen shows what the server sent. Amounts are its strings, rendered
 // untouched (never formatMoney). Bank text — counterparty and description — is
 // plain text. A feed is named by its name and its last four digits, never more.
-// A suggested match is shown by its entry: its line_debit / line_credit arrive
-// as JSON numbers and are never rendered (F-S87-7).
+// A match is shown by its entry and its line: line_debit / line_credit are the
+// server's two-decimal strings (F-S87-7), shown as sent, a dash for the side
+// the line does not carry. Nothing is computed from them. A row that is listed
+// although it is settled (F-S88-6) shows the match that settled it.
+//
+// Release C2 (N-S88-3, N-S88-4): a ticket status and a routing reason are
+// shown by the label the server sent with the row (labelOrCode) — never a code
+// reworded here. The headings carry the server's own count of the rows the
+// filters select.
 //
 // Filters (O-S87-3): ticket status, possible duplicates, a date range, and one
-// feed. The feed is set from a row ("Only this feed") and shown as a chip — no
-// endpoint lists the feeds a viewer may see. A filter that is not set is not
-// sent (bankRowParams), and changing one goes back to the first page. The
-// older ?org= and ?include_excluded= parameters are not offered.
+// feed. The feed is chosen in the feed picker or set from a row ("Only this
+// feed"), and shown as a chip. No endpoint lists the feeds a viewer may see
+// (N-S88-8), so the picker offers the feeds of the rows the list has shown so
+// far (Release C2, N-S88-2): a feed is on offer once one of its rows has been
+// loaded. A filter that is not set is not sent (bankRowParams), and changing
+// one goes back to the first page. The older ?org= and ?include_excluded=
+// parameters are not offered.
 //
 // The org column shows only when the viewer's own org list (GET
 // /api/accounting/orgs/: a reviewer's assigned orgs, every org for a super
@@ -27,6 +43,19 @@
 //                                   sibling is the STALE row: it carries the
 //                                   match, and it is the one marked duplicate.
 //   Not a duplicate: release flag → POST staff/bank-rows/<this row>/release-flag/
+// and (Release C2, O-S88-3) on a row whose ticket waits for a document and
+// which is matched, settled at the bank and in the books:
+//   No document needed            → POST staff/bank-rows/<this row>/no-document/
+//                                   {reason, note?} — one of seven reasons;
+//                                   "Other" needs a note (at most 200
+//                                   characters). The form comes first, then
+//                                   Preview asks for the plan.
+// and, for a SUPER USER only (GET staff/me/), on a ticket closed as "no
+// document needed" (listed when that status is asked for, O-S88-11):
+//   Reopen                        → POST staff/bank-rows/<this row>/reopen/
+//                                   {reason} — the reason is required. Nobody
+//                                   else is shown the button; the server gives
+//                                   anyone else its 404.
 // Each asks the server for its plan first (a dry run), shows that plan in the
 // confirm dialog (PlanPreview), and carries it out only on Confirm — the same
 // request with confirm true. The server decides what is allowed: a refusal is
@@ -38,7 +67,12 @@
 import { type FC, type ReactNode, useState } from 'react';
 
 import { ActionRefusal, noticeCls } from '@/components/internal/ActionRefusal';
-import { MergePlanPreview, ReleasePlanPreview } from '@/components/internal/PlanPreview';
+import {
+  MergePlanPreview,
+  NoDocumentPlanPreview,
+  ReleasePlanPreview,
+  ReopenPlanPreview,
+} from '@/components/internal/PlanPreview';
 import { ShortId } from '@/components/internal/ShortId';
 import {
   CenteredSpinner,
@@ -56,12 +90,25 @@ import {
 } from '@/components/internal/ui';
 import { type PlanOutcome } from '@/hooks/staffPlan';
 import { useOrgsList } from '@/hooks/useInternalAdmin';
+import { useStaffMe } from '@/hooks/useStaffMe';
 import {
   BANK_ROW_TICKET_STATUSES,
+  BANK_ROW_TICKET_STATUS_LABELS,
+  NO_DOCUMENT_NOTE_MAX,
+  NO_DOCUMENT_REASONS,
+  NO_DOCUMENT_REASON_OTHER,
   POSSIBLE_DUPLICATE_REASON,
+  REOPEN_REASON_MAX,
+  canMarkNoDocument,
+  canReopenTicket,
+  collectFeeds,
+  labelOrCode,
+  markNoDocument,
   mergeBankRow,
   releaseBankRowFlag,
+  reopenBankRow,
   useStaffBankRows,
+  type BankFeedOption,
   type BankRow,
   type BankRowFilters,
   type BankRowSibling,
@@ -77,10 +124,24 @@ const pagerCls =
 
 // A feed as the screen names it: its name, then its last four digits — never
 // more of a mask than four.
-const feedLabel = (row: BankRow): string => {
-  const name = row.bank_account_name ?? '—';
-  const lastFour = row.feed_mask ? row.feed_mask.slice(-4) : '';
+const feedText = (feedName: string | null, mask: string | null): string => {
+  const name = feedName ?? '—';
+  const lastFour = mask ? mask.slice(-4) : '';
   return lastFour ? `${name} ····${lastFour}` : name;
+};
+const feedLabel = (row: BankRow): string => feedText(row.bank_account_name, row.feed_mask);
+
+// A feed in the list (F-S88-1). A long name gives way — it is cut short, with
+// the whole label in the title — and the last four digits always show. The
+// text is the same as feedLabel's.
+const FeedName: FC<{ row: BankRow }> = ({ row }) => {
+  const lastFour = row.feed_mask ? row.feed_mask.slice(-4) : '';
+  return (
+    <span className="flex max-w-[14rem] min-w-0" title={feedLabel(row)}>
+      <span className="truncate">{row.bank_account_name ?? '—'}</span>
+      {lastFour && <span className="shrink-0 whitespace-pre">{` ····${lastFour}`}</span>}
+    </span>
+  );
 };
 
 // money_in / money_out in words; anything else as the server sent it.
@@ -186,20 +247,40 @@ interface PendingAction extends PlanView {
 
 const RowActions: FC<{
   row: BankRow;
+  // The viewer is a super user (GET staff/me/). False for a reviewer, and
+  // while the viewer's role is not known yet.
+  isSuperUser: boolean;
   // A confirmed action: say what was done, close the pane, read the list again.
   onDone: (message: string) => void;
   // A confirm the server answered without carrying it out: name the plan's
   // rows and read the list again.
   onNotCarriedOut: (rows: PlanRow[]) => void;
   onRefresh: () => void;
-}> = ({ row, onDone, onNotCarriedOut, onRefresh }) => {
+}> = ({ row, isSuperUser, onDone, onNotCarriedOut, onRefresh }) => {
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [refusal, setRefusal] = useState<RemediationRefusal | null>(null);
   // A request is out: every button of the action waits for its answer.
   const [busy, setBusy] = useState(false);
+  // "No document needed": its form is open, with the reason and the note staff
+  // have given so far. They are kept while the plan is looked at, so a
+  // cancelled plan comes back to the form as it was left.
+  const [closing, setClosing] = useState(false);
+  const [reason, setReason] = useState('');
+  const [note, setNote] = useState('');
+  // "Reopen": its form is open, with the reason given so far.
+  const [reopening, setReopening] = useState(false);
+  const [reopenReason, setReopenReason] = useState('');
   const sibling = row.duplicate_sibling;
 
-  if (row.routing_reason !== POSSIBLE_DUPLICATE_REASON) return null;
+  const flagged = row.routing_reason === POSSIBLE_DUPLICATE_REASON;
+  const canClose = canMarkNoDocument(row);
+  // Reopen is a super user's action only (O-S88-3): nobody else is shown it.
+  const canReopen = isSuperUser && canReopenTicket(row);
+  if (!flagged && !canClose && !canReopen) return null;
+
+  // "Other" needs a note (spaces are not one); any other reason stands alone.
+  const noteRequired = reason === NO_DOCUMENT_REASON_OTHER;
+  const canPreview = reason !== '' && (!noteRequired || note.trim() !== '');
 
   // `send(false)` asks what the action would do. Its plan goes into the
   // confirm dialog, whose Confirm is `send(true)`: the same request.
@@ -246,7 +327,7 @@ const RowActions: FC<{
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
-        {sibling && (
+        {flagged && sibling && (
           <PrimaryButton
             onClick={() =>
               void ask(
@@ -268,23 +349,134 @@ const RowActions: FC<{
             Merge: keep this row
           </PrimaryButton>
         )}
-        <SecondaryButton
-          onClick={() =>
-            void ask(
-              (confirmed) => releaseBankRowFlag(row.id, confirmed),
-              (plan) => ({
-                title: 'Release the possible-duplicate flag?',
-                plan: <ReleasePlanPreview plan={plan} />,
-                done: 'Flag released. This row is not a duplicate.',
-                rows: [{ label: 'Row', id: plan.row_id }],
-              }),
-            )
-          }
-          disabled={busy}
-        >
-          Not a duplicate: release flag
-        </SecondaryButton>
+        {flagged && (
+          <SecondaryButton
+            onClick={() =>
+              void ask(
+                (confirmed) => releaseBankRowFlag(row.id, confirmed),
+                (plan) => ({
+                  title: 'Release the possible-duplicate flag?',
+                  plan: <ReleasePlanPreview plan={plan} />,
+                  done: 'Flag released. This row is not a duplicate.',
+                  rows: [{ label: 'Row', id: plan.row_id }],
+                }),
+              )
+            }
+            disabled={busy}
+          >
+            Not a duplicate: release flag
+          </SecondaryButton>
+        )}
+        {canClose && (
+          <SecondaryButton onClick={() => setClosing(true)} disabled={busy}>
+            No document needed
+          </SecondaryButton>
+        )}
+        {canReopen && (
+          <SecondaryButton onClick={() => setReopening(true)} disabled={busy}>
+            Reopen
+          </SecondaryButton>
+        )}
       </div>
+
+      {/* Reopen: the reason first; the plan is asked for with Preview. */}
+      {canReopen && reopening && !pending && (
+        <div className="space-y-3 rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+          <p className="text-sm text-white/70">
+            Reopen this ticket: it will wait for its document again.
+          </p>
+          <textarea
+            value={reopenReason}
+            onChange={(e) => setReopenReason(e.target.value)}
+            disabled={busy}
+            maxLength={REOPEN_REASON_MAX}
+            rows={2}
+            aria-label="Reason for reopening"
+            placeholder="Reason for reopening"
+            className={`${fieldCls} w-full`}
+          />
+          <p className="text-xs text-white/40">A reason is required.</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <PrimaryButton
+              onClick={() =>
+                void ask(
+                  (confirmed) => reopenBankRow(row.id, reopenReason, confirmed),
+                  (plan) => ({
+                    title: 'Reopen this ticket?',
+                    plan: <ReopenPlanPreview plan={plan} />,
+                    done: 'Reopened: waiting for a document again.',
+                    rows: [{ label: 'Row', id: plan.row_id }],
+                  }),
+                )
+              }
+              disabled={busy || reopenReason.trim() === ''}
+            >
+              Preview
+            </PrimaryButton>
+            <SecondaryButton onClick={() => setReopening(false)} disabled={busy}>
+              Cancel
+            </SecondaryButton>
+          </div>
+        </div>
+      )}
+
+      {/* The reason first; the plan is asked for with Preview. Put away while
+          the plan is on screen, and back as it was left if that is cancelled. */}
+      {canClose && closing && !pending && (
+        <div className="space-y-3 rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+          <p className="text-sm text-white/70">
+            Close this ticket: no document will be asked for this row.
+          </p>
+          <select
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            disabled={busy}
+            aria-label="Reason"
+            className={`${fieldCls} w-full`}
+          >
+            <option value="">Choose a reason</option>
+            {NO_DOCUMENT_REASONS.map((option) => (
+              <option key={option.code} value={option.code}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            disabled={busy}
+            maxLength={NO_DOCUMENT_NOTE_MAX}
+            rows={2}
+            aria-label="Note"
+            placeholder="Note"
+            className={`${fieldCls} w-full`}
+          />
+          <p className="text-xs text-white/40">
+            {noteRequired ? 'A note is required for the reason "Other".' : 'A note is optional.'}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <PrimaryButton
+              onClick={() =>
+                void ask(
+                  (confirmed) => markNoDocument(row.id, reason, note, confirmed),
+                  (plan) => ({
+                    title: 'Close this ticket: no document needed?',
+                    plan: <NoDocumentPlanPreview plan={plan} />,
+                    done: 'Closed: no document needed.',
+                    rows: [{ label: 'Row', id: plan.row_id }],
+                  }),
+                )
+              }
+              disabled={busy || !canPreview}
+            >
+              Preview
+            </PrimaryButton>
+            <SecondaryButton onClick={() => setClosing(false)} disabled={busy}>
+              Cancel
+            </SecondaryButton>
+          </div>
+        </div>
+      )}
 
       {refusal && !pending && <ActionRefusal refusal={refusal} gone={ROW_GONE} onRefresh={onRefresh} />}
 
@@ -312,6 +504,7 @@ const RowActions: FC<{
 
 const DetailPane: FC<{
   row: BankRow;
+  isSuperUser: boolean;
   // The list is already narrowed to this row's feed.
   feedIsFilter: boolean;
   onOnlyThisFeed: () => void;
@@ -319,9 +512,21 @@ const DetailPane: FC<{
   onNotCarriedOut: (rows: PlanRow[]) => void;
   onRefresh: () => void;
   onClose: () => void;
-}> = ({ row, feedIsFilter, onOnlyThisFeed, onDone, onNotCarriedOut, onRefresh, onClose }) => {
+}> = ({
+  row,
+  isSuperUser,
+  feedIsFilter,
+  onOnlyThisFeed,
+  onDone,
+  onNotCarriedOut,
+  onRefresh,
+  onClose,
+}) => {
   const sibling = row.duplicate_sibling;
-  const match = row.suggested_match;
+  // The match that settled the row when it has one; else the suggestion that
+  // waits for a decision.
+  const match = row.settled_match ?? row.suggested_match;
+  const matchHeading = row.settled_match ? 'Settled match' : 'Suggested match';
   return (
     <section aria-label="Bank row detail">
       <SectionCard
@@ -345,6 +550,7 @@ const DetailPane: FC<{
 
           <RowActions
             row={row}
+            isSuperUser={isSuperUser}
             onDone={onDone}
             onNotCarriedOut={onNotCarriedOut}
             onRefresh={onRefresh}
@@ -357,20 +563,27 @@ const DetailPane: FC<{
             <Detail label="Feed">{feedLabel(row)}</Detail>
             <Detail label="Feed account">{row.feed_account_code ?? '—'}</Detail>
             <Detail label="Source">{humanizeCode(row.source)}</Detail>
-            <Detail label="Ticket">{humanizeCode(row.ticket_status)}</Detail>
-            <Detail label="Routing reason">{humanizeCode(row.routing_reason)}</Detail>
+            <Detail label="Ticket">{labelOrCode(row.ticket_status_label, row.ticket_status)}</Detail>
+            <Detail label="Routing reason">
+              {labelOrCode(row.routing_reason_label, row.routing_reason)}
+            </Detail>
+            {/* The staff note of a closed ticket, in the words it was written in. */}
+            {row.resolution_note && <Detail label="Note">{row.resolution_note}</Detail>}
           </dl>
 
           {match && (
-            <div>
-              <div className={`${labelCls} mb-1`}>Suggested match</div>
+            <section aria-label={matchHeading}>
+              <div className={`${labelCls} mb-1`}>{matchHeading}</div>
               <dl className="grid grid-cols-2 gap-3 text-sm">
                 <Detail label="State">{humanizeCode(match.state)}</Detail>
                 <Detail label="Entry date">{match.entry_date ?? '—'}</Detail>
                 <Detail label="Entry">{match.entry_description || '—'}</Detail>
                 <Detail label="Account">{match.account_code ?? '—'}</Detail>
+                {/* The line's own amounts, as the server's strings. */}
+                <Detail label="Debit">{match.line_debit ?? '—'}</Detail>
+                <Detail label="Credit">{match.line_credit ?? '—'}</Detail>
               </dl>
-            </div>
+            </section>
           )}
 
           {!feedIsFilter && (
@@ -393,8 +606,19 @@ export const InternalBankRows: FC = () => {
     ...filters,
     bankAccountId: feed?.id,
   });
+  // The feeds the filter offers: the ones met in the rows shown so far, on any
+  // page and under any filter (collectFeeds) — no endpoint lists them.
+  // Worked out while rendering, not in an effect: the picker has a row's feed
+  // in the same render that shows the row, never one render later.
+  const [knownFeeds, setKnownFeeds] = useState<BankFeedOption[]>([]);
+  const feeds = collectFeeds(knownFeeds, items);
+  if (feeds !== knownFeeds) setKnownFeeds(feeds);
   const { data: orgs } = useOrgsList();
   const spansOrgs = orgs.length > 1;
+  // Who is looking (GET staff/me/): only a super user is shown Reopen. Not a
+  // super user until the answer says so.
+  const { staff } = useStaffMe();
+  const isSuperUser = staff?.isSuperUser === true;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = items.find((row) => row.id === selectedId) ?? null;
   // The page's toast: a confirmed action closes the pane, so the confirmation
@@ -438,11 +662,13 @@ export const InternalBankRows: FC = () => {
 
   return (
     <PageContainer
+      wide
       title="Bank rows"
       subtitle={
         isLoading
           ? 'Loading…'
-          : `${count} ${count === 1 ? 'row' : 'rows'} waiting on staff (oldest first).`
+          : // The server's own count of the rows the filters select (N-S88-4).
+            `${count} bank ${count === 1 ? 'row' : 'rows'} (oldest first).`
       }
     >
       {/* Filters */}
@@ -454,10 +680,10 @@ export const InternalBankRows: FC = () => {
           className={fieldCls}
         >
           <option value="">Any ticket status</option>
-          {/* The server's own seven (BANK_ROW_TICKET_STATUSES). */}
+          {/* The server's own eight (BANK_ROW_TICKET_STATUSES), by its labels. */}
           {BANK_ROW_TICKET_STATUSES.map((status) => (
             <option key={status} value={status}>
-              {humanizeCode(status)}
+              {BANK_ROW_TICKET_STATUS_LABELS[status]}
             </option>
           ))}
         </select>
@@ -487,6 +713,24 @@ export const InternalBankRows: FC = () => {
             className={fieldCls}
           />
         </div>
+        <select
+          value={feed?.id ?? ''}
+          onChange={(e) => {
+            const chosen = feeds.find((option) => option.id === e.target.value);
+            changeFeed(chosen ? { id: chosen.id, label: feedText(chosen.name, chosen.mask) } : null);
+          }}
+          aria-label="Feed"
+          className={fieldCls}
+        >
+          <option value="">Any feed</option>
+          {feeds.map((option) => (
+            <option key={option.id} value={option.id}>
+              {feedText(option.name, option.mask)}
+              {/* Two orgs can each have a feed of the same name. */}
+              {spansOrgs && option.orgName ? ` · ${option.orgName}` : ''}
+            </option>
+          ))}
+        </select>
         {feed && (
           <span className="inline-flex items-center gap-2 rounded-full bg-[#0066FF]/20 px-3 py-1 text-xs font-medium text-[#4DA6FF]">
             <span>Feed: {feed.label}</span>
@@ -528,12 +772,14 @@ export const InternalBankRows: FC = () => {
           </SectionCard>
         )
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-          {/* List */}
-          <div className={selected ? 'lg:col-span-2' : 'lg:col-span-5'}>
+        <div>
+          {/* List: the whole content width, whether or not a row is open
+              (F-S88-1). It scrolls sideways only inside this frame, and only
+              when the frame is narrower than the table's minimum width. */}
+          <div>
             <SectionCard className="overflow-hidden" title={`Bank rows (${count})`}>
               <div className="overflow-x-auto -m-5">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[64rem] text-sm">
                   <thead>
                     <tr className="text-left text-[11px] uppercase tracking-wide text-white/30 border-b border-white/10">
                       <th className="py-2 px-5 font-medium">Date</th>
@@ -567,24 +813,34 @@ export const InternalBankRows: FC = () => {
                             )}
                           </td>
                         )}
-                        <td className="py-2.5 px-3 text-white/70 whitespace-nowrap">{feedLabel(row)}</td>
+                        <td className="py-2.5 px-3 text-white/70">
+                          <FeedName row={row} />
+                        </td>
                         <td className="py-2.5 px-3 text-right whitespace-nowrap">
                           <span className="text-xs text-white/40">{directionLabel(row.direction)}</span>{' '}
                           <span className="text-white/90 tabular-nums">{`${row.amount} ${row.currency}`}</span>
                         </td>
-                        <td className="py-2.5 px-3 max-w-[18rem]">
+                        {/* The column that gives way: it takes the width the
+                            others leave, and its text is cut short to fit. */}
+                        <td className="py-2.5 px-3 w-full max-w-0">
                           {row.counterparty_name && (
                             <div className="text-white/90 truncate">{row.counterparty_name}</div>
                           )}
                           <div className="text-white/50 truncate">{row.description || '—'}</div>
                         </td>
-                        <td className="py-2.5 px-3">
-                          {row.ticket_status ? <Pill>{humanizeCode(row.ticket_status)}</Pill> : '—'}
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          {row.ticket_status ? (
+                            <Pill>{labelOrCode(row.ticket_status_label, row.ticket_status)}</Pill>
+                          ) : (
+                            '—'
+                          )}
                         </td>
                         <td className="py-2.5 px-3">
                           <RowFlags row={row} />
                         </td>
-                        <td className="py-2.5 px-5 text-white/70">{humanizeCode(row.routing_reason)}</td>
+                        <td className="py-2.5 px-5 text-white/70 min-w-[9rem]">
+                          {labelOrCode(row.routing_reason_label, row.routing_reason)}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -593,12 +849,16 @@ export const InternalBankRows: FC = () => {
             </SectionCard>
           </div>
 
-          {/* Detail pane */}
+          {/* The open row: a drawer over the right edge of the page, with its
+              own scroll — the list beneath keeps its full width and its rows
+              stay there to be opened (Release C2, conflict 4). Under the
+              confirm dialog and the toast (z-50). */}
           {selected && (
-            <div className="lg:col-span-3">
+            <div className="fixed inset-y-0 right-0 z-40 w-full max-w-2xl overflow-y-auto border-l border-white/10 bg-[#0f172a] p-4 shadow-2xl">
               <DetailPane
                 key={selected.id}
                 row={selected}
+                isSuperUser={isSuperUser}
                 feedIsFilter={feed?.id === selected.bank_account_id}
                 onOnlyThisFeed={() =>
                   changeFeed({ id: selected.bank_account_id, label: feedLabel(selected) })
