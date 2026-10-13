@@ -56,6 +56,12 @@
 //                                   {reason} — the reason is required. Nobody
 //                                   else is shown the button; the server gives
 //                                   anyone else its 404.
+// and (Release D2, O-S89-4 / O-S89-5) on a row whose suggested match waits for
+// a decision, settled at the bank and in the books:
+//   Confirm match                 → POST staff/bank-rows/<this row>/match/confirm/
+//   Reject match                  → POST staff/bank-rows/<this row>/match/reject/
+//                                   {reason?} — the reason is optional. The
+//                                   plan says what follows for the ticket.
 // Each asks the server for its plan first (a dry run), shows that plan in the
 // confirm dialog (PlanPreview), and carries it out only on Confirm — the same
 // request with confirm true. The server decides what is allowed: a refusal is
@@ -68,6 +74,7 @@ import { type FC, type ReactNode, useState } from 'react';
 
 import { ActionRefusal, noticeCls } from '@/components/internal/ActionRefusal';
 import {
+  MatchPlanPreview,
   MergePlanPreview,
   NoDocumentPlanPreview,
   ReleasePlanPreview,
@@ -94,17 +101,21 @@ import { useStaffMe } from '@/hooks/useStaffMe';
 import {
   BANK_ROW_TICKET_STATUSES,
   BANK_ROW_TICKET_STATUS_LABELS,
+  MATCH_REASON_MAX,
   NO_DOCUMENT_NOTE_MAX,
   NO_DOCUMENT_REASONS,
   NO_DOCUMENT_REASON_OTHER,
   POSSIBLE_DUPLICATE_REASON,
   REOPEN_REASON_MAX,
+  canDecideSuggestion,
   canMarkNoDocument,
   canReopenTicket,
   collectFeeds,
+  confirmBankMatch,
   labelOrCode,
   markNoDocument,
   mergeBankRow,
+  rejectBankMatch,
   releaseBankRowFlag,
   reopenBankRow,
   useStaffBankRows,
@@ -270,13 +281,18 @@ const RowActions: FC<{
   // "Reopen": its form is open, with the reason given so far.
   const [reopening, setReopening] = useState(false);
   const [reopenReason, setReopenReason] = useState('');
+  // "Reject match" (Release D2): its form is open, with the optional reason.
+  const [rejecting, setRejecting] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
   const sibling = row.duplicate_sibling;
 
   const flagged = row.routing_reason === POSSIBLE_DUPLICATE_REASON;
   const canClose = canMarkNoDocument(row);
   // Reopen is a super user's action only (O-S88-3): nobody else is shown it.
   const canReopen = isSuperUser && canReopenTicket(row);
-  if (!flagged && !canClose && !canReopen) return null;
+  // A suggested match waits for a decision (Release D2, O-S89-4).
+  const canDecide = canDecideSuggestion(row);
+  if (!flagged && !canClose && !canReopen && !canDecide) return null;
 
   // "Other" needs a note (spaces are not one); any other reason stands alone.
   const noteRequired = reason === NO_DOCUMENT_REASON_OTHER;
@@ -367,6 +383,29 @@ const RowActions: FC<{
             Not a duplicate: release flag
           </SecondaryButton>
         )}
+        {canDecide && (
+          <PrimaryButton
+            onClick={() =>
+              void ask(
+                (confirmed) => confirmBankMatch(row.id, confirmed),
+                (plan) => ({
+                  title: 'Confirm this match?',
+                  plan: <MatchPlanPreview plan={plan} />,
+                  done: 'Match confirmed.',
+                  rows: [{ label: 'Row', id: plan.row_id }],
+                }),
+              )
+            }
+            disabled={busy}
+          >
+            Confirm match
+          </PrimaryButton>
+        )}
+        {canDecide && (
+          <SecondaryButton onClick={() => setRejecting(true)} disabled={busy}>
+            Reject match
+          </SecondaryButton>
+        )}
         {canClose && (
           <SecondaryButton onClick={() => setClosing(true)} disabled={busy}>
             No document needed
@@ -378,6 +417,50 @@ const RowActions: FC<{
           </SecondaryButton>
         )}
       </div>
+
+      {/* Reject match: an optional reason first; the plan is asked for with
+          Preview. The plan says where the row goes: its own entry, review, or
+          back to the drafting queue. */}
+      {canDecide && rejecting && !pending && (
+        <div className="space-y-3 rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+          <p className="text-sm text-white/70">
+            Reject this match: the row is re-linked to its own entry when it has one; otherwise it
+            goes to review, or back to the drafting queue.
+          </p>
+          <textarea
+            value={rejectReason}
+            onChange={(e) => setRejectReason(e.target.value)}
+            disabled={busy}
+            maxLength={MATCH_REASON_MAX}
+            rows={2}
+            aria-label="Reason for rejecting"
+            placeholder="Reason (optional)"
+            className={`${fieldCls} w-full`}
+          />
+          <p className="text-xs text-white/40">A reason is optional.</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <PrimaryButton
+              onClick={() =>
+                void ask(
+                  (confirmed) => rejectBankMatch(row.id, rejectReason, confirmed),
+                  (plan) => ({
+                    title: 'Reject this match?',
+                    plan: <MatchPlanPreview plan={plan} />,
+                    done: 'Match rejected.',
+                    rows: [{ label: 'Row', id: plan.row_id }],
+                  }),
+                )
+              }
+              disabled={busy}
+            >
+              Preview
+            </PrimaryButton>
+            <SecondaryButton onClick={() => setRejecting(false)} disabled={busy}>
+              Cancel
+            </SecondaryButton>
+          </div>
+        </div>
+      )}
 
       {/* Reopen: the reason first; the plan is asked for with Preview. */}
       {canReopen && reopening && !pending && (

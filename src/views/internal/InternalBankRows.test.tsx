@@ -14,6 +14,7 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import api from '@/utils/api';
 import {
   BANK_ROW_TICKET_STATUSES,
+  type BankMatchPlan,
   type BankMergePlan,
   type BankNoDocumentPlan,
   type BankReleasePlan,
@@ -1977,5 +1978,282 @@ describe('bank row: reopen', () => {
     expect(await screen.findByText(REOPEN_DONE)).toBeInTheDocument();
     expect(post).toHaveBeenCalledTimes(3);
     expect(post).toHaveBeenLastCalledWith(REOPEN_URL, { reason: 'Receipt turned up', confirm: true });
+  });
+});
+
+// ─── Match actions (Release D2; backend Release D1, O-S89-4 / O-S89-5) ─────────
+
+const SUGGESTED_ID = '56565656-5656-4565-8565-565656565656';
+const SUGGESTED_ENTRY = '61616161-0000-4000-8000-000000000003';
+
+// A money-out row parked on a suggested match: settled at the bank, in the
+// books, waiting for a reviewer's decision.
+const SUGGESTED = bankRow({
+  id: SUGGESTED_ID,
+  direction: 'money_out',
+  amount: '6.00',
+  counterparty_name: 'First Bank',
+  description: 'SUGGESTED ROW',
+  ticket_status: 'needs_review',
+  ticket_status_label: 'Needs Review',
+  routing_reason: 'suggested_match_review',
+  routing_reason_label: 'Suggested match needs a decision',
+  row_kind: 'suggested',
+  suggested_match: {
+    id: '71717171-0000-4000-8000-000000000001',
+    state: 'suggested',
+    similarity: '0.00',
+    date_delta_days: 1,
+    rationale: 'suggested: similarity 0.0000 below threshold',
+    created_at: '2026-09-21T10:00:00Z',
+    journal_line_id: '81818181-0000-4000-8000-000000000002',
+    entry_id: SUGGESTED_ENTRY,
+    entry_date: '2026-09-19',
+    entry_description: 'Monthly bank charges',
+    line_debit: null,
+    line_credit: '6.00',
+    account_code: '1010',
+  },
+});
+
+const CONFIRM_URL = `/api/accounting/staff/bank-rows/${SUGGESTED_ID}/match/confirm/`;
+const REJECT_URL = `/api/accounting/staff/bank-rows/${SUGGESTED_ID}/match/reject/`;
+
+// The plan as the server sends it (bank_match_actions.py MatchActionPlan._image).
+const CONFIRM_PLAN: BankMatchPlan = {
+  action: 'confirm',
+  row_id: SUGGESTED_ID,
+  row: { date: '2026-09-20', direction: 'money_out', amount: '6.00', currency: 'CAD' },
+  match: {
+    match_id: '71717171-0000-4000-8000-000000000001',
+    state: { before: 'suggested', after: 'confirmed' },
+    journal_line_id: '81818181-0000-4000-8000-000000000002',
+    account_code: '1010',
+    line_debit: null,
+    line_credit: '6.00',
+    entry: { entry_id: SUGGESTED_ENTRY, entry_number: 66, entry_date: '2026-09-19' },
+  },
+  ticket: {
+    before: { status: 'needs_review', routing_reason: 'suggested_match_review' },
+    after: { status: 'no_document_needed', routing_reason: 'account_rule' },
+  },
+  follow: 'account_rule',
+  relink: null,
+  reason: null,
+  note: null,
+  routing_reason_label: 'No-document account',
+};
+const REJECT_PLAN: BankMatchPlan = {
+  ...CONFIRM_PLAN,
+  action: 'reject',
+  match: { ...CONFIRM_PLAN.match, state: { before: 'suggested', after: 'rejected' } },
+  ticket: {
+    before: CONFIRM_PLAN.ticket.before,
+    after: { status: 'pending', routing_reason: null },
+  },
+  follow: 'pending',
+  reason: 'not this entry',
+  routing_reason_label: null,
+};
+
+const CONFIRM_MATCH = 'Confirm match';
+const REJECT_MATCH = 'Reject match';
+const CONFIRM_TITLE = 'Confirm this match?';
+const REJECT_TITLE = 'Reject this match?';
+const CONFIRM_DONE = 'Match confirmed.';
+const REJECT_DONE = 'Match rejected.';
+const rejectReason = () => screen.getByRole('textbox', { name: 'Reason for rejecting' });
+
+describe('bank row: confirm or reject a suggested match', () => {
+  it('offers Confirm match and Reject match only on a suggested row that is settled at the bank and in the books', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [SUGGESTED, FLAGGED, WAITING, PLAIN], me: 'reviewer' });
+    render(<InternalBankRows />);
+
+    await openRow(user, 'SUGGESTED ROW');
+    expect(button(CONFIRM_MATCH)).toBeEnabled();
+    expect(button(REJECT_MATCH)).toBeEnabled();
+    // Nothing is asked of the server until a button is pressed.
+    expect(post).not.toHaveBeenCalled();
+
+    // A suggestion on a row still pending at the bank; a settled row; an
+    // unmatched row: none of them.
+    for (const description of ['STAPLES STORE #114 TORONTO', 'MONTHLY FEE', 'REFUND 0042']) {
+      await openRow(user, description);
+      expect(screen.queryByRole('button', { name: CONFIRM_MATCH })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: REJECT_MATCH })).not.toBeInTheDocument();
+    }
+  });
+
+  it("asks for the confirm plan first and shows the server's plan; Confirm sends confirm true, then reads the list again and closes the pane", async () => {
+    const user = userEvent.setup();
+    serve({ rows: [SUGGESTED, PLAIN], me: 'reviewer' });
+    post
+      .mockResolvedValueOnce(planned(false, CONFIRM_PLAN))
+      .mockResolvedValueOnce(planned(true, CONFIRM_PLAN));
+    render(<InternalBankRows />);
+    await openRow(user, 'SUGGESTED ROW');
+
+    await user.click(button(CONFIRM_MATCH));
+    expect(await screen.findByRole('heading', { name: CONFIRM_TITLE })).toBeInTheDocument();
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(post).toHaveBeenCalledWith(CONFIRM_URL, { confirm: false });
+    const plan = screen.getByRole('region', { name: 'Match plan' });
+    expect(within(plan).getByText('The suggested match will be confirmed.')).toBeInTheDocument();
+    expect(plan).toHaveTextContent('suggested → confirmed');
+    expect(within(plan).getByText('No-document account')).toBeInTheDocument();
+    expect(within(plan).getByText('56565656')).toHaveAttribute('title', SUGGESTED_ID);
+
+    // What the server lists once the row is settled: it has left.
+    serve({ rows: [PLAIN], me: 'reviewer' });
+    await user.click(button('Confirm'));
+
+    expect(await screen.findByText(CONFIRM_DONE)).toBeInTheDocument();
+    expect(post).toHaveBeenCalledTimes(2);
+    expect(post).toHaveBeenLastCalledWith(CONFIRM_URL, { confirm: true });
+    await waitFor(() => expect(rowRequests()).toHaveLength(2));
+    expect(await screen.findByText('REFUND 0042')).toBeInTheDocument();
+    expect(screen.queryByText('SUGGESTED ROW')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: CONFIRM_TITLE })).not.toBeInTheDocument();
+    expect(pane()).not.toBeInTheDocument();
+  });
+
+  it('rejects with an optional reason: the form first, the reason trimmed in the plan request, then the same request with confirm true', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [SUGGESTED, PLAIN], me: 'reviewer' });
+    post
+      .mockResolvedValueOnce(planned(false, REJECT_PLAN))
+      .mockResolvedValueOnce(planned(true, REJECT_PLAN));
+    render(<InternalBankRows />);
+    await openRow(user, 'SUGGESTED ROW');
+
+    await user.click(button(REJECT_MATCH));
+    expect(screen.getByText('A reason is optional.')).toBeInTheDocument();
+    expect(rejectReason()).toHaveAttribute('maxlength', '200');
+    expect(button('Preview')).toBeEnabled();
+    await user.type(rejectReason(), '  not this entry ');
+    await user.click(button('Preview'));
+
+    expect(await screen.findByRole('heading', { name: REJECT_TITLE })).toBeInTheDocument();
+    expect(post).toHaveBeenCalledWith(REJECT_URL, { reason: 'not this entry', confirm: false });
+    const plan = screen.getByRole('region', { name: 'Match plan' });
+    expect(within(plan).getByText('The suggested match will be rejected.')).toBeInTheDocument();
+    expect(within(plan).getByText('The ticket goes back to the drafting queue.')).toBeInTheDocument();
+
+    serve({ rows: [PLAIN], me: 'reviewer' });
+    await user.click(button('Confirm'));
+
+    expect(await screen.findByText(REJECT_DONE)).toBeInTheDocument();
+    expect(post).toHaveBeenLastCalledWith(REJECT_URL, { reason: 'not this entry', confirm: true });
+    await waitFor(() => expect(rowRequests()).toHaveLength(2));
+    expect(pane()).not.toBeInTheDocument();
+  });
+
+  it('leaves a blank reason out of the rejection, and Cancel puts the form away with nothing sent', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [SUGGESTED], me: 'reviewer' });
+    post.mockResolvedValueOnce(planned(false, { ...REJECT_PLAN, reason: null }));
+    render(<InternalBankRows />);
+    await openRow(user, 'SUGGESTED ROW');
+
+    await user.click(button(REJECT_MATCH));
+    await user.type(rejectReason(), '   ');
+    await user.click(button('Cancel'));
+    expect(screen.queryByRole('textbox', { name: 'Reason for rejecting' })).not.toBeInTheDocument();
+    expect(post).not.toHaveBeenCalled();
+
+    await user.click(button(REJECT_MATCH));
+    await user.click(button('Preview'));
+    expect(await screen.findByRole('heading', { name: REJECT_TITLE })).toBeInTheDocument();
+    expect(post).toHaveBeenCalledWith(REJECT_URL, { confirm: false });
+  });
+
+  it("shows a refusal by the server's code and in its own words, before the plan or at the confirm", async () => {
+    const user = userEvent.setup();
+    serve({ rows: [SUGGESTED], me: 'reviewer' });
+    render(<InternalBankRows />);
+    await openRow(user, 'SUGGESTED ROW');
+
+    // Refused at the dry run (census L shape S5): no plan, no confirm dialog.
+    const notLive =
+      'This journal line cannot be confirmed: it reverses another line, or its entry has been reversed or corrected.';
+    post.mockResolvedValueOnce({ status: 409, data: { code: 'line_not_live', detail: notLive } });
+    await user.click(button(CONFIRM_MATCH));
+    const first = await screen.findByRole('alert');
+    expect(first).toHaveTextContent(notLive);
+    expect(within(first).getByText('line_not_live')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: CONFIRM_TITLE })).not.toBeInTheDocument();
+
+    // Refused at the confirm: the dialog closes and the refusal takes its place.
+    const gone = 'This row has no suggested match to decide.';
+    post
+      .mockResolvedValueOnce(planned(false, REJECT_PLAN))
+      .mockResolvedValueOnce({ status: 409, data: { code: 'no_suggestion', detail: gone } });
+    await user.click(button(REJECT_MATCH));
+    await user.click(button('Preview'));
+    await screen.findByRole('heading', { name: REJECT_TITLE });
+    await user.click(button('Confirm'));
+    const second = await screen.findByRole('alert');
+    expect(second).toHaveTextContent(gone);
+    expect(within(second).getByText('no_suggestion')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: REJECT_TITLE })).not.toBeInTheDocument();
+    expect(pane()).toBeInTheDocument();
+    expect(rowRequests()).toHaveLength(1);
+  });
+
+  it('counts a confirm as carried out only when the server says so: otherwise names the row, claims nothing and reads the list again', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [SUGGESTED], me: 'reviewer' });
+    post
+      .mockResolvedValueOnce(planned(false, CONFIRM_PLAN))
+      .mockResolvedValueOnce(planned(false, CONFIRM_PLAN));
+    render(<InternalBankRows />);
+    await openRow(user, 'SUGGESTED ROW');
+    await user.click(button(CONFIRM_MATCH));
+    await screen.findByRole('heading', { name: CONFIRM_TITLE });
+
+    await user.click(button('Confirm'));
+
+    const notice = (await screen.findByText('The server did not carry this out.')).closest(
+      '[role="alert"]',
+    ) as HTMLElement;
+    expect(within(notice).getByText('56565656')).toHaveAttribute('title', SUGGESTED_ID);
+    expect(screen.queryByText(CONFIRM_DONE)).not.toBeInTheDocument();
+    await waitFor(() => expect(rowRequests()).toHaveLength(2));
+  });
+
+  it("shows a stale-match or unmatched-by-staff reason by the server's label, in the list and in the pane", async () => {
+    const user = userEvent.setup();
+    serve({
+      rows: [
+        bankRow({
+          id: '91919191-0000-4000-8000-000000000001',
+          description: 'STALE ROW',
+          ticket_status: 'needs_review',
+          ticket_status_label: 'Needs Review',
+          routing_reason: 'stale_match',
+          routing_reason_label: 'Matched entry no longer live',
+        }),
+        bankRow({
+          id: '92929292-0000-4000-8000-000000000002',
+          description: 'UNMATCHED BY STAFF ROW',
+          ticket_status: 'needs_review',
+          ticket_status_label: 'Needs Review',
+          routing_reason: 'unmatched_by_staff',
+          routing_reason_label: 'Unmatched by staff',
+        }),
+      ],
+      me: 'reviewer',
+    });
+    render(<InternalBankRows />);
+
+    const stale = await rowOf('STALE ROW');
+    expect(cellsOf(stale)[6]).toBe('Matched entry no longer live');
+    expect(stale).not.toHaveTextContent('stale_match');
+    expect(cellsOf(await rowOf('UNMATCHED BY STAFF ROW'))[6]).toBe('Unmatched by staff');
+
+    const detail = await openRow(user, 'STALE ROW');
+    expect(within(detail).getByText('Matched entry no longer live')).toBeInTheDocument();
+    expect(detail).not.toHaveTextContent('stale_match');
   });
 });
