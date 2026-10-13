@@ -23,6 +23,7 @@ import { type FC, useCallback, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useOrgMe } from '@/hooks/useAccounts';
 import { useDocumentList, useDocumentListState } from '@/hooks/useDocumentList';
+import { useCounterparties } from '@/hooks/useCounterparties';
 import { PageLoader } from '@/components/Loader';
 import { PageHeader } from '@/components/t2/PageHeader';
 import { Card } from '@/components/t2/Card';
@@ -30,6 +31,7 @@ import { StatCard } from '@/components/t2/StatCard';
 import { FilterChip } from '@/components/t2/FilterChip';
 import { Tier2UploadZone } from './documents/Tier2UploadZone';
 import { DocumentStatusList } from './documents/DocumentStatusList';
+import { DocumentFilters } from './documents/DocumentFilters';
 import {
   useDocumentStatusCounts,
   type DocumentStatusCounts,
@@ -153,6 +155,14 @@ export const DocumentsPage: FC = () => {
   // list, so tiles stay live but never move when a chip toggles.
   const { counts, refetch: refetchCounts } = useDocumentStatusCounts();
 
+  // The supplier filter's options: the org's ACTIVE suppliers, every page of
+  // them (the same list the Suppliers page manages).
+  const suppliersList = useCounterparties({ role: 'supplier', archived: false });
+  useEffect(() => {
+    suppliersList.setPageSize(200);
+  }, [suppliersList.setPageSize]);
+  const suppliers = suppliersList.items.map((s) => ({ id: s.id, name: s.name }));
+
   // ONE lifted refresh drives both the list and the counts — preserves the
   // lifted-refetch structure (shared by the 30s interval and the upload zone).
   const refresh = useCallback(() => {
@@ -262,6 +272,15 @@ export const DocumentsPage: FC = () => {
               Document status
             </h2>
             <StatusChips active={statusFilter} onToggle={toggleStatus} />
+          </div>
+          <div className="mb-3">
+            <DocumentFilters
+              filters={state}
+              suppliers={suppliers}
+              statusLabel={activeChipLabel}
+              onChange={update}
+              onClear={clear}
+            />
           </div>
           <DocumentStatusList
             items={items}
