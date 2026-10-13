@@ -7,8 +7,10 @@
 // The screen shows what the server sent. Amounts are its strings, rendered
 // untouched (never formatMoney). Bank text — counterparty and description — is
 // plain text. A feed is named by its name and its last four digits, never more.
-// A suggested match is shown by its entry: its line_debit / line_credit arrive
-// as JSON numbers and are never rendered (F-S87-7).
+// A match is shown by its entry and its line: line_debit / line_credit are the
+// server's two-decimal strings (F-S87-7), shown as sent, a dash for the side
+// the line does not carry. Nothing is computed from them. A row that is listed
+// although it is settled (F-S88-6) shows the match that settled it.
 //
 // Release C2 (N-S88-3, N-S88-4): a ticket status and a routing reason are
 // shown by the label the server sent with the row (labelOrCode) — never a code
@@ -328,7 +330,10 @@ const DetailPane: FC<{
   onClose: () => void;
 }> = ({ row, feedIsFilter, onOnlyThisFeed, onDone, onNotCarriedOut, onRefresh, onClose }) => {
   const sibling = row.duplicate_sibling;
-  const match = row.suggested_match;
+  // The match that settled the row when it has one; else the suggestion that
+  // waits for a decision.
+  const match = row.settled_match ?? row.suggested_match;
+  const matchHeading = row.settled_match ? 'Settled match' : 'Suggested match';
   return (
     <section aria-label="Bank row detail">
       <SectionCard
@@ -373,15 +378,18 @@ const DetailPane: FC<{
           </dl>
 
           {match && (
-            <div>
-              <div className={`${labelCls} mb-1`}>Suggested match</div>
+            <section aria-label={matchHeading}>
+              <div className={`${labelCls} mb-1`}>{matchHeading}</div>
               <dl className="grid grid-cols-2 gap-3 text-sm">
                 <Detail label="State">{humanizeCode(match.state)}</Detail>
                 <Detail label="Entry date">{match.entry_date ?? '—'}</Detail>
                 <Detail label="Entry">{match.entry_description || '—'}</Detail>
                 <Detail label="Account">{match.account_code ?? '—'}</Detail>
+                {/* The line's own amounts, as the server's strings. */}
+                <Detail label="Debit">{match.line_debit ?? '—'}</Detail>
+                <Detail label="Credit">{match.line_credit ?? '—'}</Detail>
               </dl>
-            </div>
+            </section>
           )}
 
           {!feedIsFilter && (

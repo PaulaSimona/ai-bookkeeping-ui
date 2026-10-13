@@ -74,7 +74,8 @@ const bankRow = (over: Partial<BankRow> = {}): BankRow => ({
 });
 
 // A row intake flagged as a possible copy of a settled row, still pending at
-// the bank, with a suggested match whose line amounts arrive as numbers.
+// the bank, with a suggested match whose line amounts are the server's
+// strings: the one side the line carries, and null for the other.
 const FLAGGED = bankRow({
   id: FLAGGED_ID,
   date: '2026-09-14',
@@ -99,8 +100,8 @@ const FLAGGED = bankRow({
     entry_id: '99999999-9999-4999-8999-999999999999',
     entry_date: '2026-09-12',
     entry_description: 'Office supplies',
-    line_debit: 987.65,
-    line_credit: 432.1,
+    line_debit: '1234.50',
+    line_credit: null,
     account_code: '5100',
   },
   duplicate_sibling: {
@@ -475,7 +476,7 @@ describe('bank rows filters and paging', () => {
 });
 
 describe('bank row side pane', () => {
-  it('opens a row beside its duplicate sibling, with its org and without the match line amounts', async () => {
+  it('opens a row beside its duplicate sibling, with its org and its suggested match', async () => {
     const user = userEvent.setup();
     serve();
     render(<InternalBankRows />);
@@ -505,13 +506,14 @@ describe('bank row side pane', () => {
     expect(headers()).not.toContain('Org');
     expect(pane).toHaveTextContent('Acme Ltd');
 
-    // The suggested match by its entry — never its line debit or credit,
-    // which the server sends as numbers (F-S87-7).
-    expect(pane).toHaveTextContent('Office supplies');
-    expect(pane).toHaveTextContent('2026-09-12');
-    expect(pane).toHaveTextContent('5100');
-    expect(pane).not.toHaveTextContent('987.65');
-    expect(pane).not.toHaveTextContent('432.1');
+    // The suggested match by its entry, with its line amounts as the server's
+    // strings (F-S87-7): the side the line does not carry is a dash.
+    const match = within(pane).getByRole('region', { name: 'Suggested match' });
+    expect(match).toHaveTextContent('Office supplies');
+    expect(match).toHaveTextContent('2026-09-12');
+    expect(match).toHaveTextContent('5100');
+    expect(within(match).getByText('Debit').parentElement!.textContent).toBe('Debit1234.50');
+    expect(within(match).getByText('Credit').parentElement!.textContent).toBe('Credit—');
 
     // A row that is nobody's copy stands alone, and says so.
     await user.click(await rowOf('REFUND 0042'));
@@ -521,6 +523,82 @@ describe('bank row side pane', () => {
     );
     expect(within(plainPane).queryByRole('region', { name: 'Sibling' })).not.toBeInTheDocument();
     expect(within(plainPane).getByText('No duplicate sibling.')).toBeInTheDocument();
+  });
+
+  it("shows a waiting row's settled match under its own heading, with its state, entry, account and line amounts", async () => {
+    const user = userEvent.setup();
+    // F-S88-6: a waiting row arrives from the server although it is settled,
+    // and carries the match that settled it.
+    serve({
+      rows: [
+        bankRow({
+          id: LONE_ID,
+          description: 'WAITING MATCHED',
+          ticket_status: 'waiting_document',
+          ticket_status_label: 'Waiting for Document',
+          row_kind: 'matched',
+          settled_match: {
+            id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+            state: 'auto_matched',
+            similarity: null,
+            date_delta_days: 1,
+            rationale: '',
+            created_at: '2026-09-21T10:00:00Z',
+            journal_line_id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+            entry_id: '99999999-9999-4999-8999-999999999999',
+            entry_date: '2026-09-21',
+            entry_description: 'Monthly bank charges',
+            line_debit: null,
+            line_credit: '80.00',
+            account_code: '1010',
+          },
+        }),
+      ],
+    });
+    render(<InternalBankRows />);
+
+    await user.click(await rowOf('WAITING MATCHED'));
+    const pane = screen.getByRole('region', { name: 'Bank row detail' });
+    const settled = within(pane).getByRole('region', { name: 'Settled match' });
+    const detail = (label: string) => within(settled).getByText(label).parentElement!.textContent;
+    expect(detail('State')).toBe('StateAuto Matched');
+    expect(detail('Entry date')).toBe('Entry date2026-09-21');
+    expect(detail('Entry')).toBe('EntryMonthly bank charges');
+    expect(detail('Account')).toBe('Account1010');
+    expect(detail('Debit')).toBe('Debit—');
+    expect(detail('Credit')).toBe('Credit80.00');
+    // It is the row's settled match, not a suggestion waiting for a decision.
+    expect(within(pane).queryByRole('region', { name: 'Suggested match' })).not.toBeInTheDocument();
+  });
+
+  it('shows a line amount exactly as the server sent it: not regrouped, re-signed, rounded or summed', async () => {
+    const user = userEvent.setup();
+    serve({
+      rows: [
+        {
+          ...FLAGGED,
+          suggested_match: {
+            ...FLAGGED.suggested_match!,
+            line_debit: '1234567.80',
+            line_credit: '0.10',
+          },
+        },
+      ],
+    });
+    render(<InternalBankRows />);
+
+    await user.click(await rowOf('STAPLES STORE #114 TORONTO'));
+    const match = within(screen.getByRole('region', { name: 'Bank row detail' })).getByRole('region', {
+      name: 'Suggested match',
+    });
+    // Each side is the string that arrived — the trailing zero and all.
+    expect(within(match).getByText('Debit').parentElement!.textContent).toBe('Debit1234567.80');
+    expect(within(match).getByText('Credit').parentElement!.textContent).toBe('Credit0.10');
+    expect(match).not.toHaveTextContent('1,234,567');
+    expect(match).not.toHaveTextContent('$');
+    // Nothing is worked out from the two: no total, no difference.
+    expect(match).not.toHaveTextContent('1234567.90');
+    expect(match).not.toHaveTextContent('1234567.70');
   });
 
   it("shows the server's labels in the side pane, and a closed ticket's note", async () => {

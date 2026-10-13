@@ -24,10 +24,10 @@ export interface BankRowMatchSummary {
   entry_id: string | null;
   entry_date: string | null;
   entry_description: string | null;
-  // The server sends these two as JSON numbers, not strings (a raw Decimal out
-  // of a SerializerMethodField) — so they are not money to render as sent.
-  line_debit: number | null;
-  line_credit: number | null;
+  // The server's exact two-decimal strings (Release C1, F-S87-7); the side the
+  // line does not carry is null. Shown as sent — nothing is computed from them.
+  line_debit: string | null;
+  line_credit: string | null;
   account_code: string | null;
 }
 

@@ -9,8 +9,8 @@
 //
 // The balance legend is true of a re-point's `balances` only, so it is shown
 // only with them: a leg's amounts carry no sign claim, and a merge or a release
-// moves no money. BankRowMatchSummary.line_debit / line_credit arrive as JSON
-// numbers, not as the server's strings, and are never rendered here (F-S87-7).
+// moves no money. No plan carries a match's line_debit / line_credit (the
+// server's strings since Release C1, F-S87-7), so none is rendered here.
 import { type FC, type ReactNode, useId } from 'react';
 
 import { ShortId } from '@/components/internal/ShortId';
