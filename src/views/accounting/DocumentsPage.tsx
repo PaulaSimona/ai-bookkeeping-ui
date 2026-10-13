@@ -4,25 +4,32 @@
 // system with Tier 1's /documents page, never its hooks or routes
 // (MASTER_T2 §14–§15).
 //
+// Release E2 (O-S89-E7): the page takes the whole content width, and from
+// the status heading down it is a flex column — the table's frame takes the
+// remaining height and is the one thing that scrolls (both ways). The list's
+// filters, page and open row live in the URL (useDocumentListState), so a
+// round trip to another page and Back restores them.
+//
 // Wiring choice (D-14A3-6, A.7): usePaginatedList is LIFTED here rather than
 // living inside DocumentStatusList, so the upload zone's onUploaded and the
 // list share ONE refetch without a ref/imperative handle — that same refetch
-// also drives the 30s freshness interval below. The list is presentational.
+// also drives the 30s freshness interval below. The list is presentational;
+// its page follows the URL, and a page turn writes the URL.
 //
 // Two-layer gating mirrors the other Tier 2 pages: the route is wrapped in
 // <RequireTier2> (§21 gate swap, D-21-4), and this page redirects on the real
 // org-role check — same structural pattern as CardsPage.
-import { type FC, useCallback, useEffect, useState } from 'react';
+import { type FC, useCallback, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useOrgMe } from '@/hooks/useAccounts';
-import { usePaginatedList } from '@/hooks/usePaginatedList';
+import { useDocumentList, useDocumentListState } from '@/hooks/useDocumentList';
 import { PageLoader } from '@/components/Loader';
 import { PageHeader } from '@/components/t2/PageHeader';
 import { Card } from '@/components/t2/Card';
 import { StatCard } from '@/components/t2/StatCard';
 import { FilterChip } from '@/components/t2/FilterChip';
 import { Tier2UploadZone } from './documents/Tier2UploadZone';
-import { DocumentStatusList, type DocumentStatusRow } from './documents/DocumentStatusList';
+import { DocumentStatusList } from './documents/DocumentStatusList';
 import {
   useDocumentStatusCounts,
   type DocumentStatusCounts,
@@ -88,7 +95,7 @@ const StatTiles: FC<{
   onToggle: (v: string) => void;
   onClear: () => void;
 }> = ({ counts, active, onToggle, onClear }) => (
-  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-4">
+  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
     <TileButton
       label="Total"
       value={String(counts.total)}
@@ -125,21 +132,21 @@ export const DocumentsPage: FC = () => {
   const { role, isLoading: orgLoading } = useOrgMe();
   const canView = role === 'owner' || role === 'accountant';
 
-  // Active status chip (null = All). Threaded into the SHARED usePaginatedList
-  // via its existing optional `params` arg — no hook edit, so other callers are
-  // untouched. Changing it re-fetches (the hook keys the effect on the params),
-  // and refetch() below always carries the current status.
-  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  // The list's state — filters, page, open row — lives in the URL (O-S89-E7).
+  const { state, update, clear } = useDocumentListState();
+  const statusFilter = state.status ?? null;
 
   // Lifted list state (see header). Hooks run unconditionally, before the
   // early returns below — the route gate already restricts this page to
   // staff/superuser, so the extra GET during org-load is benign.
   const {
     items, count, page, setPage, pageSize, isLoading, error, refetch,
-  } = usePaginatedList<DocumentStatusRow>(
-    '/api/accounting/documents/status/',
-    statusFilter ? { status: statusFilter } : undefined,
-  );
+  } = useDocumentList(state);
+
+  // The list's page follows the URL; a page turn writes the URL (below).
+  useEffect(() => {
+    if (page !== state.page) setPage(state.page);
+  }, [page, state.page, setPage]);
 
   // Filter-independent status counts for the stat tiles — page-local (the shared
   // hook drops the response's `counts`); refreshed on the same triggers as the
@@ -153,17 +160,16 @@ export const DocumentsPage: FC = () => {
     refetchCounts();
   }, [refetch, refetchCounts]);
 
-  // Single-select toggle: tap the active chip/tile to clear to All. Reset to page 1.
+  // Single-select toggle: tap the active chip/tile to clear to All. A change
+  // of filter goes back to page one (useDocumentListState).
   const toggleStatus = useCallback((value: string) => {
-    setStatusFilter((cur) => (cur === value ? null : value));
-    setPage(1);
-  }, [setPage]);
+    update({ status: statusFilter === value ? undefined : value });
+  }, [statusFilter, update]);
 
-  // O-S30-2: the Total tile clears the filter (unfiltered list). Reset to page 1.
+  // O-S30-2: the Total tile clears the status filter (unfiltered list).
   const clearStatus = useCallback(() => {
-    setStatusFilter(null);
-    setPage(1);
-  }, [setPage]);
+    update({ status: undefined });
+  }, [update]);
 
   // Human label of the active chip (drives the filtered empty-state copy).
   const activeChipLabel = STATUS_CHIPS.find((c) => c.value === statusFilter)?.label ?? null;
@@ -188,8 +194,8 @@ export const DocumentsPage: FC = () => {
   if (!canView) return null; // redirect in flight — don't flash the page
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
-      <div className="mx-auto max-w-5xl px-6 py-8">
+    <div className="flex h-full min-h-0 flex-col bg-gray-50 text-gray-900">
+      <div className="flex min-h-0 flex-1 flex-col px-6 py-8" data-testid="documents-page">
 
         <PageHeader
           title="Documents"
@@ -248,8 +254,9 @@ export const DocumentsPage: FC = () => {
           </div>
         )}
 
-        {/* Status list + single-select filter chips. */}
-        <section className="mt-8">
+        {/* Status list + single-select filter chips. From here down the page
+            is a flex column: the list's frame takes the remaining height. */}
+        <section className="mt-8 flex min-h-0 flex-1 flex-col">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-[13px] font-semibold uppercase tracking-wider text-gray-500">
               Document status
@@ -259,8 +266,8 @@ export const DocumentsPage: FC = () => {
           <DocumentStatusList
             items={items}
             count={count}
-            page={page}
-            setPage={setPage}
+            page={state.page}
+            setPage={(n) => update({ page: n })}
             pageSize={pageSize}
             isLoading={isLoading}
             error={error}
@@ -268,6 +275,8 @@ export const DocumentsPage: FC = () => {
               activeChipLabel ? `No ${activeChipLabel.toLowerCase()} documents.` : undefined
             }
             onDeleted={refresh}
+            open={state.open}
+            onOpen={(id) => update({ open: id })}
           />
         </section>
 
