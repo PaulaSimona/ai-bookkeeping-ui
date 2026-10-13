@@ -1,8 +1,14 @@
 // InternalBankRows (S87 B2b U3, O-S87-8) — the staff bank-rows screen: every
 // bank row waiting on staff, across the orgs the viewer may see
-// (GET /api/accounting/review/bank/). The InternalQueue pattern: the list, and
-// the open row in a pane beside it — the row and the row it may be a copy of,
-// side by side.
+// (GET /api/accounting/review/bank/). The list, and the open row in a pane —
+// the row and the row it may be a copy of, side by side.
+//
+// Layout (Release C2, F-S88-1): the page takes the whole content width
+// (PageContainer wide) and so does the list, whether or not a row is open. The
+// table has a minimum width of 64rem: it scrolls sideways, inside its own
+// frame, only when that frame is narrower. Bank text is the column that gives
+// way; a long feed name is cut short and keeps its last four digits. The open
+// row is a drawer over the right edge of the page, with its own scroll.
 //
 // The screen shows what the server sent. Amounts are its strings, rendered
 // untouched (never formatMoney). Bank text — counterparty and description — is
@@ -124,6 +130,19 @@ const feedText = (feedName: string | null, mask: string | null): string => {
   return lastFour ? `${name} ····${lastFour}` : name;
 };
 const feedLabel = (row: BankRow): string => feedText(row.bank_account_name, row.feed_mask);
+
+// A feed in the list (F-S88-1). A long name gives way — it is cut short, with
+// the whole label in the title — and the last four digits always show. The
+// text is the same as feedLabel's.
+const FeedName: FC<{ row: BankRow }> = ({ row }) => {
+  const lastFour = row.feed_mask ? row.feed_mask.slice(-4) : '';
+  return (
+    <span className="flex max-w-[14rem] min-w-0" title={feedLabel(row)}>
+      <span className="truncate">{row.bank_account_name ?? '—'}</span>
+      {lastFour && <span className="shrink-0 whitespace-pre">{` ····${lastFour}`}</span>}
+    </span>
+  );
+};
 
 // money_in / money_out in words; anything else as the server sent it.
 const directionLabel = (direction: string): string => {
@@ -643,6 +662,7 @@ export const InternalBankRows: FC = () => {
 
   return (
     <PageContainer
+      wide
       title="Bank rows"
       subtitle={
         isLoading
@@ -752,12 +772,14 @@ export const InternalBankRows: FC = () => {
           </SectionCard>
         )
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-          {/* List */}
-          <div className={selected ? 'lg:col-span-2' : 'lg:col-span-5'}>
+        <div>
+          {/* List: the whole content width, whether or not a row is open
+              (F-S88-1). It scrolls sideways only inside this frame, and only
+              when the frame is narrower than the table's minimum width. */}
+          <div>
             <SectionCard className="overflow-hidden" title={`Bank rows (${count})`}>
               <div className="overflow-x-auto -m-5">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[64rem] text-sm">
                   <thead>
                     <tr className="text-left text-[11px] uppercase tracking-wide text-white/30 border-b border-white/10">
                       <th className="py-2 px-5 font-medium">Date</th>
@@ -791,18 +813,22 @@ export const InternalBankRows: FC = () => {
                             )}
                           </td>
                         )}
-                        <td className="py-2.5 px-3 text-white/70 whitespace-nowrap">{feedLabel(row)}</td>
+                        <td className="py-2.5 px-3 text-white/70">
+                          <FeedName row={row} />
+                        </td>
                         <td className="py-2.5 px-3 text-right whitespace-nowrap">
                           <span className="text-xs text-white/40">{directionLabel(row.direction)}</span>{' '}
                           <span className="text-white/90 tabular-nums">{`${row.amount} ${row.currency}`}</span>
                         </td>
-                        <td className="py-2.5 px-3 max-w-[18rem]">
+                        {/* The column that gives way: it takes the width the
+                            others leave, and its text is cut short to fit. */}
+                        <td className="py-2.5 px-3 w-full max-w-0">
                           {row.counterparty_name && (
                             <div className="text-white/90 truncate">{row.counterparty_name}</div>
                           )}
                           <div className="text-white/50 truncate">{row.description || '—'}</div>
                         </td>
-                        <td className="py-2.5 px-3">
+                        <td className="py-2.5 px-3 whitespace-nowrap">
                           {row.ticket_status ? (
                             <Pill>{labelOrCode(row.ticket_status_label, row.ticket_status)}</Pill>
                           ) : (
@@ -812,7 +838,7 @@ export const InternalBankRows: FC = () => {
                         <td className="py-2.5 px-3">
                           <RowFlags row={row} />
                         </td>
-                        <td className="py-2.5 px-5 text-white/70">
+                        <td className="py-2.5 px-5 text-white/70 min-w-[9rem]">
                           {labelOrCode(row.routing_reason_label, row.routing_reason)}
                         </td>
                       </tr>
@@ -823,9 +849,12 @@ export const InternalBankRows: FC = () => {
             </SectionCard>
           </div>
 
-          {/* Detail pane */}
+          {/* The open row: a drawer over the right edge of the page, with its
+              own scroll — the list beneath keeps its full width and its rows
+              stay there to be opened (Release C2, conflict 4). Under the
+              confirm dialog and the toast (z-50). */}
           {selected && (
-            <div className="lg:col-span-3">
+            <div className="fixed inset-y-0 right-0 z-40 w-full max-w-2xl overflow-y-auto border-l border-white/10 bg-[#0f172a] p-4 shadow-2xl">
               <DetailPane
                 key={selected.id}
                 row={selected}

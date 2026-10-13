@@ -296,6 +296,45 @@ describe('bank rows list', () => {
     expect(screen.getByRole('heading', { name: 'Bank rows (1)' })).toBeInTheDocument();
   });
 
+  // ── Full width (Release C2, F-S88-1) ───────────────────────────────────────
+  // jsdom lays nothing out: these pin the class contract a browser turns into
+  // widths. The list scrolls sideways only inside its own frame, and only when
+  // that frame is narrower than the table's minimum width (64rem).
+
+  it('fills the content width: the page has no maximum width, and the table has its own minimum width inside its scrolling frame', async () => {
+    serve();
+    render(<InternalBankRows />);
+    await rowOf('REFUND 0042');
+
+    const page = screen.getByRole('heading', { name: 'Bank rows' }).closest('div.py-8') as HTMLElement;
+    expect(page).not.toHaveClass('max-w-6xl');
+    expect(page).not.toHaveClass('mx-auto');
+
+    const table = screen.getByRole('table');
+    expect(table).toHaveClass('w-full', 'min-w-[64rem]');
+    expect(table.parentElement).toHaveClass('overflow-x-auto');
+  });
+
+  it('keeps the list at full width while a row is open: the row opens in a drawer over the page', async () => {
+    const user = userEvent.setup();
+    serve();
+    render(<InternalBankRows />);
+    await user.click(await rowOf('STAPLES STORE #114 TORONTO'));
+
+    // The open row is in a drawer fixed to the right edge, with its own scroll.
+    const drawer = screen.getByRole('region', { name: 'Bank row detail' }).closest('.fixed') as HTMLElement;
+    expect(drawer).not.toBeNull();
+    expect(drawer).toHaveClass('inset-y-0', 'right-0', 'overflow-y-auto');
+
+    // The list gives up none of its width to it: it is not in the drawer, it
+    // is in no narrower column of a split, and it keeps every column.
+    const table = screen.getByRole('table');
+    expect(drawer).not.toContainElement(table);
+    expect(table.closest('[class*="col-span"]')).toBeNull();
+    expect(table).toHaveClass('w-full', 'min-w-[64rem]');
+    expect(headers()).toEqual(['Date', 'Feed', 'Amount', 'Bank text', 'Ticket', 'Flags', 'Routing reason']);
+  });
+
   it("shows the org column only when the viewer's org list has more than one org", async () => {
     serve({ orgs: [ACME] });
     const single = render(<InternalBankRows />);

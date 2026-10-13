@@ -12,9 +12,12 @@ export const PageContainer: FC<{
   title: string;
   subtitle?: string;
   actions?: ReactNode;
+  // Fill the whole content width instead of the centred maximum (F-S88-1) —
+  // for a page whose table needs the room. Every other page leaves it off.
+  wide?: boolean;
   children: ReactNode;
-}> = ({ title, subtitle, actions, children }) => (
-  <div className="max-w-6xl mx-auto px-6 py-8">
+}> = ({ title, subtitle, actions, wide, children }) => (
+  <div className={wide ? 'px-6 py-8' : 'max-w-6xl mx-auto px-6 py-8'}>
     <div className="flex items-start justify-between gap-4 mb-6">
       <div>
         <h1 className="text-2xl font-bold text-white">{title}</h1>
