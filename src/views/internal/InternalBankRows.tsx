@@ -18,10 +18,13 @@
 // filters select.
 //
 // Filters (O-S87-3): ticket status, possible duplicates, a date range, and one
-// feed. The feed is set from a row ("Only this feed") and shown as a chip — no
-// endpoint lists the feeds a viewer may see. A filter that is not set is not
-// sent (bankRowParams), and changing one goes back to the first page. The
-// older ?org= and ?include_excluded= parameters are not offered.
+// feed. The feed is chosen in the feed picker or set from a row ("Only this
+// feed"), and shown as a chip. No endpoint lists the feeds a viewer may see
+// (N-S88-8), so the picker offers the feeds of the rows the list has shown so
+// far (Release C2, N-S88-2): a feed is on offer once one of its rows has been
+// loaded. A filter that is not set is not sent (bankRowParams), and changing
+// one goes back to the first page. The older ?org= and ?include_excluded=
+// parameters are not offered.
 //
 // The org column shows only when the viewer's own org list (GET
 // /api/accounting/orgs/: a reviewer's assigned orgs, every org for a super
@@ -92,12 +95,14 @@ import {
   REOPEN_REASON_MAX,
   canMarkNoDocument,
   canReopenTicket,
+  collectFeeds,
   labelOrCode,
   markNoDocument,
   mergeBankRow,
   releaseBankRowFlag,
   reopenBankRow,
   useStaffBankRows,
+  type BankFeedOption,
   type BankRow,
   type BankRowFilters,
   type BankRowSibling,
@@ -113,11 +118,12 @@ const pagerCls =
 
 // A feed as the screen names it: its name, then its last four digits — never
 // more of a mask than four.
-const feedLabel = (row: BankRow): string => {
-  const name = row.bank_account_name ?? '—';
-  const lastFour = row.feed_mask ? row.feed_mask.slice(-4) : '';
+const feedText = (feedName: string | null, mask: string | null): string => {
+  const name = feedName ?? '—';
+  const lastFour = mask ? mask.slice(-4) : '';
   return lastFour ? `${name} ····${lastFour}` : name;
 };
+const feedLabel = (row: BankRow): string => feedText(row.bank_account_name, row.feed_mask);
 
 // money_in / money_out in words; anything else as the server sent it.
 const directionLabel = (direction: string): string => {
@@ -581,6 +587,13 @@ export const InternalBankRows: FC = () => {
     ...filters,
     bankAccountId: feed?.id,
   });
+  // The feeds the filter offers: the ones met in the rows shown so far, on any
+  // page and under any filter (collectFeeds) — no endpoint lists them.
+  // Worked out while rendering, not in an effect: the picker has a row's feed
+  // in the same render that shows the row, never one render later.
+  const [knownFeeds, setKnownFeeds] = useState<BankFeedOption[]>([]);
+  const feeds = collectFeeds(knownFeeds, items);
+  if (feeds !== knownFeeds) setKnownFeeds(feeds);
   const { data: orgs } = useOrgsList();
   const spansOrgs = orgs.length > 1;
   // Who is looking (GET staff/me/): only a super user is shown Reopen. Not a
@@ -680,6 +693,24 @@ export const InternalBankRows: FC = () => {
             className={fieldCls}
           />
         </div>
+        <select
+          value={feed?.id ?? ''}
+          onChange={(e) => {
+            const chosen = feeds.find((option) => option.id === e.target.value);
+            changeFeed(chosen ? { id: chosen.id, label: feedText(chosen.name, chosen.mask) } : null);
+          }}
+          aria-label="Feed"
+          className={fieldCls}
+        >
+          <option value="">Any feed</option>
+          {feeds.map((option) => (
+            <option key={option.id} value={option.id}>
+              {feedText(option.name, option.mask)}
+              {/* Two orgs can each have a feed of the same name. */}
+              {spansOrgs && option.orgName ? ` · ${option.orgName}` : ''}
+            </option>
+          ))}
+        </select>
         {feed && (
           <span className="inline-flex items-center gap-2 rounded-full bg-[#0066FF]/20 px-3 py-1 text-xs font-medium text-[#4DA6FF]">
             <span>Feed: {feed.label}</span>

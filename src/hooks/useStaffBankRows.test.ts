@@ -11,6 +11,7 @@ import {
   NO_DOCUMENT_REASONS,
   REOPEN_REASON_MAX,
   bankRowParams,
+  collectFeeds,
   labelOrCode,
   markNoDocument,
   mergeBankRow,
@@ -20,6 +21,7 @@ import {
   type BankNoDocumentPlan,
   type BankReleasePlan,
   type BankReopenPlan,
+  type BankRow,
 } from './useStaffBankRows';
 
 vi.mock('@/utils/api', () => ({ default: { get: vi.fn(), post: vi.fn() } }));
@@ -141,6 +143,70 @@ describe('bank row list filters', () => {
     // One at a time: nothing else rides along.
     expect(bankRowParams({ possibleDuplicate: true })).toEqual({ possible_duplicate: '1' });
     expect(bankRowParams({ dateTo: '2026-10-05' })).toEqual({ date_to: '2026-10-05' });
+  });
+});
+
+// Release C2 (N-S88-2): the feed filter's options are the feeds of the rows the
+// list has shown — no endpoint lists the feeds a staff viewer may see.
+describe('feeds seen in the list', () => {
+  const OTHER_FEED = '0f0f0f0f-0000-4000-8000-00000000000f';
+
+  // A row as the list sends it, on the given feed.
+  const rowOn = (id: string, feed: string, name: string | null, mask: string | null): BankRow => ({
+    id,
+    org_id: '11111111-1111-4111-8111-111111111111',
+    org_name: 'Acme Ltd',
+    bank_account_id: feed,
+    bank_account_name: name,
+    feed_mask: mask,
+    feed_account_code: '1010',
+    date: '2026-09-20',
+    direction: 'money_out',
+    amount: '80.00',
+    currency: 'CAD',
+    counterparty_name: '',
+    description: '',
+    source: 'plaid',
+    suggested_match: null,
+    settled_match: null,
+    row_kind: 'unmatched',
+    pending: false,
+    excluded: false,
+    excluded_reason: '',
+    ticket_status: 'pending',
+    ticket_status_label: 'Pending',
+    routing_reason: null,
+    routing_reason_label: null,
+    resolution_note: null,
+    duplicate_sibling: null,
+  });
+
+  it('collects each feed once from the rows it has seen, in the order first seen', () => {
+    const feeds = collectFeeds(
+      [],
+      [
+        rowOn(STALE, FEED, 'Business Mastercard', '3277'),
+        rowOn(SURVIVING, OTHER_FEED, 'Operating Chequing', null),
+        rowOn('cccccccc-cccc-4ccc-8ccc-cccccccccccc', FEED, 'Business Mastercard', '3277'),
+      ],
+    );
+
+    expect(feeds).toEqual([
+      { id: FEED, name: 'Business Mastercard', mask: '3277', orgName: 'Acme Ltd' },
+      { id: OTHER_FEED, name: 'Operating Chequing', mask: null, orgName: 'Acme Ltd' },
+    ]);
+  });
+
+  it('keeps the feeds it already knows when a later page has none of them', () => {
+    const first = collectFeeds([], [rowOn(STALE, FEED, 'Business Mastercard', '3277')]);
+
+    // A page narrowed to another feed adds that feed and drops nothing.
+    const second = collectFeeds(first, [rowOn(SURVIVING, OTHER_FEED, 'Operating Chequing', null)]);
+    expect(second.map((feed) => feed.id)).toEqual([FEED, OTHER_FEED]);
+
+    // An empty page, or one with nothing new, leaves the very same list.
+    expect(collectFeeds(second, [])).toBe(second);
+    expect(collectFeeds(second, [rowOn(STALE, FEED, 'Renamed since', '0000')])).toBe(second);
   });
 });
 

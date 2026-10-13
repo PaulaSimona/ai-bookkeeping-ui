@@ -144,6 +144,35 @@ export const bankRowParams = (filters: BankRowFilters): Record<string, string> =
   return params;
 };
 
+// A feed as the feed filter offers it (Release C2, N-S88-2).
+export interface BankFeedOption {
+  id: string;
+  name: string | null;
+  mask: string | null; // the feed's last four digits, never more
+  orgName: string | null;
+}
+
+// The feeds of the rows the list has shown so far. No endpoint lists the feeds
+// a staff viewer may see (a staff feed list is queued as N-S88-8), so the
+// filter offers the ones it has met: each feed once, in the order first seen,
+// and a feed already known stays as it was. With nothing new, the same list
+// comes back — so keeping it in state causes no extra render.
+export const collectFeeds = (known: BankFeedOption[], rows: BankRow[]): BankFeedOption[] => {
+  const seen = new Set(known.map((feed) => feed.id));
+  const added: BankFeedOption[] = [];
+  for (const row of rows) {
+    if (!row.bank_account_id || seen.has(row.bank_account_id)) continue;
+    seen.add(row.bank_account_id);
+    added.push({
+      id: row.bank_account_id,
+      name: row.bank_account_name,
+      mask: row.feed_mask,
+      orgName: row.org_name,
+    });
+  }
+  return added.length > 0 ? [...known, ...added] : known;
+};
+
 export const BANK_ROWS_URL = '/api/accounting/review/bank/';
 
 export const useStaffBankRows = (filters: BankRowFilters) =>

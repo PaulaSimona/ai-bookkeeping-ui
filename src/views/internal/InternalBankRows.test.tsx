@@ -454,6 +454,141 @@ describe('bank rows filters and paging', () => {
     });
   });
 
+  // ── The feed filter (Release C2, N-S88-2) ──────────────────────────────────
+  // Its options are the feeds of the rows the list has shown: no endpoint
+  // lists the feeds a staff viewer may see.
+
+  const FEED_B = 'f2f2f2f2-0000-4000-8000-000000000002';
+  const FEED_C = 'f3f3f3f3-0000-4000-8000-000000000003';
+  const feedPicker = () => screen.getByRole('combobox', { name: 'Feed' });
+  const feedOptions = () =>
+    within(feedPicker())
+      .getAllByRole('option')
+      .map((o) => o.textContent);
+
+  // One row on each of two feeds.
+  const ON_A = bankRow({ description: 'ROW ON A' });
+  const ON_B = bankRow({
+    id: LONE_ID,
+    description: 'ROW ON B',
+    bank_account_id: FEED_B,
+    bank_account_name: 'Operating Chequing',
+    feed_mask: null,
+  });
+
+  it('offers the feeds of the rows it has loaded, each by its name and last four digits, and never more of a mask', async () => {
+    serve({
+      rows: [
+        ON_A,
+        ON_B,
+        // A second row on the first feed: the feed is offered once.
+        bankRow({ id: FLAGGED_ID, description: 'ALSO ON A' }),
+        bankRow({
+          id: SIBLING_ID,
+          description: 'ROW ON C',
+          bank_account_id: FEED_C,
+          bank_account_name: 'Savings',
+          feed_mask: '9912345678',
+        }),
+      ],
+    });
+    render(<InternalBankRows />);
+    await rowOf('ROW ON C');
+
+    expect(feedOptions()).toEqual([
+      'Any feed',
+      'Business Mastercard ····3277',
+      'Operating Chequing',
+      'Savings ····5678',
+    ]);
+    expect(feedPicker()).not.toHaveTextContent('991234');
+    expect(feedPicker()).toHaveValue('');
+  });
+
+  it('sends bank_account_id for the chosen feed and goes back to the first page', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [ON_A, ON_B], count: 120 });
+    render(<InternalBankRows />);
+    await rowOf('ROW ON B');
+
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    expect(await screen.findByText('Page 2 of 3')).toBeInTheDocument();
+
+    await user.selectOptions(feedPicker(), 'Operating Chequing');
+    expect(await screen.findByText('Page 1 of 3')).toBeInTheDocument();
+    expect(lastRowRequest()).toEqual({ bank_account_id: FEED_B, page: 1, page_size: 50 });
+    expect(rowRequests()).not.toContainEqual({ bank_account_id: FEED_B, page: 2, page_size: 50 });
+    expect(feedPicker()).toHaveValue(FEED_B);
+  });
+
+  it('keeps every feed on offer while the list is narrowed to one', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [ON_A, ON_B] });
+    render(<InternalBankRows />);
+    await rowOf('ROW ON B');
+
+    // Narrowed to B, the server sends B's rows only.
+    serve({ rows: [ON_B] });
+    await user.selectOptions(feedPicker(), 'Operating Chequing');
+    await settle();
+    expect(screen.queryByText('ROW ON A')).not.toBeInTheDocument();
+    expect(feedOptions()).toEqual(['Any feed', 'Business Mastercard ····3277', 'Operating Chequing']);
+
+    // So the other feed can still be chosen, straight from here.
+    serve({ rows: [ON_A] });
+    await user.selectOptions(feedPicker(), 'Business Mastercard ····3277');
+    await settle();
+    expect(lastRowRequest()).toEqual({ bank_account_id: FEED, page: 1, page_size: 50 });
+    expect(await screen.findByText('ROW ON A')).toBeInTheDocument();
+  });
+
+  it('names the org beside a feed when the viewer has more than one org', async () => {
+    serve({
+      orgs: [ACME, BIRCH],
+      rows: [
+        bankRow({ description: 'ACME ROW', bank_account_name: 'Chequing', feed_mask: '1111' }),
+        bankRow({
+          id: LONE_ID,
+          description: 'BIRCH ROW',
+          org_id: ORG_B,
+          org_name: 'Birch Inc',
+          bank_account_id: FEED_B,
+          bank_account_name: 'Chequing',
+          feed_mask: '2222',
+        }),
+      ],
+    });
+    render(<InternalBankRows />);
+    await rowOf('BIRCH ROW');
+    await settle();
+
+    expect(feedOptions()).toEqual([
+      'Any feed',
+      'Chequing ····1111 · Acme Ltd',
+      'Chequing ····2222 · Birch Inc',
+    ]);
+  });
+
+  it('follows a feed set from a row with Only this feed, and Any feed clears it', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [ON_A, ON_B] });
+    render(<InternalBankRows />);
+
+    await user.click(await rowOf('ROW ON B'));
+    await user.click(screen.getByRole('button', { name: 'Only this feed' }));
+    await settle();
+    expect(lastRowRequest()).toEqual({ bank_account_id: FEED_B, page: 1, page_size: 50 });
+    // The picker and the chip say the same thing.
+    expect(feedPicker()).toHaveValue(FEED_B);
+    expect(screen.getByText('Feed: Operating Chequing')).toBeInTheDocument();
+
+    await user.selectOptions(feedPicker(), 'Any feed');
+    await settle();
+    expect(lastRowRequest()).toEqual({ page: 1, page_size: 50 });
+    expect(feedPicker()).toHaveValue('');
+    expect(screen.queryByText('Feed: Operating Chequing')).not.toBeInTheDocument();
+  });
+
   it('pages through the list fifty rows at a time', async () => {
     const user = userEvent.setup();
     serve({ count: 120 });
