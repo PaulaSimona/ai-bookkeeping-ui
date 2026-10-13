@@ -20,11 +20,18 @@ export const fileSha256 = async (file: Blob): Promise<string | null> => {
   const subtle = globalThis.crypto?.subtle;
   if (!subtle || typeof subtle.digest !== 'function') return null;
   try {
-    const digest = await subtle.digest('SHA-256', await readBytes(file));
+    // F-S89-3 (CI #70/#71): a typed-array VIEW, never the raw ArrayBuffer —
+    // Node 20's subtle.digest refuses the buffer a jsdom FileReader hands
+    // back (another realm), and browsers accept either.
+    const digest = await subtle.digest('SHA-256', new Uint8Array(await readBytes(file)));
     return Array.from(new Uint8Array(digest))
       .map((byte) => byte.toString(16).padStart(2, '0'))
       .join('');
-  } catch {
+  } catch (error) {
+    // A silent skip would hide a broken precheck: say so — the error's name
+    // and message only, never the file's name or bytes.
+    const { name, message } = (error ?? {}) as { name?: unknown; message?: unknown };
+    console.warn('fileSha256: precheck skipped', String(name ?? 'Error'), String(message ?? ''));
     return null;
   }
 };
