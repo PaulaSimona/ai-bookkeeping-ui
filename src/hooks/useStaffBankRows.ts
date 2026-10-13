@@ -63,12 +63,19 @@ export interface BankRow {
   description: string;
   source: string; // manual | csv | plaid
   suggested_match: BankRowMatchSummary | null;
-  row_kind: 'suggested' | 'unmatched';
+  // The match that settled the row. A settled row is listed only while its
+  // ticket waits for its document (F-S88-6), or closed as "no document
+  // needed" when that status is asked for (O-S88-11).
+  settled_match: BankRowMatchSummary | null;
+  row_kind: 'suggested' | 'matched' | 'unmatched';
   pending: boolean;
   excluded: boolean;
   excluded_reason: string;
   ticket_status: string | null;
+  ticket_status_label: string | null; // the server's words for the status
   routing_reason: string | null;
+  routing_reason_label: string | null; // the server's words for the reason
+  resolution_note: string | null; // the staff note of a closed ticket
   duplicate_sibling: BankRowSibling | null;
 }
 
@@ -77,7 +84,8 @@ export interface BankRow {
 export const POSSIBLE_DUPLICATE_REASON = 'possible_duplicate_bank_row';
 
 // The ticket statuses the list filters on — mirrors the server's own set
-// (accounting/bank_review_views.py); any other value is a 400 there.
+// (accounting/models.py BankTransactionAccountingState.Status, in its
+// order); any other value is a 400 there.
 export const BANK_ROW_TICKET_STATUSES = [
   'pending',
   'processing',
@@ -86,7 +94,33 @@ export const BANK_ROW_TICKET_STATUSES = [
   'waiting_document',
   'documented',
   'closed',
+  'no_document_needed',
 ] as const;
+
+// What the status filter calls each of them — the model's own labels, kept
+// here because no endpoint lists them (Release C2, conflict 3). For the
+// filter's options ONLY: a row always shows the label the server sent with it.
+export const BANK_ROW_TICKET_STATUS_LABELS: Record<
+  (typeof BANK_ROW_TICKET_STATUSES)[number],
+  string
+> = {
+  pending: 'Pending',
+  processing: 'Processing',
+  needs_review: 'Needs Review',
+  failed: 'Failed',
+  waiting_document: 'Waiting for Document',
+  documented: 'Documented',
+  closed: 'Closed',
+  no_document_needed: 'No document needed',
+};
+
+// A status or a routing reason as the screen shows it (N-S88-3): the server's
+// label. With no label, the code exactly as it was sent — never reworded
+// here; with neither, a dash.
+export const labelOrCode = (
+  label: string | null | undefined,
+  code: string | null | undefined,
+): string => label || code || '—';
 
 export interface BankRowFilters {
   ticketStatus?: string;

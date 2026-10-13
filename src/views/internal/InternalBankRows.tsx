@@ -10,6 +10,11 @@
 // A suggested match is shown by its entry: its line_debit / line_credit arrive
 // as JSON numbers and are never rendered (F-S87-7).
 //
+// Release C2 (N-S88-3, N-S88-4): a ticket status and a routing reason are
+// shown by the label the server sent with the row (labelOrCode) — never a code
+// reworded here. The headings carry the server's own count of the rows the
+// filters select.
+//
 // Filters (O-S87-3): ticket status, possible duplicates, a date range, and one
 // feed. The feed is set from a row ("Only this feed") and shown as a chip — no
 // endpoint lists the feeds a viewer may see. A filter that is not set is not
@@ -58,7 +63,9 @@ import { type PlanOutcome } from '@/hooks/staffPlan';
 import { useOrgsList } from '@/hooks/useInternalAdmin';
 import {
   BANK_ROW_TICKET_STATUSES,
+  BANK_ROW_TICKET_STATUS_LABELS,
   POSSIBLE_DUPLICATE_REASON,
+  labelOrCode,
   mergeBankRow,
   releaseBankRowFlag,
   useStaffBankRows,
@@ -357,8 +364,12 @@ const DetailPane: FC<{
             <Detail label="Feed">{feedLabel(row)}</Detail>
             <Detail label="Feed account">{row.feed_account_code ?? '—'}</Detail>
             <Detail label="Source">{humanizeCode(row.source)}</Detail>
-            <Detail label="Ticket">{humanizeCode(row.ticket_status)}</Detail>
-            <Detail label="Routing reason">{humanizeCode(row.routing_reason)}</Detail>
+            <Detail label="Ticket">{labelOrCode(row.ticket_status_label, row.ticket_status)}</Detail>
+            <Detail label="Routing reason">
+              {labelOrCode(row.routing_reason_label, row.routing_reason)}
+            </Detail>
+            {/* The staff note of a closed ticket, in the words it was written in. */}
+            {row.resolution_note && <Detail label="Note">{row.resolution_note}</Detail>}
           </dl>
 
           {match && (
@@ -442,7 +453,8 @@ export const InternalBankRows: FC = () => {
       subtitle={
         isLoading
           ? 'Loading…'
-          : `${count} ${count === 1 ? 'row' : 'rows'} waiting on staff (oldest first).`
+          : // The server's own count of the rows the filters select (N-S88-4).
+            `${count} bank ${count === 1 ? 'row' : 'rows'} (oldest first).`
       }
     >
       {/* Filters */}
@@ -454,10 +466,10 @@ export const InternalBankRows: FC = () => {
           className={fieldCls}
         >
           <option value="">Any ticket status</option>
-          {/* The server's own seven (BANK_ROW_TICKET_STATUSES). */}
+          {/* The server's own eight (BANK_ROW_TICKET_STATUSES), by its labels. */}
           {BANK_ROW_TICKET_STATUSES.map((status) => (
             <option key={status} value={status}>
-              {humanizeCode(status)}
+              {BANK_ROW_TICKET_STATUS_LABELS[status]}
             </option>
           ))}
         </select>
@@ -579,12 +591,18 @@ export const InternalBankRows: FC = () => {
                           <div className="text-white/50 truncate">{row.description || '—'}</div>
                         </td>
                         <td className="py-2.5 px-3">
-                          {row.ticket_status ? <Pill>{humanizeCode(row.ticket_status)}</Pill> : '—'}
+                          {row.ticket_status ? (
+                            <Pill>{labelOrCode(row.ticket_status_label, row.ticket_status)}</Pill>
+                          ) : (
+                            '—'
+                          )}
                         </td>
                         <td className="py-2.5 px-3">
                           <RowFlags row={row} />
                         </td>
-                        <td className="py-2.5 px-5 text-white/70">{humanizeCode(row.routing_reason)}</td>
+                        <td className="py-2.5 px-5 text-white/70">
+                          {labelOrCode(row.routing_reason_label, row.routing_reason)}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

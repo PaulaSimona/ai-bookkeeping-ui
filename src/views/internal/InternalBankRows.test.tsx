@@ -59,12 +59,16 @@ const bankRow = (over: Partial<BankRow> = {}): BankRow => ({
   description: 'REFUND 0042',
   source: 'plaid',
   suggested_match: null,
+  settled_match: null,
   row_kind: 'unmatched',
   pending: false,
   excluded: false,
   excluded_reason: '',
   ticket_status: 'pending',
+  ticket_status_label: 'Pending',
   routing_reason: null,
+  routing_reason_label: null,
+  resolution_note: null,
   duplicate_sibling: null,
   ...over,
 });
@@ -80,7 +84,9 @@ const FLAGGED = bankRow({
   description: 'STAPLES STORE #114 TORONTO',
   pending: true,
   ticket_status: 'needs_review',
+  ticket_status_label: 'Needs Review',
   routing_reason: 'possible_duplicate_bank_row',
+  routing_reason_label: 'Possible duplicate',
   row_kind: 'suggested',
   suggested_match: {
     id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
@@ -189,13 +195,85 @@ describe('bank rows list', () => {
     expect(ticket.textContent).toBe('Needs Review');
     expect(within(flags).getByText('Pending at bank')).toBeInTheDocument();
     expect(within(flags).getByText('Possible duplicate')).toBeInTheDocument();
-    expect(reason.textContent).toBe('Possible Duplicate Bank Row');
+    // The routing reason in the server's own words (N-S88-3).
+    expect(reason.textContent).toBe('Possible duplicate');
 
     // A row with nothing to flag and no routing reason says so with a dash.
     const plain = cellsOf(await rowOf('REFUND 0042'));
     expect(plain[2]).toContain('Money in');
     expect(plain[2]).toContain('80.00 CAD');
     expect(plain.slice(4)).toEqual(['Pending', '—', '—']);
+  });
+
+  it("shows each ticket status and routing reason by the server's label, never a title-cased code", async () => {
+    serve({
+      rows: [
+        bankRow({
+          description: 'WAITING ROW',
+          ticket_status: 'waiting_document',
+          ticket_status_label: 'Waiting for Document',
+          routing_reason: 'low_confidence',
+          routing_reason_label: 'Low confidence in the drafted account',
+        }),
+      ],
+    });
+    render(<InternalBankRows />);
+
+    const row = await rowOf('WAITING ROW');
+    const cells = cellsOf(row);
+    expect(cells[4]).toBe('Waiting for Document');
+    expect(cells[6]).toBe('Low confidence in the drafted account');
+    // Not the code, and not the code reworded on the client.
+    expect(row).not.toHaveTextContent('waiting_document');
+    expect(row).not.toHaveTextContent('Waiting Document');
+    expect(row).not.toHaveTextContent('low_confidence');
+    expect(row).not.toHaveTextContent('Low Confidence');
+  });
+
+  it('shows the code as sent when the server gives no label, and a dash when there is neither', async () => {
+    serve({
+      rows: [
+        bankRow({
+          description: 'NO LABELS',
+          ticket_status: 'needs_review',
+          ticket_status_label: null,
+          routing_reason: 'period_locked',
+          routing_reason_label: null,
+        }),
+        bankRow({
+          id: LONE_ID,
+          description: 'NO TICKET',
+          ticket_status: null,
+          ticket_status_label: null,
+          routing_reason: null,
+          routing_reason_label: null,
+        }),
+      ],
+    });
+    render(<InternalBankRows />);
+
+    const unlabelled = cellsOf(await rowOf('NO LABELS'));
+    expect(unlabelled[4]).toBe('needs_review');
+    expect(unlabelled[6]).toBe('period_locked');
+
+    const bare = cellsOf(await rowOf('NO TICKET'));
+    expect(bare[4]).toBe('—');
+    expect(bare[6]).toBe('—');
+  });
+
+  it("heads the page and the list with the server's count, not the number of rows on the page", async () => {
+    serve({ count: 120 });
+    const many = render(<InternalBankRows />);
+    await rowOf('REFUND 0042');
+    expect(screen.getByText('120 bank rows (oldest first).')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Bank rows (120)' })).toBeInTheDocument();
+    many.unmount();
+
+    serve({ rows: [PLAIN], count: 1 });
+    render(<InternalBankRows />);
+    await rowOf('REFUND 0042');
+    expect(screen.getByText('1 bank row (oldest first).')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Bank rows (1)' })).toBeInTheDocument();
   });
 
   it("shows the org column only when the viewer's org list has more than one org", async () => {
@@ -328,6 +406,34 @@ describe('bank rows filters and paging', () => {
     expect(lastRowRequest()).toEqual({ date_to: '2026-09-30', page: 1, page_size: 50 });
   });
 
+  it('offers every ticket status in the filter by its label, No document needed among them, and sends its code', async () => {
+    const user = userEvent.setup();
+    serve();
+    render(<InternalBankRows />);
+    await rowOf('REFUND 0042');
+
+    const status = screen.getByRole('combobox', { name: 'Ticket status' });
+    expect(within(status).getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'Any ticket status',
+      'Pending',
+      'Processing',
+      'Needs Review',
+      'Failed',
+      'Waiting for Document',
+      'Documented',
+      'Closed',
+      'No document needed',
+    ]);
+
+    await user.selectOptions(status, 'No document needed');
+    await settle();
+    expect(lastRowRequest()).toEqual({
+      ticket_status: 'no_document_needed',
+      page: 1,
+      page_size: 50,
+    });
+  });
+
   it('pages through the list fifty rows at a time', async () => {
     const user = userEvent.setup();
     serve({ count: 120 });
@@ -415,6 +521,40 @@ describe('bank row side pane', () => {
     );
     expect(within(plainPane).queryByRole('region', { name: 'Sibling' })).not.toBeInTheDocument();
     expect(within(plainPane).getByText('No duplicate sibling.')).toBeInTheDocument();
+  });
+
+  it("shows the server's labels in the side pane, and a closed ticket's note", async () => {
+    const user = userEvent.setup();
+    serve({
+      rows: [
+        bankRow({
+          id: LONE_ID,
+          description: 'CLOSED ROW',
+          ticket_status: 'no_document_needed',
+          ticket_status_label: 'No document needed',
+          routing_reason: 'other',
+          routing_reason_label: 'Other',
+          resolution_note: 'Paid in cash, no receipt',
+        }),
+        PLAIN,
+      ],
+    });
+    render(<InternalBankRows />);
+
+    await user.click(await rowOf('CLOSED ROW'));
+    const closed = screen.getByRole('region', { name: 'Bank row detail' });
+    const detail = (label: string) => within(closed).getByText(label).parentElement as HTMLElement;
+    expect(detail('Ticket')).toHaveTextContent('No document needed');
+    expect(detail('Routing reason')).toHaveTextContent('Other');
+    expect(detail('Note')).toHaveTextContent('Paid in cash, no receipt');
+    expect(closed).not.toHaveTextContent('No Document Needed');
+    expect(closed).not.toHaveTextContent('no_document_needed');
+
+    // A ticket with no note has no Note line at all.
+    await user.click(await rowOf('REFUND 0042'));
+    const plain = screen.getByRole('region', { name: 'Bank row detail' });
+    expect(within(plain).getByText('Ticket').parentElement).toHaveTextContent('Pending');
+    expect(within(plain).queryByText('Note')).not.toBeInTheDocument();
   });
 
   it('narrows the list to one feed from a row, as a chip that can be removed', async () => {

@@ -5,7 +5,10 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import api from '@/utils/api';
 import {
+  BANK_ROW_TICKET_STATUSES,
+  BANK_ROW_TICKET_STATUS_LABELS,
   bankRowParams,
+  labelOrCode,
   mergeBankRow,
   releaseBankRowFlag,
   type BankMergePlan,
@@ -93,6 +96,43 @@ describe('bank row list filters', () => {
     // One at a time: nothing else rides along.
     expect(bankRowParams({ possibleDuplicate: true })).toEqual({ possible_duplicate: '1' });
     expect(bankRowParams({ dateTo: '2026-10-05' })).toEqual({ date_to: '2026-10-05' });
+  });
+});
+
+// Release C2 (N-S88-3): a status or a reason is shown by the server's label.
+describe('ticket statuses and labels', () => {
+  it("names the server's eight ticket statuses, each with its label for the filter", () => {
+    // accounting/models.py BankTransactionAccountingState.Status, in its order.
+    expect(BANK_ROW_TICKET_STATUSES).toEqual([
+      'pending',
+      'processing',
+      'needs_review',
+      'failed',
+      'waiting_document',
+      'documented',
+      'closed',
+      'no_document_needed',
+    ]);
+    expect(BANK_ROW_TICKET_STATUS_LABELS).toEqual({
+      pending: 'Pending',
+      processing: 'Processing',
+      needs_review: 'Needs Review',
+      failed: 'Failed',
+      waiting_document: 'Waiting for Document',
+      documented: 'Documented',
+      closed: 'Closed',
+      no_document_needed: 'No document needed',
+    });
+  });
+
+  it("gives the server's label, the code as sent when there is none, and a dash when there is neither", () => {
+    expect(labelOrCode('Waiting for Document', 'waiting_document')).toBe('Waiting for Document');
+    // No label: the code, exactly as it was sent — never reworded here.
+    expect(labelOrCode(null, 'needs_review')).toBe('needs_review');
+    expect(labelOrCode(undefined, 'period_locked')).toBe('period_locked');
+    expect(labelOrCode('', 'needs_review')).toBe('needs_review');
+    expect(labelOrCode(null, null)).toBe('—');
+    expect(labelOrCode(undefined, undefined)).toBe('—');
   });
 });
 
