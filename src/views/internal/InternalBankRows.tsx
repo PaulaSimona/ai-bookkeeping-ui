@@ -62,6 +62,14 @@
 //   Reject match                  → POST staff/bank-rows/<this row>/match/reject/
 //                                   {reason?} — the reason is optional. The
 //                                   plan says what follows for the ticket.
+// and on an unmatched row, settled at the bank and in the books:
+//   Match to a line…              → GET  staff/bank-rows/<this row>/match-candidates/
+//                                   for the picker (the live, free lines on the
+//                                   feed's account for the exact amount), then
+//                                   POST staff/bank-rows/<this row>/match/manual/
+//                                   {journal_line_id, note?}. The picker names a
+//                                   line by its entry, date, account and amount
+//                                   — never bank text.
 // Each asks the server for its plan first (a dry run), shows that plan in the
 // confirm dialog (PlanPreview), and carries it out only on Confirm — the same
 // request with confirm true. The server decides what is allowed: a refusal is
@@ -108,11 +116,14 @@ import {
   POSSIBLE_DUPLICATE_REASON,
   REOPEN_REASON_MAX,
   canDecideSuggestion,
+  canManualMatch,
   canMarkNoDocument,
   canReopenTicket,
   collectFeeds,
   confirmBankMatch,
+  fetchMatchCandidates,
   labelOrCode,
+  manualMatchBankRow,
   markNoDocument,
   mergeBankRow,
   rejectBankMatch,
@@ -120,11 +131,13 @@ import {
   reopenBankRow,
   useStaffBankRows,
   type BankFeedOption,
+  type BankMatchCandidate,
   type BankRow,
   type BankRowFilters,
   type BankRowSibling,
 } from '@/hooks/useStaffBankRows';
 import { type RemediationRefusal } from '@/hooks/useStaffResolution';
+import { formatEntryNumber } from '@/utils/entryStatus';
 
 const fieldCls =
   'rounded-lg bg-[#0A1628] border border-white/15 px-3 py-2 text-sm text-white ' +
@@ -231,6 +244,16 @@ const RowCard: FC<{ label: string; heading: string; row: RowSide }> = ({ label, 
 
 // ─── Actions ───────────────────────────────────────────────────────────────────
 
+// A candidate line in the picker: its entry (number, else id), date, account
+// and the one amount it carries, then the entry's description — the platform's
+// wording, as the match summary already shows staff. Never bank text.
+const candidateLabel = (candidate: BankMatchCandidate): string => {
+  const entry = formatEntryNumber(candidate.entry.entry_number) || candidate.entry.entry_id.slice(0, 8);
+  const amount =
+    candidate.line_debit != null ? `debit ${candidate.line_debit}` : `credit ${candidate.line_credit ?? '—'}`;
+  return `${entry} · ${candidate.entry.entry_date} · ${candidate.account_code} · ${amount} · ${candidate.entry_description}`;
+};
+
 // What ActionRefusal says on a 404: the row, or the sibling it would merge
 // with, is gone.
 const ROW_GONE = 'This row is no longer available.';
@@ -284,6 +307,12 @@ const RowActions: FC<{
   // "Reject match" (Release D2): its form is open, with the optional reason.
   const [rejecting, setRejecting] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
+  // "Match to a line…" (Release D2): the candidates read for this row (null
+  // until they arrive), the line chosen and the optional note.
+  const [matching, setMatching] = useState(false);
+  const [candidates, setCandidates] = useState<BankMatchCandidate[] | null>(null);
+  const [lineId, setLineId] = useState('');
+  const [matchNote, setMatchNote] = useState('');
   const sibling = row.duplicate_sibling;
 
   const flagged = row.routing_reason === POSSIBLE_DUPLICATE_REASON;
@@ -292,7 +321,26 @@ const RowActions: FC<{
   const canReopen = isSuperUser && canReopenTicket(row);
   // A suggested match waits for a decision (Release D2, O-S89-4).
   const canDecide = canDecideSuggestion(row);
-  if (!flagged && !canClose && !canReopen && !canDecide) return null;
+  // An unmatched row may be matched by hand (Release D2, O-S89-4).
+  const canMatch = canManualMatch(row);
+  if (!flagged && !canClose && !canReopen && !canDecide && !canMatch) return null;
+
+  // Opens the manual-match form once the candidates are read. A refusal on
+  // the read is shown and the form stays closed.
+  const openMatching = async () => {
+    setBusy(true);
+    setRefusal(null);
+    setCandidates(null);
+    setLineId('');
+    const outcome = await fetchMatchCandidates(row.id);
+    setBusy(false);
+    if (!outcome.ok) {
+      setRefusal(outcome.refusal);
+      return;
+    }
+    setCandidates(outcome.candidates);
+    setMatching(true);
+  };
 
   // "Other" needs a note (spaces are not one); any other reason stands alone.
   const noteRequired = reason === NO_DOCUMENT_REASON_OTHER;
@@ -406,6 +454,11 @@ const RowActions: FC<{
             Reject match
           </SecondaryButton>
         )}
+        {canMatch && (
+          <SecondaryButton onClick={() => void openMatching()} disabled={busy}>
+            Match to a line…
+          </SecondaryButton>
+        )}
         {canClose && (
           <SecondaryButton onClick={() => setClosing(true)} disabled={busy}>
             No document needed
@@ -456,6 +509,72 @@ const RowActions: FC<{
               Preview
             </PrimaryButton>
             <SecondaryButton onClick={() => setRejecting(false)} disabled={busy}>
+              Cancel
+            </SecondaryButton>
+          </div>
+        </div>
+      )}
+
+      {/* Match to a line: the candidates the server read for this row, one to
+          be chosen, and an optional note; the plan is asked for with Preview. */}
+      {canMatch && matching && candidates != null && !pending && (
+        <div className="space-y-3 rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+          {candidates.length === 0 ? (
+            <p className="text-sm text-white/70">
+              No posted line on this feed&apos;s account is free for this amount.
+            </p>
+          ) : (
+            <>
+              <p className="text-sm text-white/70">
+                Match this row by hand to a posted line on its feed&apos;s account for the same
+                amount. The ticket then waits for its document.
+              </p>
+              <select
+                value={lineId}
+                onChange={(e) => setLineId(e.target.value)}
+                disabled={busy}
+                aria-label="Line"
+                className={`${fieldCls} w-full`}
+              >
+                <option value="">Choose a line</option>
+                {candidates.map((candidate) => (
+                  <option key={candidate.journal_line_id} value={candidate.journal_line_id}>
+                    {candidateLabel(candidate)}
+                  </option>
+                ))}
+              </select>
+              <textarea
+                value={matchNote}
+                onChange={(e) => setMatchNote(e.target.value)}
+                disabled={busy}
+                maxLength={MATCH_REASON_MAX}
+                rows={2}
+                aria-label="Note for the match"
+                placeholder="Note (optional)"
+                className={`${fieldCls} w-full`}
+              />
+            </>
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {candidates.length > 0 && (
+              <PrimaryButton
+                onClick={() =>
+                  void ask(
+                    (confirmed) => manualMatchBankRow(row.id, lineId, matchNote, confirmed),
+                    (plan) => ({
+                      title: 'Match this row by hand?',
+                      plan: <MatchPlanPreview plan={plan} />,
+                      done: 'Matched by hand.',
+                      rows: [{ label: 'Row', id: plan.row_id }],
+                    }),
+                  )
+                }
+                disabled={busy || lineId === ''}
+              >
+                Preview
+              </PrimaryButton>
+            )}
+            <SecondaryButton onClick={() => setMatching(false)} disabled={busy}>
               Cancel
             </SecondaryButton>
           </div>

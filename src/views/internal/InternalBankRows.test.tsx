@@ -14,6 +14,7 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import api from '@/utils/api';
 import {
   BANK_ROW_TICKET_STATUSES,
+  type BankMatchCandidate,
   type BankMatchPlan,
   type BankMergePlan,
   type BankNoDocumentPlan,
@@ -2255,5 +2256,250 @@ describe('bank row: confirm or reject a suggested match', () => {
     const detail = await openRow(user, 'STALE ROW');
     expect(within(detail).getByText('Matched entry no longer live')).toBeInTheDocument();
     expect(detail).not.toHaveTextContent('stale_match');
+  });
+});
+
+// ─── A match made by hand (Release D2) ─────────────────────────────────────────
+
+const CANDIDATES_URL = `/api/accounting/staff/bank-rows/${PLAIN_ID}/match-candidates/`;
+const MANUAL_URL = `/api/accounting/staff/bank-rows/${PLAIN_ID}/match/manual/`;
+const LINE_A = 'a1a1a1a1-0000-4000-8000-000000000001';
+const LINE_B = 'b2b2b2b2-0000-4000-8000-000000000002';
+const ENTRY_A = 'c3c3c3c3-0000-4000-8000-000000000003';
+const ENTRY_B = 'd4d4d4d4-0000-4000-8000-000000000004';
+
+// The candidates as the server sends them (bank_match_actions.py
+// _candidate_image): PLAIN is money in, so each is a debit on the feed's
+// account for its amount.
+const CANDIDATES: BankMatchCandidate[] = [
+  {
+    journal_line_id: LINE_A,
+    entry: { entry_id: ENTRY_A, entry_number: 70, entry_date: '2026-09-18' },
+    entry_description: 'Refund received',
+    entry_source: 'manual',
+    account_code: '2150',
+    line_debit: '80.00',
+    line_credit: null,
+  },
+  {
+    journal_line_id: LINE_B,
+    entry: { entry_id: ENTRY_B, entry_number: null, entry_date: '2026-09-02' },
+    entry_description: 'Deposit recognised',
+    entry_source: 'deposit_recognition',
+    account_code: '2150',
+    line_debit: '80.00',
+    line_credit: null,
+  },
+];
+
+const MANUAL_PLAN: BankMatchPlan = {
+  action: 'manual_match',
+  row_id: PLAIN_ID,
+  row: { date: '2026-09-20', direction: 'money_in', amount: '80.00', currency: 'CAD' },
+  match: {
+    match_id: null,
+    state: { before: null, after: 'manually_matched' },
+    journal_line_id: LINE_A,
+    account_code: '2150',
+    line_debit: '80.00',
+    line_credit: null,
+    entry: { entry_id: ENTRY_A, entry_number: 70, entry_date: '2026-09-18' },
+  },
+  ticket: {
+    before: { status: 'pending', routing_reason: null },
+    after: { status: 'waiting_document', routing_reason: null },
+  },
+  follow: 'waiting_document',
+  relink: null,
+  reason: null,
+  note: 'by hand',
+  routing_reason_label: null,
+};
+
+const MATCH_BY_HAND = 'Match to a line…';
+const MANUAL_TITLE = 'Match this row by hand?';
+const MANUAL_DONE = 'Matched by hand.';
+const linePicker = () => screen.getByRole('combobox', { name: 'Line' });
+const matchNote = () => screen.getByRole('textbox', { name: 'Note for the match' });
+
+// Serves the list (PLAIN among the rows) and the candidates for it.
+const serveWithCandidates = (candidates: unknown = CANDIDATES, rows: BankRow[] = [PLAIN, SUGGESTED]) => {
+  serve({ rows, me: 'reviewer' });
+  const base = get.getMockImplementation()!;
+  get.mockImplementation((url, config) => {
+    if (url === CANDIDATES_URL) {
+      return Promise.resolve({ status: 200, data: { row_id: PLAIN_ID, candidates } });
+    }
+    return base(url, config);
+  });
+};
+
+describe('bank row: a match made by hand', () => {
+  it('offers Match to a line only on an unmatched row that is settled at the bank and in the books', async () => {
+    const user = userEvent.setup();
+    serve({
+      rows: [
+        PLAIN,
+        SUGGESTED,
+        WAITING,
+        bankRow({ id: '93939393-0000-4000-8000-000000000003', description: 'PENDING ROW', pending: true }),
+      ],
+      me: 'reviewer',
+    });
+    render(<InternalBankRows />);
+
+    await openRow(user, 'REFUND 0042');
+    expect(button(MATCH_BY_HAND)).toBeEnabled();
+    for (const description of ['SUGGESTED ROW', 'MONTHLY FEE', 'PENDING ROW']) {
+      await openRow(user, description);
+      expect(screen.queryByRole('button', { name: MATCH_BY_HAND })).not.toBeInTheDocument();
+    }
+    // Nothing is read or sent until the button is pressed.
+    expect(get.mock.calls.some(([url]) => String(url).endsWith('/match-candidates/'))).toBe(false);
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('reads the candidates when asked, and offers each by its entry, date, account and amount — never bank text; Preview waits for a choice', async () => {
+    const user = userEvent.setup();
+    serveWithCandidates();
+    render(<InternalBankRows />);
+    await openRow(user, 'REFUND 0042');
+
+    await user.click(button(MATCH_BY_HAND));
+
+    const picker = await screen.findByRole('combobox', { name: 'Line' });
+    expect(get).toHaveBeenCalledWith(CANDIDATES_URL);
+    const options = within(picker)
+      .getAllByRole('option')
+      .map((option) => option.textContent);
+    expect(options).toEqual([
+      'Choose a line',
+      'JE-0070 · 2026-09-18 · 2150 · debit 80.00 · Refund received',
+      'd4d4d4d4 · 2026-09-02 · 2150 · debit 80.00 · Deposit recognised',
+    ]);
+    expect(within(picker).queryByText(/REFUND 0042|Refund Co/)).not.toBeInTheDocument();
+    expect(button('Preview')).toBeDisabled();
+    await user.selectOptions(picker, LINE_A);
+    expect(button('Preview')).toBeEnabled();
+    expect(matchNote()).toHaveAttribute('maxlength', '200');
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('says so when no line fits, and shows a refusal reading the candidates in the server\'s words', async () => {
+    const user = userEvent.setup();
+    serveWithCandidates([]);
+    render(<InternalBankRows />);
+    await openRow(user, 'REFUND 0042');
+
+    await user.click(button(MATCH_BY_HAND));
+    expect(
+      await screen.findByText("No posted line on this feed's account is free for this amount."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Line' })).not.toBeInTheDocument();
+    await user.click(button('Cancel'));
+
+    // The read refused: no form, the refusal shown.
+    const base = get.getMockImplementation()!;
+    get.mockImplementation((url, config) =>
+      url === CANDIDATES_URL
+        ? Promise.resolve({ status: 409, data: { code: 'row_pending', detail: 'Still pending at the bank.' } })
+        : base(url, config),
+    );
+    await user.click(button(MATCH_BY_HAND));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Still pending at the bank.');
+    expect(within(alert).getByText('row_pending')).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Line' })).not.toBeInTheDocument();
+  });
+
+  it("asks for the plan with the chosen line and the trimmed note, shows the server's plan, and confirms with the same request and confirm true", async () => {
+    const user = userEvent.setup();
+    serveWithCandidates();
+    post
+      .mockResolvedValueOnce(planned(false, MANUAL_PLAN))
+      .mockResolvedValueOnce(planned(true, MANUAL_PLAN));
+    render(<InternalBankRows />);
+    await openRow(user, 'REFUND 0042');
+    await user.click(button(MATCH_BY_HAND));
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Line' }), LINE_A);
+    await user.type(matchNote(), '  by hand ');
+    await user.click(button('Preview'));
+
+    expect(await screen.findByRole('heading', { name: MANUAL_TITLE })).toBeInTheDocument();
+    expect(post).toHaveBeenCalledWith(MANUAL_URL, { journal_line_id: LINE_A, note: 'by hand', confirm: false });
+    const plan = screen.getByRole('region', { name: 'Match plan' });
+    expect(within(plan).getByText('This row will be matched to the line below by hand.')).toBeInTheDocument();
+    expect(plan).toHaveTextContent('new → manually_matched');
+    expect(plan).toHaveTextContent('JE-0070');
+
+    serve({ rows: [SUGGESTED], me: 'reviewer' });
+    await user.click(button('Confirm'));
+
+    expect(await screen.findByText(MANUAL_DONE)).toBeInTheDocument();
+    expect(post).toHaveBeenLastCalledWith(MANUAL_URL, { journal_line_id: LINE_A, note: 'by hand', confirm: true });
+    await waitFor(() => expect(rowRequests()).toHaveLength(2));
+    expect(pane()).not.toBeInTheDocument();
+  });
+
+  it('leaves a blank note out of the request', async () => {
+    const user = userEvent.setup();
+    serveWithCandidates();
+    post.mockResolvedValueOnce(planned(false, { ...MANUAL_PLAN, note: null }));
+    render(<InternalBankRows />);
+    await openRow(user, 'REFUND 0042');
+    await user.click(button(MATCH_BY_HAND));
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Line' }), LINE_B);
+    await user.type(matchNote(), '   ');
+    await user.click(button('Preview'));
+
+    await screen.findByRole('heading', { name: MANUAL_TITLE });
+    expect(post).toHaveBeenCalledWith(MANUAL_URL, { journal_line_id: LINE_B, confirm: false });
+  });
+
+  it("shows a refusal by the server's code and in its own words, and keeps the form as it was", async () => {
+    const user = userEvent.setup();
+    serveWithCandidates();
+    const mismatch = 'The journal line is for 80.00; the transaction is for 81.00. A match needs the exact amount.';
+    post.mockResolvedValueOnce({ status: 409, data: { code: 'amount_mismatch', detail: mismatch } });
+    render(<InternalBankRows />);
+    await openRow(user, 'REFUND 0042');
+    await user.click(button(MATCH_BY_HAND));
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Line' }), LINE_A);
+    await user.click(button('Preview'));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(mismatch);
+    expect(within(alert).getByText('amount_mismatch')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: MANUAL_TITLE })).not.toBeInTheDocument();
+    // The choice stands; the form was not put away.
+    expect(linePicker()).toHaveValue(LINE_A);
+    expect(rowRequests()).toHaveLength(1);
+  });
+
+  it('sends one request at a time: the picker, the note and the buttons wait for the answer', async () => {
+    const user = userEvent.setup();
+    serveWithCandidates();
+    const answers: ((value: unknown) => void)[] = [];
+    post.mockImplementation(() => new Promise((resolve) => answers.push(resolve)));
+    render(<InternalBankRows />);
+    await openRow(user, 'REFUND 0042');
+    await user.click(button(MATCH_BY_HAND));
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Line' }), LINE_A);
+    await user.click(button('Preview'));
+
+    expect(button('Preview')).toBeDisabled();
+    expect(linePicker()).toBeDisabled();
+    expect(matchNote()).toBeDisabled();
+    await user.click(button('Preview'));
+    expect(post).toHaveBeenCalledTimes(1);
+
+    await act(async () => answers[0](planned(false, MANUAL_PLAN)));
+    await screen.findByRole('heading', { name: MANUAL_TITLE });
+    await user.click(button('Confirm'));
+    expect(button('Confirm')).toBeDisabled();
+    await user.click(button('Confirm'));
+    expect(post).toHaveBeenCalledTimes(2);
+    await act(async () => answers[1](planned(true, MANUAL_PLAN)));
+    expect(await screen.findByText(MANUAL_DONE)).toBeInTheDocument();
   });
 });
