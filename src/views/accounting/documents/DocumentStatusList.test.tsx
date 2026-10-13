@@ -3,20 +3,21 @@
 // model read, type, total as the server's string, status — in one frame that
 // scrolls both ways with a sticky header, never narrower than 56rem. The
 // open row is marked and reported; View and Delete are as they were.
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import api from '@/utils/api';
 import { type DocumentRow } from '@/hooks/useDocumentList';
 import { DocumentStatusList } from './DocumentStatusList';
 
-vi.mock('@/utils/api', () => ({ default: { get: vi.fn(), post: vi.fn(), delete: vi.fn() } }));
+vi.mock('@/utils/api', () => ({ default: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() } }));
 // The toast reads the Redux store; the list's tests look at what it was told.
 const showToast = vi.fn();
 vi.mock('@/hooks/useToast', () => ({ useToast: () => ({ showToast }) }));
 
 const get = api.get as unknown as Mock<(url: string) => Promise<unknown>>;
 const del = api.delete as unknown as Mock<(url: string) => Promise<unknown>>;
+const patch = api.patch as unknown as Mock<(url: string, body?: unknown) => Promise<unknown>>;
 
 const SUPPLIER = 'c0c0c0c0-0000-4000-8000-000000000001';
 
@@ -81,6 +82,7 @@ const cellsOf = (tr: HTMLElement) => within(tr).getAllByRole('cell').map((td) =>
 beforeEach(() => {
   get.mockReset();
   del.mockReset();
+  patch.mockReset();
   showToast.mockReset();
   base.setPage = vi.fn();
 });
@@ -240,5 +242,164 @@ describe('the document table', () => {
     expect(cell).toHaveClass('truncate');
     expect(cell).toHaveAttribute('title', long);
     expect(cell.closest('td')).toHaveClass('w-full', 'max-w-0');
+  });
+});
+
+// ─── Rename (Release E2-4, O-S89-E4) ───────────────────────────────────────────
+//
+// Rename opens the name in place; Save sends it and the row then shows the
+// name THE SERVER ANSWERED WITH — never the typed one; an empty name returns
+// the document to its automatic name; a refusal is shown in the server's
+// words and the old name stays.
+
+const RENAME_URL = (id: number) => `/api/accounting/documents/${id}/name/`;
+const renameField = () => screen.getByRole('textbox', { name: 'Document name' });
+
+describe('rename', () => {
+  it('opens the shown name in place, and Cancel or Escape puts it back untouched', async () => {
+    const user = userEvent.setup();
+    render(<DocumentStatusList {...base} items={[SUPPLIER_ROW]} />);
+    await user.click(within(rowOf('Costco Wholesale')).getByRole('button', { name: 'Rename' }));
+    expect(renameField()).toHaveValue('Costco Wholesale');
+    expect(renameField()).toHaveAttribute('maxlength', '200');
+    await user.type(renameField(), ' typed');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('textbox', { name: 'Document name' })).not.toBeInTheDocument();
+    expect(screen.getByText('Costco Wholesale')).toBeInTheDocument();
+
+    await user.click(within(rowOf('Costco Wholesale')).getByRole('button', { name: 'Rename' }));
+    await user.type(renameField(), ' again{Escape}');
+    expect(screen.queryByRole('textbox', { name: 'Document name' })).not.toBeInTheDocument();
+    expect(patch).not.toHaveBeenCalled();
+  });
+
+  it("saves what was typed and shows the row the server answered with — not the typed name", async () => {
+    const user = userEvent.setup();
+    const onRenamed = vi.fn();
+    // What comes back is what is shown — worded apart from what was typed,
+    // so a row that showed the typed name would be caught.
+    patch.mockResolvedValue({
+      status: 200,
+      data: { ...SUPPLIER_ROW, display_name: 'Name the server kept', display_name_source: 'manual', counterparty: null, read_as: 'COSTCO WHOLESALE' },
+    });
+    render(<DocumentStatusList {...base} items={[SUPPLIER_ROW]} onRenamed={onRenamed} />);
+    await user.click(within(rowOf('Costco Wholesale')).getByRole('button', { name: 'Rename' }));
+    await user.clear(renameField());
+    await user.type(renameField(), 'Name as typed');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(patch).toHaveBeenCalledTimes(1);
+    expect(patch).toHaveBeenCalledWith(RENAME_URL(41), { display_name: 'Name as typed' });
+    expect(await screen.findByText('Name the server kept')).toBeInTheDocument();
+    expect(screen.queryByText('Name as typed')).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Document name' })).not.toBeInTheDocument();
+    // The second line follows the server's row too: no supplier now, read-as instead.
+    expect(rowOf('Name the server kept')).toHaveTextContent('Read as · COSTCO WHOLESALE');
+    expect(onRenamed).toHaveBeenCalledTimes(1);
+  });
+
+  it('an empty name returns the document to its automatic name, as the server says it', async () => {
+    const user = userEvent.setup();
+    patch.mockResolvedValue({
+      status: 200,
+      data: { ...MANUAL_ROW, display_name: 'scan-0007.pdf', display_name_source: 'filename' },
+    });
+    render(<DocumentStatusList {...base} items={[MANUAL_ROW]} />);
+    await user.click(within(rowOf('May rent')).getByRole('button', { name: 'Rename' }));
+    await user.clear(renameField());
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(patch).toHaveBeenCalledWith(RENAME_URL(43), { display_name: '' });
+    expect(await screen.findByText('scan-0007.pdf')).toBeInTheDocument();
+    expect(screen.queryByText('May rent')).not.toBeInTheDocument();
+  });
+
+  it('Enter saves', async () => {
+    const user = userEvent.setup();
+    patch.mockResolvedValue({ status: 200, data: { ...SUPPLIER_ROW, display_name: 'Entered', display_name_source: 'manual' } });
+    render(<DocumentStatusList {...base} items={[SUPPLIER_ROW]} />);
+    await user.click(within(rowOf('Costco Wholesale')).getByRole('button', { name: 'Rename' }));
+    await user.clear(renameField());
+    await user.type(renameField(), 'Entered{Enter}');
+    expect(await screen.findByText('Entered')).toBeInTheDocument();
+    expect(patch).toHaveBeenCalledWith(RENAME_URL(41), { display_name: 'Entered' });
+  });
+
+  it("shows a refusal in the server's words and keeps the old name", async () => {
+    const user = userEvent.setup();
+    patch.mockResolvedValue({ status: 400, data: { display_name: 'The name may not exceed 200 characters.' } });
+    render(<DocumentStatusList {...base} items={[SUPPLIER_ROW]} />);
+    await user.click(within(rowOf('Costco Wholesale')).getByRole('button', { name: 'Rename' }));
+    await user.clear(renameField());
+    await user.type(renameField(), 'x');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(showToast).toHaveBeenCalledWith({
+        title: 'Could not rename document',
+        message: 'The name may not exceed 200 characters.',
+        variant: 'danger',
+      }),
+    );
+    // The field stays open with what was typed; the row keeps its name.
+    expect(renameField()).toHaveValue('x');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByText('Costco Wholesale')).toBeInTheDocument();
+    expect(screen.queryByText('x')).not.toBeInTheDocument();
+  });
+
+  it('says the document is no longer available on a 404 and closes the field', async () => {
+    const user = userEvent.setup();
+    const onDeleted = vi.fn();
+    patch.mockResolvedValue({ status: 404, data: { detail: 'Not found.' } });
+    render(<DocumentStatusList {...base} items={[SUPPLIER_ROW]} onDeleted={onDeleted} />);
+    await user.click(within(rowOf('Costco Wholesale')).getByRole('button', { name: 'Rename' }));
+    await user.type(renameField(), 'x');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(showToast).toHaveBeenCalledWith({
+        title: 'Could not rename document',
+        message: 'This document is no longer available.',
+        variant: 'danger',
+      }),
+    );
+    expect(screen.queryByRole('textbox', { name: 'Document name' })).not.toBeInTheDocument();
+    // The list is read again, so the gone row leaves.
+    expect(onDeleted).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends one request at a time, and does not open the row while renaming', async () => {
+    const user = userEvent.setup();
+    const onOpen = vi.fn();
+    const answers: ((value: unknown) => void)[] = [];
+    patch.mockImplementation(() => new Promise((resolve) => answers.push(resolve)));
+    render(<DocumentStatusList {...base} items={[SUPPLIER_ROW]} onOpen={onOpen} />);
+    await user.click(within(rowOf('Costco Wholesale')).getByRole('button', { name: 'Rename' }));
+    expect(onOpen).not.toHaveBeenCalled();
+    await user.type(renameField(), 'x');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+    expect(renameField()).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(patch).toHaveBeenCalledTimes(1);
+    await act(async () => answers[0]({ status: 200, data: { ...SUPPLIER_ROW, display_name: 'Done', display_name_source: 'manual' } }));
+    expect(await screen.findByText('Done')).toBeInTheDocument();
+  });
+
+  it('keeps the field open with the failure when the connection is lost', async () => {
+    const user = userEvent.setup();
+    patch.mockRejectedValue(new Error('network down'));
+    render(<DocumentStatusList {...base} items={[SUPPLIER_ROW]} />);
+    await user.click(within(rowOf('Costco Wholesale')).getByRole('button', { name: 'Rename' }));
+    await user.type(renameField(), 'x');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(showToast).toHaveBeenCalledWith({
+        title: 'Could not rename document',
+        message: 'Could not rename the document.',
+        variant: 'danger',
+      }),
+    );
+    expect(renameField()).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
   });
 });

@@ -14,11 +14,11 @@
 // D-14A3-5: raw routing_reason text is NEVER rendered — it only steers which
 // calm badge shows. The open row is marked (aria-selected) and reported to the
 // page; what it opens is the page's drawer.
-import { type FC, useState } from 'react';
+import { type FC, type KeyboardEvent, useState } from 'react';
 import { Card } from '@/components/t2/Card';
 import api from '@/utils/api';
 import { useToast } from '@/hooks/useToast';
-import { documentTypeLabel, type DocumentRow } from '@/hooks/useDocumentList';
+import { documentTypeLabel, renameDocument, type DocumentRow } from '@/hooks/useDocumentList';
 
 // O-S30-3: the terminal, entry-unlinked statuses a client may dispose of. Must
 // mirror the backend eligibility ({not_source_document, rejected, failed}); the
@@ -47,7 +47,11 @@ interface Props {
   // The open row (O-S89-E7), and how a click changes it.
   open?: number | null;
   onOpen?: (documentId: number | null) => void;
+  // O-S89-E4: a rename the server carried out — the row it answered with.
+  onRenamed?: (row: DocumentRow) => void;
 }
+
+const RENAME_GONE = 'This document is no longer available.';
 
 // D-14A3-5 badge precedence — routing_reason wins, then accounting_status;
 // unknown/future statuses fall through to a safe "Processing" (never a crash).
@@ -121,16 +125,58 @@ const headCls = 'px-4 py-3 text-left text-[11px] font-semibold uppercase trackin
 
 export const DocumentStatusList: FC<Props> = ({
   items, count, page, setPage, pageSize, isLoading, error, emptyMessage,
-  onDeleted, open = null, onOpen,
+  onDeleted, open = null, onOpen, onRenamed,
 }) => {
   const { showToast } = useToast();
+  // O-S89-E4: the row being renamed, what has been typed, and whether the
+  // request is out. What the row shows afterwards is the SERVER's row
+  // (renamed), never the typed name — the executed guard of this screen.
+  const [renaming, setRenaming] = useState<{ id: number; draft: string } | null>(null);
+  const [renameBusy, setRenameBusy] = useState(false);
+  const [renamed, setRenamed] = useState<Record<number, DocumentRow>>({});
+
+  const startRename = (row: DocumentRow) => {
+    if (renameBusy) return;
+    setRenaming({ id: row.document_id, draft: row.display_name });
+  };
+  const cancelRename = () => {
+    if (!renameBusy) setRenaming(null);
+  };
+  const saveRename = async () => {
+    if (!renaming || renameBusy) return;
+    setRenameBusy(true);
+    const outcome = await renameDocument(renaming.id, renaming.draft);
+    setRenameBusy(false);
+    if (outcome.ok) {
+      setRenamed((prev) => ({ ...prev, [outcome.row.document_id]: outcome.row }));
+      setRenaming(null);
+      onRenamed?.(outcome.row);
+      return;
+    }
+    if (outcome.status === 404) {
+      // Gone: the list is read again, and the field closes with the row.
+      setRenaming(null);
+      showToast({ title: 'Could not rename document', message: RENAME_GONE, variant: 'danger' });
+      onDeleted?.();
+      return;
+    }
+    // Refused, or no answer: the field stays open with what was typed.
+    showToast({ title: 'Could not rename document', message: outcome.detail, variant: 'danger' });
+  };
+  const onRenameKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') { e.preventDefault(); void saveRename(); }
+    if (e.key === 'Escape') { e.preventDefault(); cancelRename(); }
+  };
   // Optimistic removal: hide a just-deleted row immediately (before the parent's
   // refetch lands). The subsequent refresh reconciles list + counts from the
   // server; a stale id lingering here is harmless (the row is already gone).
   const [deletedIds, setDeletedIds] = useState<Set<number>>(new Set());
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
-  const visibleItems = items.filter((r) => !deletedIds.has(r.document_id));
+  const visibleItems = items
+    .filter((r) => !deletedIds.has(r.document_id))
+    // A renamed row shows the server's answer until the list is read again.
+    .map((r) => renamed[r.document_id] ?? r);
   const showPager = count > pageSize;
   const from = count === 0 ? 0 : (page - 1) * pageSize + 1;
   const to = Math.min(page * pageSize, count);
@@ -247,10 +293,44 @@ export const DocumentStatusList: FC<Props> = ({
                     {/* The column that gives way: it takes the width the
                         others leave, and its text is cut short to fit. */}
                     <td className="w-full max-w-0 px-4 py-3">
-                      <div className="truncate font-medium text-gray-900" title={row.display_name}>
-                        {row.display_name}
-                      </div>
-                      <NameDetail row={row} />
+                      {renaming?.id === row.document_id ? (
+                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="text"
+                            aria-label="Document name"
+                            value={renaming.draft}
+                            maxLength={200}
+                            disabled={renameBusy}
+                            autoFocus
+                            onChange={(e) => setRenaming({ id: row.document_id, draft: e.target.value })}
+                            onKeyDown={onRenameKey}
+                            className="h-8 w-full rounded-lg border border-gray-200 px-2.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => void saveRename()}
+                            disabled={renameBusy}
+                            className="text-[13px] font-medium text-[var(--color-primary)] hover:underline disabled:opacity-50"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={cancelRename}
+                            disabled={renameBusy}
+                            className="text-[13px] font-medium text-gray-500 hover:underline disabled:opacity-50"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="truncate font-medium text-gray-900" title={row.display_name}>
+                            {row.display_name}
+                          </div>
+                          <NameDetail row={row} />
+                        </>
+                      )}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-gray-700">{documentTypeLabel(row.document_type)}</td>
                     <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums text-gray-900">
@@ -259,6 +339,17 @@ export const DocumentStatusList: FC<Props> = ({
                     <td className="whitespace-nowrap px-4 py-3"><Badge row={row} /></td>
                     <td className="whitespace-nowrap px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-4">
+                        {/* O-S89-E4: rename in place — owner or accountant; the server decides. */}
+                        {renaming?.id !== row.document_id && (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); startRename(row); }}
+                            disabled={renameBusy}
+                            className="text-[13px] font-medium text-gray-600 hover:underline disabled:opacity-50"
+                          >
+                            Rename
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); viewDocument(row.document_id); }}
