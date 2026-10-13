@@ -1,5 +1,7 @@
 import { usePaginatedList } from '@/hooks/usePaginatedList';
-import { type PlanOutcome, postForPlan } from '@/hooks/staffPlan';
+import { type PlanOutcome, postForPlan, refusalFromResponse } from '@/hooks/staffPlan';
+import { type RemediationRefusal } from '@/hooks/useStaffResolution';
+import api from '@/utils/api';
 
 /**
  * Staff bank rows (S87 B2b; backend Release B2a, 125b419):
@@ -8,6 +10,11 @@ import { type PlanOutcome, postForPlan } from '@/hooks/staffPlan';
  *   POST /api/accounting/staff/bank-rows/<id>/release-flag/  {confirm}
  *   POST /api/accounting/staff/bank-rows/<id>/no-document/   {reason, note?, confirm}  (Release C2)
  *   POST /api/accounting/staff/bank-rows/<id>/reopen/        {reason, confirm}         (Release C2, super users)
+ *   POST /api/accounting/staff/bank-rows/<id>/match/confirm/ {confirm}                 (Release D2)
+ *   POST /api/accounting/staff/bank-rows/<id>/match/reject/  {reason?, confirm}        (Release D2)
+ *   POST /api/accounting/staff/bank-rows/<id>/match/manual/  {journal_line_id, note?, confirm}
+ *   POST /api/accounting/staff/bank-rows/<id>/match/unmatch/ {reason, confirm}         (Release D2, super users)
+ *   GET  /api/accounting/staff/bank-rows/<id>/match-candidates/                        (Release D2)
  * The list returns the rows of every org the viewer may see. The POSTs
  * are dry runs unless confirm is true: each answers {executed, plan}, and the
  * plan of a dry run is what the confirm run then carries out (PlanOutcome).
@@ -350,3 +357,149 @@ export const reopenBankRow = (
     { reason: reason.trim(), confirm },
     'Could not reopen the ticket.',
   );
+
+// ─── Match actions (Release D2; backend Release D1, O-S89-4 / O-S89-5) ─────────
+// The reviewer's decisions on a row's match. Each is a dry run unless confirm
+// is true, like the actions above; the plan says what follows for the ticket
+// (follow) and, on a rejection, which entry the row is re-linked to (relink).
+// Who may do what is the server's: reviewers and super users confirm, reject
+// and match by hand; only a super user unmatches (anyone else gets its 404),
+// so the screen shows Unmatch to super users alone (useStaffMe).
+
+// How long a reason or a note may be (bank_match_actions.py REASON_MAX_LENGTH).
+export const MATCH_REASON_MAX = 200;
+
+export interface BankMatchPlanEntry {
+  entry_id: string;
+  entry_number: number | null;
+  entry_date: string;
+}
+
+// Mirrors accounting/bank_match_actions.py MatchActionPlan._image — ids,
+// codes, dates and the line's amounts as the server's strings.
+export interface BankMatchPlan {
+  action: 'confirm' | 'reject' | 'manual_match' | 'unmatch';
+  row_id: string;
+  row: { date: string; direction: string; amount: string; currency: string };
+  match: {
+    match_id: string | null; // null for a match made by hand: it does not exist yet
+    state: { before: string | null; after: string };
+    journal_line_id: string;
+    account_code: string;
+    line_debit: string | null;
+    line_credit: string | null;
+    entry: BankMatchPlanEntry;
+  };
+  ticket: { before: BankTicketImage | null; after: BankTicketImage | null };
+  // account_rule | waiting_document | needs_review | pending | no_ticket
+  follow: string;
+  relink: { entry: BankMatchPlanEntry; journal_line_id: string; account_code: string } | null;
+  reason: string | null;
+  note: string | null;
+  routing_reason_label: string | null; // the server's words for ticket.after's reason
+}
+
+// One line a manual match may use (bank_match_actions.py _candidate_image).
+export interface BankMatchCandidate {
+  journal_line_id: string;
+  entry: BankMatchPlanEntry;
+  entry_description: string;
+  entry_source: string;
+  account_code: string;
+  line_debit: string | null;
+  line_credit: string | null;
+}
+
+const matchUrl = (rowId: string, action: string) =>
+  `/api/accounting/staff/bank-rows/${rowId}/match/${action}/`;
+
+// A row whose suggested match waits for a decision, settled at the bank and in
+// the books. The server remains the judge (a line no longer live is refused).
+export const canDecideSuggestion = (row: BankRow): boolean =>
+  row.suggested_match != null && !row.pending && !row.excluded;
+
+// A row with no active match at all, settled at the bank and in the books.
+export const canManualMatch = (row: BankRow): boolean =>
+  row.row_kind === 'unmatched' && !row.pending && !row.excluded;
+
+// A row settled by a match, still in the books. Who may take it off is the
+// caller's question (useStaffMe), and the server's.
+export const canUnmatch = (row: BankRow): boolean =>
+  row.settled_match != null && !row.pending && !row.excluded;
+
+// Confirm the row's suggested match. 409 {code, detail} — no_suggestion,
+// not_suggested, line_not_live, row_pending, row_excluded.
+export const confirmBankMatch = (rowId: string, confirm: boolean): Promise<PlanOutcome<BankMatchPlan>> =>
+  postForPlan<BankMatchPlan>(matchUrl(rowId, 'confirm'), { confirm }, 'Could not confirm the match.');
+
+// Reject the row's suggested match. The reason is optional: it travels
+// trimmed and is left out when blank.
+export const rejectBankMatch = (
+  rowId: string,
+  reason: string,
+  confirm: boolean,
+): Promise<PlanOutcome<BankMatchPlan>> => {
+  const trimmed = reason.trim();
+  return postForPlan<BankMatchPlan>(
+    matchUrl(rowId, 'reject'),
+    trimmed ? { reason: trimmed, confirm } : { confirm },
+    'Could not reject the match.',
+  );
+};
+
+// Match the row by hand to one line. 409 {code, detail} — wrong_account,
+// amount_mismatch, wrong_side, line_already_matched, line_not_live,
+// entry_not_posted, transaction_already_matched, row_pending, row_excluded;
+// a line of another org is the 404.
+export const manualMatchBankRow = (
+  rowId: string,
+  journalLineId: string,
+  note: string,
+  confirm: boolean,
+): Promise<PlanOutcome<BankMatchPlan>> => {
+  const trimmed = note.trim();
+  return postForPlan<BankMatchPlan>(
+    matchUrl(rowId, 'manual'),
+    trimmed
+      ? { journal_line_id: journalLineId, note: trimmed, confirm }
+      : { journal_line_id: journalLineId, confirm },
+    'Could not match the row.',
+  );
+};
+
+// SUPER USERS ONLY: take the row's settled match off, reason required.
+// 409 {code, detail} — no_settled_match, row_pending, row_excluded.
+export const unmatchBankRow = (
+  rowId: string,
+  reason: string,
+  confirm: boolean,
+): Promise<PlanOutcome<BankMatchPlan>> =>
+  postForPlan<BankMatchPlan>(
+    matchUrl(rowId, 'unmatch'),
+    { reason: reason.trim(), confirm },
+    'Could not take the match off.',
+  );
+
+export type CandidatesOutcome =
+  | { ok: true; candidates: BankMatchCandidate[] }
+  | { ok: false; refusal: RemediationRefusal };
+
+// The lines a manual match may use: live, free, on the feed's ledger account,
+// for the exact amount on the row's side — newest entry first, at most fifty.
+// A staff read: the read lane's per-minute limit on a 429.
+export const fetchMatchCandidates = async (rowId: string): Promise<CandidatesOutcome> => {
+  const fallback = 'Could not read the lines this row may be matched to.';
+  try {
+    const res = await api.get(`/api/accounting/staff/bank-rows/${rowId}/match-candidates/`);
+    const data = res?.data as { candidates?: unknown } | null | undefined;
+    if (res && res.status === 200 && Array.isArray(data?.candidates)) {
+      return { ok: true, candidates: data.candidates as BankMatchCandidate[] };
+    }
+    return {
+      ok: false,
+      refusal: refusalFromResponse(res, fallback, 'The read limit has been reached. Try again in a minute.'),
+    };
+  } catch {
+    return { ok: false, refusal: { detail: fallback, context: {} } };
+  }
+};

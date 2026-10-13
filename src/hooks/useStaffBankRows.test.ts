@@ -17,6 +17,17 @@ import {
   mergeBankRow,
   releaseBankRowFlag,
   reopenBankRow,
+  MATCH_REASON_MAX,
+  canDecideSuggestion,
+  canManualMatch,
+  canUnmatch,
+  confirmBankMatch,
+  fetchMatchCandidates,
+  manualMatchBankRow,
+  rejectBankMatch,
+  unmatchBankRow,
+  type BankMatchCandidate,
+  type BankMatchPlan,
   type BankMergePlan,
   type BankNoDocumentPlan,
   type BankReleasePlan,
@@ -27,6 +38,7 @@ import {
 vi.mock('@/utils/api', () => ({ default: { get: vi.fn(), post: vi.fn() } }));
 
 const post = api.post as unknown as Mock<(url: string, body?: unknown) => Promise<unknown>>;
+const get = api.get as unknown as Mock<(url: string) => Promise<unknown>>;
 
 const STALE = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const SURVIVING = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -492,5 +504,202 @@ describe('reopen a ticket closed as no document needed', () => {
       ok: false,
       refusal: { status: 404, detail: 'Not found', context: { detail: 'Not found.' } },
     });
+  });
+});
+
+// ─── Match actions (Release D2; backend Release D1, O-S89-4 / O-S89-5) ─────────
+
+const ROW = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+const LINE = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+const ENTRY = '99999999-9999-4999-8999-999999999999';
+const MATCH_URL = (action: string) => `/api/accounting/staff/bank-rows/${ROW}/match/${action}/`;
+const CANDIDATES_URL = `/api/accounting/staff/bank-rows/${ROW}/match-candidates/`;
+
+// A plan exactly as the server sends it (bank_match_actions.py
+// MatchActionPlan._image).
+const MATCH_PLAN: BankMatchPlan = {
+  action: 'confirm',
+  row_id: ROW,
+  row: { date: '2026-09-20', direction: 'money_out', amount: '6.00', currency: 'CAD' },
+  match: {
+    match_id: 'c1c1c1c1-0000-4000-8000-000000000001',
+    state: { before: 'suggested', after: 'confirmed' },
+    journal_line_id: LINE,
+    account_code: '1010',
+    line_debit: null,
+    line_credit: '6.00',
+    entry: { entry_id: ENTRY, entry_number: 66, entry_date: '2026-09-19' },
+  },
+  ticket: {
+    before: { status: 'needs_review', routing_reason: 'suggested_match_review' },
+    after: { status: 'no_document_needed', routing_reason: 'account_rule' },
+  },
+  follow: 'account_rule',
+  relink: null,
+  reason: null,
+  note: null,
+  routing_reason_label: 'No-document account',
+};
+
+const CANDIDATE: BankMatchCandidate = {
+  journal_line_id: LINE,
+  entry: { entry_id: ENTRY, entry_number: 66, entry_date: '2026-09-19' },
+  entry_description: 'Bank draft: fixture',
+  entry_source: 'bank_feed',
+  account_code: '1010',
+  line_debit: null,
+  line_credit: '6.00',
+};
+
+const row = (over: Partial<BankRow> = {}): BankRow => ({
+  id: ROW,
+  org_id: null,
+  org_name: null,
+  bank_account_id: FEED,
+  bank_account_name: 'Chequing',
+  feed_mask: '1234',
+  feed_account_code: '1010',
+  date: '2026-09-20',
+  direction: 'money_out',
+  amount: '6.00',
+  currency: 'CAD',
+  counterparty_name: '',
+  description: '',
+  source: 'plaid',
+  suggested_match: null,
+  settled_match: null,
+  row_kind: 'unmatched',
+  pending: false,
+  excluded: false,
+  excluded_reason: '',
+  ticket_status: 'pending',
+  ticket_status_label: 'Pending',
+  routing_reason: null,
+  routing_reason_label: null,
+  resolution_note: null,
+  duplicate_sibling: null,
+  ...over,
+});
+const SUMMARY = {
+  id: 'c1c1c1c1-0000-4000-8000-000000000001',
+  state: 'suggested',
+  similarity: '0.00',
+  date_delta_days: 1,
+  rationale: 'suggested',
+  created_at: '2026-09-20T10:00:00Z',
+  journal_line_id: LINE,
+  entry_id: ENTRY,
+  entry_date: '2026-09-19',
+  entry_description: 'Bank draft',
+  line_debit: null,
+  line_credit: '6.00',
+  account_code: '1010',
+};
+
+describe('match actions: confirm and reject a suggestion', () => {
+  it('confirmBankMatch asks for the plan with confirm false, then confirms with confirm true', async () => {
+    post.mockResolvedValueOnce(ok(false, MATCH_PLAN)).mockResolvedValueOnce(ok(true, MATCH_PLAN));
+
+    expect(await confirmBankMatch(ROW, false)).toEqual({ ok: true, executed: false, plan: MATCH_PLAN });
+    expect(await confirmBankMatch(ROW, true)).toEqual({ ok: true, executed: true, plan: MATCH_PLAN });
+
+    expect(post.mock.calls).toEqual([
+      [MATCH_URL('confirm'), { confirm: false }],
+      [MATCH_URL('confirm'), { confirm: true }],
+    ]);
+  });
+
+  it('rejectBankMatch sends the reason trimmed, and leaves it out when it is blank', async () => {
+    post.mockResolvedValue(ok(false, { ...MATCH_PLAN, action: 'reject' }));
+
+    await rejectBankMatch(ROW, '  not this entry ', false);
+    await rejectBankMatch(ROW, '   ', true);
+
+    expect(post.mock.calls).toEqual([
+      [MATCH_URL('reject'), { reason: 'not this entry', confirm: false }],
+      [MATCH_URL('reject'), { confirm: true }],
+    ]);
+    expect(MATCH_REASON_MAX).toBe(200);
+  });
+
+  it('hands back a refusal with the server code and its own words, and a 404 as not found', async () => {
+    const detail = 'This journal line cannot be confirmed.';
+    post.mockResolvedValueOnce({ status: 409, data: { code: 'line_not_live', detail } });
+    expect(await confirmBankMatch(ROW, true)).toEqual({
+      ok: false,
+      refusal: { status: 409, code: 'line_not_live', detail, context: { code: 'line_not_live', detail } },
+    });
+    post.mockResolvedValueOnce({ status: 404, data: { detail: 'Not found.' } });
+    expect(await rejectBankMatch(ROW, '', false)).toEqual({
+      ok: false,
+      refusal: { status: 404, detail: 'Not found', context: { detail: 'Not found.' } },
+    });
+  });
+});
+
+describe('match actions: a match made by hand', () => {
+  it('manualMatchBankRow sends the line and the trimmed note, and leaves the note out when blank', async () => {
+    post.mockResolvedValue(ok(false, { ...MATCH_PLAN, action: 'manual_match' }));
+
+    await manualMatchBankRow(ROW, LINE, '  by hand ', false);
+    await manualMatchBankRow(ROW, LINE, '', true);
+
+    expect(post.mock.calls).toEqual([
+      [MATCH_URL('manual'), { journal_line_id: LINE, note: 'by hand', confirm: false }],
+      [MATCH_URL('manual'), { journal_line_id: LINE, confirm: true }],
+    ]);
+  });
+
+  it('fetchMatchCandidates hands back the candidates as sent, and a refusal otherwise', async () => {
+    get.mockResolvedValueOnce({ status: 200, data: { row_id: ROW, candidates: [CANDIDATE] } });
+    expect(await fetchMatchCandidates(ROW)).toEqual({ ok: true, candidates: [CANDIDATE] });
+    expect(get).toHaveBeenCalledWith(CANDIDATES_URL);
+
+    get.mockResolvedValueOnce({ status: 409, data: { code: 'row_pending', detail: 'Pending.' } });
+    expect(await fetchMatchCandidates(ROW)).toEqual({
+      ok: false,
+      refusal: { status: 409, code: 'row_pending', detail: 'Pending.', context: { code: 'row_pending', detail: 'Pending.' } },
+    });
+    get.mockResolvedValueOnce({ status: 404, data: { detail: 'Not found.' } });
+    expect((await fetchMatchCandidates(ROW)) as { ok: boolean }).toMatchObject({ ok: false, refusal: { status: 404 } });
+    get.mockRejectedValueOnce(new Error('offline'));
+    expect(await fetchMatchCandidates(ROW)).toMatchObject({ ok: false, refusal: { context: {} } });
+  });
+});
+
+describe('match actions: unmatch (super users)', () => {
+  it('unmatchBankRow sends the reason trimmed with confirm', async () => {
+    post.mockResolvedValue(ok(true, { ...MATCH_PLAN, action: 'unmatch' }));
+
+    const outcome = await unmatchBankRow(ROW, '  Wrong entry. ', true);
+
+    expect(post).toHaveBeenCalledWith(MATCH_URL('unmatch'), { reason: 'Wrong entry.', confirm: true });
+    expect(outcome).toEqual({ ok: true, executed: true, plan: { ...MATCH_PLAN, action: 'unmatch' } });
+  });
+});
+
+describe('match actions: which rows offer which action', () => {
+  it('canDecideSuggestion: a row with a suggested match, settled at the bank and in the books', () => {
+    const suggested = row({ row_kind: 'suggested', suggested_match: SUMMARY });
+    expect(canDecideSuggestion(suggested)).toBe(true);
+    expect(canDecideSuggestion(row())).toBe(false);
+    expect(canDecideSuggestion({ ...suggested, pending: true })).toBe(false);
+    expect(canDecideSuggestion({ ...suggested, excluded: true })).toBe(false);
+  });
+
+  it('canManualMatch: an unmatched row, settled at the bank and in the books', () => {
+    expect(canManualMatch(row())).toBe(true);
+    expect(canManualMatch(row({ row_kind: 'suggested', suggested_match: SUMMARY }))).toBe(false);
+    expect(canManualMatch(row({ row_kind: 'matched', settled_match: { ...SUMMARY, state: 'confirmed' } }))).toBe(false);
+    expect(canManualMatch(row({ pending: true }))).toBe(false);
+    expect(canManualMatch(row({ excluded: true }))).toBe(false);
+  });
+
+  it('canUnmatch: a row with a settled match that is in the books (who may is the caller\'s question)', () => {
+    const settled = row({ row_kind: 'matched', settled_match: { ...SUMMARY, state: 'auto_matched' } });
+    expect(canUnmatch(settled)).toBe(true);
+    expect(canUnmatch(row())).toBe(false);
+    expect(canUnmatch(row({ row_kind: 'suggested', suggested_match: SUMMARY }))).toBe(false);
+    expect(canUnmatch({ ...settled, excluded: true })).toBe(false);
   });
 });
