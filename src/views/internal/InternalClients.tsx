@@ -98,8 +98,13 @@ export const InternalClients: FC = () => {
                   <tr className="text-left text-[11px] uppercase tracking-wide text-white/30 border-b border-white/10">
                     <th className="py-2 px-5 font-medium">Organization</th>
                     <th className="py-2 px-5 font-medium text-right">Entries</th>
+                    {/* Release C2 U7: the Reports cell (S69 E8) had no heading
+                        of its own; every column has one now. */}
+                    <th className="py-2 px-5 font-medium text-right">Reports</th>
                     {/* O-S31-1 C4: second per-org drill-in. */}
                     <th className="py-2 px-5 font-medium text-right">Cards</th>
+                    {/* Release C2 U7 (O-S88-4): the org's "no document" accounts. */}
+                    <th className="py-2 px-5 font-medium text-right">No-document accounts</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -139,6 +144,17 @@ export const InternalClients: FC = () => {
                           className="text-white/60 hover:text-white"
                         >
                           Card registry →
+                        </Link>
+                      </td>
+                      {/* Release C2 U7: same stopPropagation Link pattern — the
+                          row click still goes to entries. */}
+                      <td className="py-2.5 px-5 text-right">
+                        <Link
+                          to={`/internal/clients/${o.id}/no-document-accounts`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-white/60 hover:text-white"
+                        >
+                          No-document accounts →
                         </Link>
                       </td>
                     </tr>
