@@ -70,6 +70,12 @@
 //                                   {journal_line_id, note?}. The picker names a
 //                                   line by its entry, date, account and amount
 //                                   — never bank text.
+// and, for a SUPER USER only, on a row settled by a match and in the books:
+//   Unmatch                       → POST staff/bank-rows/<this row>/match/unmatch/
+//                                   {reason} — the reason is required; the
+//                                   ticket goes to review. Nobody else is
+//                                   shown the button; the server gives anyone
+//                                   else its 404.
 // Each asks the server for its plan first (a dry run), shows that plan in the
 // confirm dialog (PlanPreview), and carries it out only on Confirm — the same
 // request with confirm true. The server decides what is allowed: a refusal is
@@ -119,6 +125,7 @@ import {
   canManualMatch,
   canMarkNoDocument,
   canReopenTicket,
+  canUnmatch,
   collectFeeds,
   confirmBankMatch,
   fetchMatchCandidates,
@@ -129,6 +136,7 @@ import {
   rejectBankMatch,
   releaseBankRowFlag,
   reopenBankRow,
+  unmatchBankRow,
   useStaffBankRows,
   type BankFeedOption,
   type BankMatchCandidate,
@@ -313,6 +321,9 @@ const RowActions: FC<{
   const [candidates, setCandidates] = useState<BankMatchCandidate[] | null>(null);
   const [lineId, setLineId] = useState('');
   const [matchNote, setMatchNote] = useState('');
+  // "Unmatch" (Release D2, super users): its form is open, with the reason.
+  const [unmatching, setUnmatching] = useState(false);
+  const [unmatchReason, setUnmatchReason] = useState('');
   const sibling = row.duplicate_sibling;
 
   const flagged = row.routing_reason === POSSIBLE_DUPLICATE_REASON;
@@ -323,7 +334,9 @@ const RowActions: FC<{
   const canDecide = canDecideSuggestion(row);
   // An unmatched row may be matched by hand (Release D2, O-S89-4).
   const canMatch = canManualMatch(row);
-  if (!flagged && !canClose && !canReopen && !canDecide && !canMatch) return null;
+  // Unmatch is a super user's action only (O-S89-4): nobody else is shown it.
+  const canTakeOff = isSuperUser && canUnmatch(row);
+  if (!flagged && !canClose && !canReopen && !canDecide && !canMatch && !canTakeOff) return null;
 
   // Opens the manual-match form once the candidates are read. A refusal on
   // the read is shown and the form stays closed.
@@ -469,7 +482,54 @@ const RowActions: FC<{
             Reopen
           </SecondaryButton>
         )}
+        {canTakeOff && (
+          <SecondaryButton onClick={() => setUnmatching(true)} disabled={busy}>
+            Unmatch
+          </SecondaryButton>
+        )}
       </div>
+
+      {/* Unmatch (super users): the reason first; the plan is asked for with
+          Preview. The ticket goes to review as unmatched by staff. */}
+      {canTakeOff && unmatching && !pending && (
+        <div className="space-y-3 rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+          <p className="text-sm text-white/70">
+            Take this match off: the row is unmatched and its ticket goes to review.
+          </p>
+          <textarea
+            value={unmatchReason}
+            onChange={(e) => setUnmatchReason(e.target.value)}
+            disabled={busy}
+            maxLength={MATCH_REASON_MAX}
+            rows={2}
+            aria-label="Reason for unmatching"
+            placeholder="Reason for unmatching"
+            className={`${fieldCls} w-full`}
+          />
+          <p className="text-xs text-white/40">A reason is required.</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <PrimaryButton
+              onClick={() =>
+                void ask(
+                  (confirmed) => unmatchBankRow(row.id, unmatchReason, confirmed),
+                  (plan) => ({
+                    title: 'Take this match off?',
+                    plan: <MatchPlanPreview plan={plan} />,
+                    done: 'Match taken off.',
+                    rows: [{ label: 'Row', id: plan.row_id }],
+                  }),
+                )
+              }
+              disabled={busy || unmatchReason.trim() === ''}
+            >
+              Preview
+            </PrimaryButton>
+            <SecondaryButton onClick={() => setUnmatching(false)} disabled={busy}>
+              Cancel
+            </SecondaryButton>
+          </div>
+        </div>
+      )}
 
       {/* Reject match: an optional reason first; the plan is asked for with
           Preview. The plan says where the row goes: its own entry, review, or

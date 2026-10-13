@@ -2503,3 +2503,156 @@ describe('bank row: a match made by hand', () => {
     expect(await screen.findByText(MANUAL_DONE)).toBeInTheDocument();
   });
 });
+
+// ─── Unmatch (Release D2; super users) ─────────────────────────────────────────
+
+const UNMATCH_URL = `/api/accounting/staff/bank-rows/${WAITING_ID}/match/unmatch/`;
+const UNMATCH_PLAN: BankMatchPlan = {
+  action: 'unmatch',
+  row_id: WAITING_ID,
+  row: { date: '2026-09-20', direction: 'money_out', amount: '80.00', currency: 'CAD' },
+  match: {
+    match_id: '31313131-0000-4000-8000-000000000001',
+    state: { before: 'auto_matched', after: 'unmatched' },
+    journal_line_id: '41414141-0000-4000-8000-000000000002',
+    account_code: '1010',
+    line_debit: null,
+    line_credit: '80.00',
+    entry: { entry_id: '51515151-0000-4000-8000-000000000003', entry_number: 68, entry_date: '2026-09-21' },
+  },
+  ticket: {
+    before: { status: 'waiting_document', routing_reason: null },
+    after: { status: 'needs_review', routing_reason: 'unmatched_by_staff' },
+  },
+  follow: 'needs_review',
+  relink: null,
+  reason: 'Matched to the wrong entry.',
+  note: null,
+  routing_reason_label: 'Unmatched by staff',
+};
+const UNMATCH = 'Unmatch';
+const UNMATCH_TITLE = 'Take this match off?';
+const UNMATCH_DONE = 'Match taken off.';
+const unmatchReason = () => screen.getByRole('textbox', { name: 'Reason for unmatching' });
+
+// Opens the waiting row, asks for the form, gives a reason and asks for the plan.
+const previewUnmatch = async (user: ReturnType<typeof userEvent.setup>, reason: string) => {
+  await openRow(user, 'MONTHLY FEE');
+  await user.click(await screen.findByRole('button', { name: UNMATCH }));
+  await user.type(unmatchReason(), reason);
+  await user.click(button('Preview'));
+};
+
+describe('bank row: unmatch', () => {
+  it('offers Unmatch to a super user on a settled row that is in the books, and on no other row', async () => {
+    const user = userEvent.setup();
+    serve({
+      rows: [
+        WAITING,
+        SUGGESTED,
+        PLAIN,
+        { ...WAITING, id: '94949494-0000-4000-8000-000000000004', description: 'EXCLUDED SETTLED', excluded: true, excluded_reason: 'plaid_removed' },
+      ],
+      me: 'super',
+    });
+    render(<InternalBankRows />);
+
+    await openRow(user, 'MONTHLY FEE');
+    expect(await screen.findByRole('button', { name: UNMATCH })).toBeEnabled();
+    expect(screen.queryByRole('textbox', { name: 'Reason for unmatching' })).not.toBeInTheDocument();
+    for (const description of ['SUGGESTED ROW', 'REFUND 0042', 'EXCLUDED SETTLED']) {
+      await openRow(user, description);
+      expect(screen.queryByRole('button', { name: UNMATCH })).not.toBeInTheDocument();
+    }
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it("never offers Unmatch to a reviewer, to a viewer who is not staff, or while the viewer's role is not known", async () => {
+    const user = userEvent.setup();
+    for (const me of ['reviewer', undefined, 'unanswered'] as const) {
+      serve({ rows: [WAITING], me });
+      const view = render(<InternalBankRows />);
+      await openRow(user, 'MONTHLY FEE');
+      await settle();
+      expect(screen.queryByRole('button', { name: UNMATCH })).not.toBeInTheDocument();
+      view.unmount();
+    }
+    serve({ rows: [WAITING], me: 'super' });
+    render(<InternalBankRows />);
+    await openRow(user, 'MONTHLY FEE');
+    expect(await screen.findByRole('button', { name: UNMATCH })).toBeInTheDocument();
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('needs a reason, holds it to 200 characters, and Cancel puts the form away with nothing sent', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [WAITING], me: 'super' });
+    render(<InternalBankRows />);
+    await openRow(user, 'MONTHLY FEE');
+    await user.click(await screen.findByRole('button', { name: UNMATCH }));
+
+    expect(screen.getByText('A reason is required.')).toBeInTheDocument();
+    expect(button('Preview')).toBeDisabled();
+    await user.type(unmatchReason(), '   ');
+    expect(button('Preview')).toBeDisabled();
+    await user.type(unmatchReason(), 'Wrong entry');
+    expect(button('Preview')).toBeEnabled();
+    expect(unmatchReason()).toHaveAttribute('maxlength', '200');
+    await user.click(button('Cancel'));
+    expect(screen.queryByRole('textbox', { name: 'Reason for unmatching' })).not.toBeInTheDocument();
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it("asks for the plan first with the reason trimmed and shows the server's plan; Confirm sends confirm true, then reads the list again and closes the pane", async () => {
+    const user = userEvent.setup();
+    serve({ rows: [WAITING, PLAIN], me: 'super' });
+    post
+      .mockResolvedValueOnce(planned(false, UNMATCH_PLAN))
+      .mockResolvedValueOnce(planned(true, UNMATCH_PLAN));
+    render(<InternalBankRows />);
+
+    await previewUnmatch(user, '  Matched to the wrong entry. ');
+    expect(await screen.findByRole('heading', { name: UNMATCH_TITLE })).toBeInTheDocument();
+    expect(post).toHaveBeenCalledWith(UNMATCH_URL, { reason: 'Matched to the wrong entry.', confirm: false });
+    const plan = screen.getByRole('region', { name: 'Match plan' });
+    expect(within(plan).getByText('The settled match will be taken off this row.')).toBeInTheDocument();
+    expect(plan).toHaveTextContent('auto_matched → unmatched');
+    expect(within(plan).getByText('Unmatched by staff')).toBeInTheDocument();
+    expect(within(plan).getByText('The ticket goes to review.')).toBeInTheDocument();
+
+    serve({ rows: [PLAIN], me: 'super' });
+    await user.click(button('Confirm'));
+
+    expect(await screen.findByText(UNMATCH_DONE)).toBeInTheDocument();
+    expect(post).toHaveBeenLastCalledWith(UNMATCH_URL, { reason: 'Matched to the wrong entry.', confirm: true });
+    await waitFor(() => expect(rowRequests()).toHaveLength(2));
+    expect(pane()).not.toBeInTheDocument();
+  });
+
+  it('says the row is no longer available on a 404, with a refresh', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [WAITING], me: 'super' });
+    post.mockResolvedValue({ status: 404, data: { detail: 'Not found.' } });
+    render(<InternalBankRows />);
+
+    await previewUnmatch(user, 'Wrong entry');
+    expect(await screen.findByText('This row is no longer available.')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: UNMATCH_TITLE })).not.toBeInTheDocument();
+    serve({ rows: [PLAIN], me: 'super' });
+    await user.click(button('Refresh'));
+    await waitFor(() => expect(rowRequests()).toHaveLength(2));
+    expect(pane()).not.toBeInTheDocument();
+  });
+
+  it('shows the hourly limit on a 429 and does not try again by itself', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [WAITING], me: 'super' });
+    post.mockResolvedValue({ status: 429, data: {} });
+    render(<InternalBankRows />);
+
+    await previewUnmatch(user, 'Wrong entry');
+    expect(await screen.findByText(LIMIT)).toBeInTheDocument();
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('heading', { name: UNMATCH_TITLE })).not.toBeInTheDocument();
+  });
+});
