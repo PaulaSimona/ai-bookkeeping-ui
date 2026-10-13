@@ -1,7 +1,7 @@
 // PlanPreview (S87 B2b U2, O-S87-8 / O-S87-9) — what the server says a staff
 // action will do, shown before staff confirm it: the bank-row merge, the flag
-// release, the "no document needed" close (useStaffBankRows) and the feed
-// re-point (useStaffRepoint).
+// release, the "no document needed" close and its reopen (useStaffBankRows)
+// and the feed re-point (useStaffRepoint).
 //
 // Every field of a plan is shown as returned. Amounts are the server's strings,
 // rendered untouched — never formatMoney: nothing regrouped, re-signed or given
@@ -20,6 +20,7 @@ import {
   type BankMergePlan,
   type BankNoDocumentPlan,
   type BankReleasePlan,
+  type BankReopenPlan,
   type BankTicketImage,
 } from '@/hooks/useStaffBankRows';
 import { type RepointPlan } from '@/hooks/useStaffRepoint';
@@ -193,6 +194,20 @@ export const NoDocumentPlanPreview: FC<{ plan: BankNoDocumentPlan }> = ({ plan }
       <Field label="Match">
         match <ShortId className={idCls} id={plan.matched.match_id} /> · {plan.matched.state}
       </Field>
+      <Field label="Ticket">{ticketChange(plan.ticket)}</Field>
+    </dl>
+  </section>
+);
+
+// A closed ticket sent back to wait for its document (super users).
+export const ReopenPlanPreview: FC<{ plan: BankReopenPlan }> = ({ plan }) => (
+  <section aria-label="Reopen plan" className={planCls}>
+    <p>This ticket will wait for its document again.</p>
+    <p className="mt-1 text-white/50">No journal entry is changed.</p>
+    <dl className="mt-3">
+      <TicketPlanRow plan={plan} />
+      <Field label="Reason for reopening">{plan.reason}</Field>
+      <TicketPlanEntry entry={plan.entry} />
       <Field label="Ticket">{ticketChange(plan.ticket)}</Field>
     </dl>
   </section>

@@ -9,14 +9,17 @@ import {
   BANK_ROW_TICKET_STATUS_LABELS,
   NO_DOCUMENT_NOTE_MAX,
   NO_DOCUMENT_REASONS,
+  REOPEN_REASON_MAX,
   bankRowParams,
   labelOrCode,
   markNoDocument,
   mergeBankRow,
   releaseBankRowFlag,
+  reopenBankRow,
   type BankMergePlan,
   type BankNoDocumentPlan,
   type BankReleasePlan,
+  type BankReopenPlan,
 } from './useStaffBankRows';
 
 vi.mock('@/utils/api', () => ({ default: { get: vi.fn(), post: vi.fn() } }));
@@ -80,6 +83,23 @@ const NO_DOCUMENT_PLAN: BankNoDocumentPlan = {
     entry_date: '2026-09-21',
   },
   matched: { match_id: 'mmmmmmmm-mmmm-4mmm-8mmm-mmmmmmmmmmmm', state: 'auto_matched' },
+};
+
+// The plan of a reopen (accounting/bank_ticket_service.py ReopenPlan._image).
+const REOPEN_URL = `/api/accounting/staff/bank-rows/${SURVIVING}/reopen/`;
+const REOPEN_PLAN: BankReopenPlan = {
+  row_id: SURVIVING,
+  row: { date: '2026-09-20', direction: 'money_out', amount: '80.00', currency: 'CAD' },
+  ticket: {
+    before: { status: 'no_document_needed', routing_reason: 'bank_fee' },
+    after: { status: 'waiting_document', routing_reason: null },
+  },
+  reason: 'Receipt turned up',
+  entry: {
+    entry_id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+    entry_number: 68,
+    entry_date: '2026-09-21',
+  },
 };
 
 const ok = (executed: boolean, plan: unknown) => ({ status: 200, data: { executed, plan } });
@@ -351,5 +371,60 @@ describe('close a ticket: no document needed', () => {
       { code: 'other', label: 'Other' },
     ]);
     expect(NO_DOCUMENT_NOTE_MAX).toBe(200);
+  });
+});
+
+// Release C2 (O-S88-3): POST staff/bank-rows/<id>/reopen/ {reason, confirm} —
+// super users only; the server answers anyone else with its 404.
+describe('reopen a ticket closed as no document needed', () => {
+  it('asks for the plan first: the reason in the body, confirm false', async () => {
+    post.mockResolvedValue(ok(false, REOPEN_PLAN));
+
+    const outcome = await reopenBankRow(SURVIVING, '  Receipt turned up ', false);
+
+    expect(post).toHaveBeenCalledTimes(1);
+    // The reason travels trimmed, as the server would record it.
+    expect(post).toHaveBeenCalledWith(REOPEN_URL, { reason: 'Receipt turned up', confirm: false });
+    expect(outcome).toEqual({ ok: true, executed: false, plan: REOPEN_PLAN });
+  });
+
+  it('confirms with the same reason and confirm true', async () => {
+    post.mockResolvedValue(ok(true, REOPEN_PLAN));
+
+    const outcome = await reopenBankRow(SURVIVING, 'Receipt turned up', true);
+
+    expect(post).toHaveBeenCalledWith(REOPEN_URL, { reason: 'Receipt turned up', confirm: true });
+    expect(outcome).toEqual({ ok: true, executed: true, plan: REOPEN_PLAN });
+    expect(REOPEN_REASON_MAX).toBe(200);
+  });
+
+  it('hands back a refusal with the server code and its own words', async () => {
+    const detail = 'This row is not closed as "no document needed".';
+    post.mockResolvedValue({ status: 409, data: { code: 'not_no_document_needed', detail } });
+
+    const outcome = await reopenBankRow(SURVIVING, 'Receipt turned up', true);
+
+    expect(outcome).toEqual({
+      ok: false,
+      refusal: {
+        status: 409,
+        code: 'not_no_document_needed',
+        detail,
+        context: { code: 'not_no_document_needed', detail },
+      },
+    });
+  });
+
+  it('reports a 404 as not found, whoever asked, and invents no plan', async () => {
+    // A reviewer, a row of another client and a row that is gone all get the
+    // same answer from the server; nothing here tells them apart.
+    post.mockResolvedValue({ status: 404, data: { detail: 'Not found.' } });
+
+    const outcome = await reopenBankRow(SURVIVING, 'Receipt turned up', false);
+
+    expect(outcome).toEqual({
+      ok: false,
+      refusal: { status: 404, detail: 'Not found', context: { detail: 'Not found.' } },
+    });
   });
 });

@@ -8,12 +8,14 @@ import {
   type BankMergePlan,
   type BankNoDocumentPlan,
   type BankReleasePlan,
+  type BankReopenPlan,
 } from '@/hooks/useStaffBankRows';
 import { type RepointPlan } from '@/hooks/useStaffRepoint';
 import {
   MergePlanPreview,
   NoDocumentPlanPreview,
   ReleasePlanPreview,
+  ReopenPlanPreview,
   RepointPlanPreview,
 } from './PlanPreview';
 
@@ -352,6 +354,35 @@ describe('no-document plan', () => {
     expect(value('Reason').textContent).toBe('Bank fee');
     expect(value('Note').textContent).toBe('none');
     expect(value('Ticket').textContent).toBe('waiting_document → no_document_needed (bank_fee)');
+  });
+});
+
+describe('reopen plan', () => {
+  it('shows the row, the reason given, the entry and the ticket change as returned', () => {
+    const reopen: BankReopenPlan = {
+      row_id: ROW,
+      row: { date: '2026-09-20', direction: 'money_out', amount: '1234.50', currency: 'CAD' },
+      ticket: {
+        before: { status: 'no_document_needed', routing_reason: 'bank_fee' },
+        after: { status: 'waiting_document', routing_reason: null },
+      },
+      reason: 'Receipt turned up',
+      entry: { entry_id: ENTRY, entry_number: 68, entry_date: '2026-09-21' },
+    };
+    render(<ReopenPlanPreview plan={reopen} />);
+    const plan = screen.getByRole('region', { name: 'Reopen plan' });
+
+    expect(within(plan).getByText('This ticket will wait for its document again.')).toBeInTheDocument();
+    expect(within(plan).getByText('No journal entry is changed.')).toBeInTheDocument();
+    expectShortId(field('Row'), ROW);
+    expect(value('Date').textContent).toBe('2026-09-20');
+    expect(value('Amount').textContent).toBe('Money out 1234.50 CAD');
+    expect(value('Reason for reopening').textContent).toBe('Receipt turned up');
+    const entry = field('Entry');
+    expect(entry).toHaveTextContent('JE-0068');
+    expect(entry).toHaveTextContent('2026-09-21');
+    expectShortId(entry, ENTRY);
+    expect(value('Ticket').textContent).toBe('no_document_needed (bank_fee) → waiting_document');
   });
 });
 

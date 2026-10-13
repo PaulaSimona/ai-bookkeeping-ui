@@ -17,6 +17,7 @@ import {
   type BankMergePlan,
   type BankNoDocumentPlan,
   type BankReleasePlan,
+  type BankReopenPlan,
   type BankRow,
 } from '@/hooks/useStaffBankRows';
 import { InternalBankRows } from './InternalBankRows';
@@ -31,6 +32,7 @@ const post = api.post as unknown as Mock<(url: string, body?: unknown) => Promis
 
 const ROWS_URL = '/api/accounting/review/bank/';
 const ORGS_URL = '/api/accounting/orgs/';
+const ME_URL = '/api/accounting/staff/me/';
 
 const ORG_A = '11111111-1111-4111-8111-111111111111';
 const ORG_B = '22222222-2222-4222-8222-222222222222';
@@ -125,11 +127,27 @@ interface Served {
   rows?: BankRow[];
   count?: number;
   orgs?: { id: string; name: string }[];
+  // Who GET staff/me/ says the viewer is (Release C2). Left out, it answers
+  // 404 like any other address here: the viewer is not known to be staff.
+  // 'unanswered' never answers at all.
+  me?: 'super' | 'reviewer' | 'unanswered';
 }
 
-// What the server answers: the viewer's orgs, and a page of rows.
-const serve = ({ rows = [FLAGGED, PLAIN], count, orgs = [ACME] }: Served = {}) => {
+// What the server answers: the viewer's orgs, a page of rows, and — when the
+// test says who is looking — the viewer's own staff role.
+const serve = ({ rows = [FLAGGED, PLAIN], count, orgs = [ACME], me }: Served = {}) => {
   get.mockImplementation((url) => {
+    if (url === ME_URL && me === 'unanswered') return new Promise(() => {});
+    if (url === ME_URL && me) {
+      return Promise.resolve({
+        status: 200,
+        data: {
+          is_staff_member: true,
+          is_super_user: me === 'super',
+          role_type: me === 'super' ? 'super_user' : 'reviewer',
+        },
+      });
+    }
     if (url === ORGS_URL) return Promise.resolve({ status: 200, data: orgs });
     if (url === ROWS_URL) {
       return Promise.resolve({
@@ -1462,5 +1480,328 @@ describe('bank row: no document needed', () => {
     expect(reasonPicker()).toHaveValue('other');
     expect(button('Preview')).toBeEnabled();
     expect(rowRequests()).toHaveLength(1);
+  });
+});
+
+// ─── Reopen (Release C2, O-S88-3; listed by O-S88-11) ──────────────────────────
+//
+// A ticket closed as "no document needed" can be sent back to wait for its
+// document — by a super user only. The button is not shown to anyone else, and
+// the server answers anyone else with the same 404 as a row that is not there.
+
+const CLOSED_ID = '78787878-7878-4787-8787-787878787878';
+
+// A ticket closed as "no document needed": listed when that status is asked
+// for, with the match that settled its row.
+const CLOSED = bankRow({
+  id: CLOSED_ID,
+  direction: 'money_out',
+  counterparty_name: 'First Bank',
+  description: 'CLOSED FEE',
+  ticket_status: 'no_document_needed',
+  ticket_status_label: 'No document needed',
+  routing_reason: 'bank_fee',
+  routing_reason_label: 'Bank fee',
+  row_kind: 'matched',
+  settled_match: WAITING.settled_match,
+});
+
+const REOPEN_URL = `/api/accounting/staff/bank-rows/${CLOSED_ID}/reopen/`;
+
+// The plan as the server sends it (bank_ticket_service.py ReopenPlan._image).
+const REOPEN_PLAN: BankReopenPlan = {
+  row_id: CLOSED_ID,
+  row: { date: '2026-09-20', direction: 'money_out', amount: '80.00', currency: 'CAD' },
+  ticket: {
+    before: { status: 'no_document_needed', routing_reason: 'bank_fee' },
+    after: { status: 'waiting_document', routing_reason: null },
+  },
+  reason: 'Receipt turned up',
+  entry: {
+    entry_id: '51515151-0000-4000-8000-000000000003',
+    entry_number: 68,
+    entry_date: '2026-09-21',
+  },
+};
+
+const REOPEN = 'Reopen';
+const REOPEN_TITLE = 'Reopen this ticket?';
+const REOPEN_DONE = 'Reopened: waiting for a document again.';
+
+const reopenReason = () => screen.getByRole('textbox', { name: 'Reason for reopening' });
+
+// Opens the closed row, asks for the reopen form, gives the reason and asks
+// the server for its plan. The button is there once the viewer's role is known.
+const previewReopen = async (
+  user: ReturnType<typeof userEvent.setup>,
+  reason = 'Receipt turned up',
+) => {
+  await openRow(user, 'CLOSED FEE');
+  await user.click(await screen.findByRole('button', { name: REOPEN }));
+  await user.type(reopenReason(), reason);
+  await user.click(button('Preview'));
+};
+
+describe('bank row: reopen', () => {
+  it('offers Reopen to a super user on a ticket closed as no document needed', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [CLOSED], me: 'super' });
+    render(<InternalBankRows />);
+
+    await openRow(user, 'CLOSED FEE');
+    expect(await screen.findByRole('button', { name: REOPEN })).toBeEnabled();
+    // The ticket is closed, not waiting, and the row is nobody's copy.
+    expect(screen.queryByRole('button', { name: NO_DOC })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: MERGE })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: RELEASE })).not.toBeInTheDocument();
+    // Nothing is asked of the server until the form is filled and previewed.
+    expect(screen.queryByRole('textbox', { name: 'Reason for reopening' })).not.toBeInTheDocument();
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it("never offers Reopen to a reviewer, to a viewer who is not staff, or while the viewer's role is not known", async () => {
+    const user = userEvent.setup();
+    for (const me of ['reviewer', undefined, 'unanswered'] as const) {
+      serve({ rows: [CLOSED], me });
+      const view = render(<InternalBankRows />);
+      await openRow(user, 'CLOSED FEE');
+      await settle();
+      expect(screen.queryByRole('button', { name: REOPEN })).not.toBeInTheDocument();
+      view.unmount();
+    }
+
+    // Control: the same row, opened by a super user, has the button.
+    serve({ rows: [CLOSED], me: 'super' });
+    render(<InternalBankRows />);
+    await openRow(user, 'CLOSED FEE');
+    expect(await screen.findByRole('button', { name: REOPEN })).toBeInTheDocument();
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('offers Reopen on no other ticket status, and not on a row that has left the books', async () => {
+    const user = userEvent.setup();
+    serve({
+      rows: [
+        CLOSED,
+        WAITING,
+        FLAGGED,
+        PLAIN,
+        {
+          ...CLOSED,
+          id: '79797979-0000-4000-8000-000000000001',
+          description: 'CLOSED EXCLUDED',
+          excluded: true,
+          excluded_reason: 'duplicate',
+        },
+      ],
+      me: 'super',
+    });
+    render(<InternalBankRows />);
+
+    // Control first: once the role is known, the closed row has the button.
+    await openRow(user, 'CLOSED FEE');
+    expect(await screen.findByRole('button', { name: REOPEN })).toBeInTheDocument();
+
+    for (const description of [
+      'MONTHLY FEE',
+      'STAPLES STORE #114 TORONTO',
+      'REFUND 0042',
+      'CLOSED EXCLUDED',
+    ]) {
+      await openRow(user, description);
+      expect(screen.queryByRole('button', { name: REOPEN })).not.toBeInTheDocument();
+    }
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('needs a reason for reopening, and holds it to 200 characters', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [CLOSED], me: 'super' });
+    render(<InternalBankRows />);
+    await openRow(user, 'CLOSED FEE');
+    await user.click(await screen.findByRole('button', { name: REOPEN }));
+
+    expect(screen.getByText('A reason is required.')).toBeInTheDocument();
+    expect(button('Preview')).toBeDisabled();
+    // Spaces are not a reason.
+    await user.type(reopenReason(), '   ');
+    expect(button('Preview')).toBeDisabled();
+    await user.type(reopenReason(), 'Receipt turned up');
+    expect(button('Preview')).toBeEnabled();
+    expect(reopenReason()).toHaveAttribute('maxlength', '200');
+
+    // Cancel puts the form away; nothing was sent.
+    await user.click(button('Cancel'));
+    expect(screen.queryByRole('textbox', { name: 'Reason for reopening' })).not.toBeInTheDocument();
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('asks for the reopen plan first and shows it; Confirm sends the same request with confirm true, then reads the list again and closes the pane', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [CLOSED, PLAIN], me: 'super' });
+    post
+      .mockResolvedValueOnce(planned(false, REOPEN_PLAN))
+      .mockResolvedValueOnce(planned(true, REOPEN_PLAN));
+    render(<InternalBankRows />);
+
+    await previewReopen(user, '  Receipt turned up ');
+    expect(await screen.findByRole('heading', { name: REOPEN_TITLE })).toBeInTheDocument();
+    expect(post).toHaveBeenCalledTimes(1);
+    // The reason travels trimmed, as the server would record it.
+    expect(post).toHaveBeenCalledWith(REOPEN_URL, { reason: 'Receipt turned up', confirm: false });
+
+    const plan = screen.getByRole('region', { name: 'Reopen plan' });
+    expect(within(plan).getByText('This ticket will wait for its document again.')).toBeInTheDocument();
+    expect(within(plan).getByText('Receipt turned up')).toBeInTheDocument();
+    expect(within(plan).getByText('78787878')).toHaveAttribute('title', CLOSED_ID);
+    expect(rowRequests()).toHaveLength(1);
+
+    // What the server lists once the ticket is reopened.
+    serve({ rows: [PLAIN], me: 'super' });
+    await user.click(button('Confirm'));
+
+    expect(await screen.findByText(REOPEN_DONE)).toBeInTheDocument();
+    expect(post).toHaveBeenCalledTimes(2);
+    expect(post).toHaveBeenLastCalledWith(REOPEN_URL, { reason: 'Receipt turned up', confirm: true });
+    await waitFor(() => expect(rowRequests()).toHaveLength(2));
+    expect(await screen.findByText('REFUND 0042')).toBeInTheDocument();
+    expect(screen.queryByText('CLOSED FEE')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: REOPEN_TITLE })).not.toBeInTheDocument();
+    expect(pane()).not.toBeInTheDocument();
+  });
+
+  it('counts the reopen as carried out only when the server says so: otherwise names the row, claims nothing and reads the list again', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [CLOSED, PLAIN], me: 'super' });
+    // The confirm comes back 200, but as a plan that was NOT executed.
+    post
+      .mockResolvedValueOnce(planned(false, REOPEN_PLAN))
+      .mockResolvedValueOnce(planned(false, REOPEN_PLAN));
+    render(<InternalBankRows />);
+    await previewReopen(user);
+    await screen.findByRole('heading', { name: REOPEN_TITLE });
+
+    await user.click(button('Confirm'));
+
+    const notice = (await screen.findByText('The server did not carry this out.')).closest(
+      '[role="alert"]',
+    ) as HTMLElement;
+    expect(within(notice).getByText('78787878')).toHaveAttribute('title', CLOSED_ID);
+    expect(post).toHaveBeenCalledTimes(2);
+    expect(post).toHaveBeenLastCalledWith(REOPEN_URL, { reason: 'Receipt turned up', confirm: true });
+    expect(screen.queryByText(REOPEN_DONE)).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: REOPEN_TITLE })).not.toBeInTheDocument();
+
+    // The list is read again, and the notice is still there once it is back.
+    await waitFor(() => expect(rowRequests()).toHaveLength(2));
+    expect(await screen.findByText('REFUND 0042')).toBeInTheDocument();
+    expect(screen.getByText('The server did not carry this out.')).toBeInTheDocument();
+    expect(screen.queryByText(REOPEN_DONE)).not.toBeInTheDocument();
+  });
+
+  it("shows a refusal by the server's code and in its own words, before the plan or at the confirm", async () => {
+    const user = userEvent.setup();
+    serve({ rows: [CLOSED], me: 'super' });
+    render(<InternalBankRows />);
+
+    // Refused at the dry run: no plan, no confirm dialog.
+    const notLive =
+      "This row's entry is no longer live (reversed or corrected), so its ticket cannot be changed here.";
+    post.mockResolvedValueOnce({ status: 409, data: { code: 'entry_not_live', detail: notLive } });
+    await previewReopen(user);
+    const first = await screen.findByRole('alert');
+    expect(first).toHaveTextContent(notLive);
+    expect(within(first).getByText('entry_not_live')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: REOPEN_TITLE })).not.toBeInTheDocument();
+
+    // Refused at the confirm: the dialog closes and the refusal takes its place.
+    const notClosed = 'This row is not closed as "no document needed".';
+    post
+      .mockResolvedValueOnce(planned(false, REOPEN_PLAN))
+      .mockResolvedValueOnce({
+        status: 409,
+        data: { code: 'not_no_document_needed', detail: notClosed },
+      });
+    await user.click(button('Preview'));
+    await screen.findByRole('heading', { name: REOPEN_TITLE });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    await user.click(button('Confirm'));
+    const second = await screen.findByRole('alert');
+    expect(second).toHaveTextContent(notClosed);
+    expect(within(second).getByText('not_no_document_needed')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: REOPEN_TITLE })).not.toBeInTheDocument();
+
+    // Nothing was carried out: the pane stays and the list is not read again.
+    expect(pane()).toBeInTheDocument();
+    expect(rowRequests()).toHaveLength(1);
+    expect(screen.queryByText(REOPEN_DONE)).not.toBeInTheDocument();
+  });
+
+  it('says the row is no longer available on a 404, with a refresh', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [CLOSED, PLAIN], me: 'super' });
+    post.mockResolvedValue({ status: 404, data: { detail: 'Not found.' } });
+    render(<InternalBankRows />);
+
+    await previewReopen(user);
+    expect(await screen.findByText('This row is no longer available.')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: REOPEN_TITLE })).not.toBeInTheDocument();
+    expect(rowRequests()).toHaveLength(1);
+
+    // Refresh reads the list again; a row that is gone takes its pane with it.
+    serve({ rows: [PLAIN], me: 'super' });
+    await user.click(button('Refresh'));
+    await waitFor(() => expect(rowRequests()).toHaveLength(2));
+    await rowOf('REFUND 0042');
+    expect(screen.queryByText('This row is no longer available.')).not.toBeInTheDocument();
+    expect(pane()).not.toBeInTheDocument();
+    expect(post).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the hourly limit on a 429 and does not try again by itself', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [CLOSED], me: 'super' });
+    post.mockResolvedValue({ status: 429, data: { detail: 'Request was throttled.' } });
+    render(<InternalBankRows />);
+
+    await previewReopen(user);
+    expect(await screen.findByText(LIMIT)).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: REOPEN_TITLE })).not.toBeInTheDocument();
+
+    await settle();
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(rowRequests()).toHaveLength(1);
+    // Asking again is the super user's own choice.
+    expect(button('Preview')).toBeEnabled();
+  });
+
+  it('keeps the confirm open when the connection is lost: the failure with no code, Confirm ready again, nothing said to be done', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [CLOSED], me: 'super' });
+    post
+      .mockResolvedValueOnce(planned(false, REOPEN_PLAN))
+      .mockRejectedValueOnce(new Error('network down'));
+    render(<InternalBankRows />);
+    await previewReopen(user);
+    await screen.findByRole('heading', { name: REOPEN_TITLE });
+
+    await user.click(button('Confirm'));
+
+    // The refusal view, in the hook's words and with no code beneath.
+    const failure = await screen.findByRole('alert');
+    expect(failure.textContent).toBe('Could not reopen the ticket.');
+    expect(screen.getByRole('heading', { name: REOPEN_TITLE })).toBeInTheDocument();
+    expect(button('Confirm')).toBeEnabled();
+    expect(button('Cancel')).toBeEnabled();
+    expect(screen.queryByText(REOPEN_DONE)).not.toBeInTheDocument();
+    expect(screen.queryByText('The server did not carry this out.')).not.toBeInTheDocument();
+    expect(rowRequests()).toHaveLength(1);
+
+    // Confirm again is the same request again.
+    post.mockResolvedValueOnce(planned(true, REOPEN_PLAN));
+    await user.click(button('Confirm'));
+    expect(await screen.findByText(REOPEN_DONE)).toBeInTheDocument();
+    expect(post).toHaveBeenCalledTimes(3);
+    expect(post).toHaveBeenLastCalledWith(REOPEN_URL, { reason: 'Receipt turned up', confirm: true });
   });
 });

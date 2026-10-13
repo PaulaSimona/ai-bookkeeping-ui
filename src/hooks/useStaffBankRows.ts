@@ -7,6 +7,7 @@ import { type PlanOutcome, postForPlan } from '@/hooks/staffPlan';
  *   POST /api/accounting/staff/bank-rows/<id>/merge/         {surviving_row_id, confirm}
  *   POST /api/accounting/staff/bank-rows/<id>/release-flag/  {confirm}
  *   POST /api/accounting/staff/bank-rows/<id>/no-document/   {reason, note?, confirm}  (Release C2)
+ *   POST /api/accounting/staff/bank-rows/<id>/reopen/        {reason, confirm}         (Release C2, super users)
  * The list returns the rows of every org the viewer may see. The POSTs
  * are dry runs unless confirm is true: each answers {executed, plan}, and the
  * plan of a dry run is what the confirm run then carries out (PlanOutcome).
@@ -281,3 +282,42 @@ export const markNoDocument = (
     'Could not close the ticket.',
   );
 };
+
+// ─── Reopen (Release C2; backend Release C1, O-S88-3) ──────────────────────────
+//   POST /api/accounting/staff/bank-rows/<id>/reopen/  {reason, confirm}
+// SUPER USERS ONLY: a ticket closed as "no document needed" goes back to wait
+// for its document. The server answers anyone else with the same 404 as a row
+// that is not there, so the screen does not show the action to anyone else.
+
+// How long the reason for a reopen may be (bank_ticket_service.py
+// clean_reopen_reason: NOTE_MAX_LENGTH).
+export const REOPEN_REASON_MAX = 200;
+
+// Whether a row's ticket is one that can be reopened: closed as "no document
+// needed", on a row that is still in the books. Who may do it is the caller's
+// question (useStaffMe), and the server's.
+export const canReopenTicket = (row: BankRow): boolean =>
+  row.ticket_status === 'no_document_needed' && !row.excluded;
+
+// Mirrors accounting/bank_ticket_service.py ReopenPlan._image.
+export interface BankReopenPlan {
+  row_id: string;
+  row: { date: string; direction: string; amount: string; currency: string };
+  ticket: { before: BankTicketImage | null; after: BankTicketImage };
+  reason: string; // why it is reopened, as staff wrote it
+  entry: { entry_id: string; entry_number: number | null; entry_date: string };
+}
+
+// Reopen a closed ticket. The reason travels trimmed. Refusals: 400 {reason}
+// for a missing or too long reason; 409 {code, detail} — row_excluded,
+// not_no_document_needed, no_entry, entry_not_posted, entry_not_live.
+export const reopenBankRow = (
+  rowId: string,
+  reason: string,
+  confirm: boolean,
+): Promise<PlanOutcome<BankReopenPlan>> =>
+  postForPlan<BankReopenPlan>(
+    `/api/accounting/staff/bank-rows/${rowId}/reopen/`,
+    { reason: reason.trim(), confirm },
+    'Could not reopen the ticket.',
+  );

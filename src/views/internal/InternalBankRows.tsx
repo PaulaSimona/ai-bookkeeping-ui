@@ -41,6 +41,12 @@
 //                                   "Other" needs a note (at most 200
 //                                   characters). The form comes first, then
 //                                   Preview asks for the plan.
+// and, for a SUPER USER only (GET staff/me/), on a ticket closed as "no
+// document needed" (listed when that status is asked for, O-S88-11):
+//   Reopen                        → POST staff/bank-rows/<this row>/reopen/
+//                                   {reason} — the reason is required. Nobody
+//                                   else is shown the button; the server gives
+//                                   anyone else its 404.
 // Each asks the server for its plan first (a dry run), shows that plan in the
 // confirm dialog (PlanPreview), and carries it out only on Confirm — the same
 // request with confirm true. The server decides what is allowed: a refusal is
@@ -56,6 +62,7 @@ import {
   MergePlanPreview,
   NoDocumentPlanPreview,
   ReleasePlanPreview,
+  ReopenPlanPreview,
 } from '@/components/internal/PlanPreview';
 import { ShortId } from '@/components/internal/ShortId';
 import {
@@ -74,6 +81,7 @@ import {
 } from '@/components/internal/ui';
 import { type PlanOutcome } from '@/hooks/staffPlan';
 import { useOrgsList } from '@/hooks/useInternalAdmin';
+import { useStaffMe } from '@/hooks/useStaffMe';
 import {
   BANK_ROW_TICKET_STATUSES,
   BANK_ROW_TICKET_STATUS_LABELS,
@@ -81,11 +89,14 @@ import {
   NO_DOCUMENT_REASONS,
   NO_DOCUMENT_REASON_OTHER,
   POSSIBLE_DUPLICATE_REASON,
+  REOPEN_REASON_MAX,
   canMarkNoDocument,
+  canReopenTicket,
   labelOrCode,
   markNoDocument,
   mergeBankRow,
   releaseBankRowFlag,
+  reopenBankRow,
   useStaffBankRows,
   type BankRow,
   type BankRowFilters,
@@ -211,13 +222,16 @@ interface PendingAction extends PlanView {
 
 const RowActions: FC<{
   row: BankRow;
+  // The viewer is a super user (GET staff/me/). False for a reviewer, and
+  // while the viewer's role is not known yet.
+  isSuperUser: boolean;
   // A confirmed action: say what was done, close the pane, read the list again.
   onDone: (message: string) => void;
   // A confirm the server answered without carrying it out: name the plan's
   // rows and read the list again.
   onNotCarriedOut: (rows: PlanRow[]) => void;
   onRefresh: () => void;
-}> = ({ row, onDone, onNotCarriedOut, onRefresh }) => {
+}> = ({ row, isSuperUser, onDone, onNotCarriedOut, onRefresh }) => {
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [refusal, setRefusal] = useState<RemediationRefusal | null>(null);
   // A request is out: every button of the action waits for its answer.
@@ -228,11 +242,16 @@ const RowActions: FC<{
   const [closing, setClosing] = useState(false);
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
+  // "Reopen": its form is open, with the reason given so far.
+  const [reopening, setReopening] = useState(false);
+  const [reopenReason, setReopenReason] = useState('');
   const sibling = row.duplicate_sibling;
 
   const flagged = row.routing_reason === POSSIBLE_DUPLICATE_REASON;
   const canClose = canMarkNoDocument(row);
-  if (!flagged && !canClose) return null;
+  // Reopen is a super user's action only (O-S88-3): nobody else is shown it.
+  const canReopen = isSuperUser && canReopenTicket(row);
+  if (!flagged && !canClose && !canReopen) return null;
 
   // "Other" needs a note (spaces are not one); any other reason stands alone.
   const noteRequired = reason === NO_DOCUMENT_REASON_OTHER;
@@ -328,7 +347,53 @@ const RowActions: FC<{
             No document needed
           </SecondaryButton>
         )}
+        {canReopen && (
+          <SecondaryButton onClick={() => setReopening(true)} disabled={busy}>
+            Reopen
+          </SecondaryButton>
+        )}
       </div>
+
+      {/* Reopen: the reason first; the plan is asked for with Preview. */}
+      {canReopen && reopening && !pending && (
+        <div className="space-y-3 rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+          <p className="text-sm text-white/70">
+            Reopen this ticket: it will wait for its document again.
+          </p>
+          <textarea
+            value={reopenReason}
+            onChange={(e) => setReopenReason(e.target.value)}
+            disabled={busy}
+            maxLength={REOPEN_REASON_MAX}
+            rows={2}
+            aria-label="Reason for reopening"
+            placeholder="Reason for reopening"
+            className={`${fieldCls} w-full`}
+          />
+          <p className="text-xs text-white/40">A reason is required.</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <PrimaryButton
+              onClick={() =>
+                void ask(
+                  (confirmed) => reopenBankRow(row.id, reopenReason, confirmed),
+                  (plan) => ({
+                    title: 'Reopen this ticket?',
+                    plan: <ReopenPlanPreview plan={plan} />,
+                    done: 'Reopened: waiting for a document again.',
+                    rows: [{ label: 'Row', id: plan.row_id }],
+                  }),
+                )
+              }
+              disabled={busy || reopenReason.trim() === ''}
+            >
+              Preview
+            </PrimaryButton>
+            <SecondaryButton onClick={() => setReopening(false)} disabled={busy}>
+              Cancel
+            </SecondaryButton>
+          </div>
+        </div>
+      )}
 
       {/* The reason first; the plan is asked for with Preview. Put away while
           the plan is on screen, and back as it was left if that is cancelled. */}
@@ -414,6 +479,7 @@ const RowActions: FC<{
 
 const DetailPane: FC<{
   row: BankRow;
+  isSuperUser: boolean;
   // The list is already narrowed to this row's feed.
   feedIsFilter: boolean;
   onOnlyThisFeed: () => void;
@@ -421,7 +487,16 @@ const DetailPane: FC<{
   onNotCarriedOut: (rows: PlanRow[]) => void;
   onRefresh: () => void;
   onClose: () => void;
-}> = ({ row, feedIsFilter, onOnlyThisFeed, onDone, onNotCarriedOut, onRefresh, onClose }) => {
+}> = ({
+  row,
+  isSuperUser,
+  feedIsFilter,
+  onOnlyThisFeed,
+  onDone,
+  onNotCarriedOut,
+  onRefresh,
+  onClose,
+}) => {
   const sibling = row.duplicate_sibling;
   // The match that settled the row when it has one; else the suggestion that
   // waits for a decision.
@@ -450,6 +525,7 @@ const DetailPane: FC<{
 
           <RowActions
             row={row}
+            isSuperUser={isSuperUser}
             onDone={onDone}
             onNotCarriedOut={onNotCarriedOut}
             onRefresh={onRefresh}
@@ -507,6 +583,10 @@ export const InternalBankRows: FC = () => {
   });
   const { data: orgs } = useOrgsList();
   const spansOrgs = orgs.length > 1;
+  // Who is looking (GET staff/me/): only a super user is shown Reopen. Not a
+  // super user until the answer says so.
+  const { staff } = useStaffMe();
+  const isSuperUser = staff?.isSuperUser === true;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = items.find((row) => row.id === selectedId) ?? null;
   // The page's toast: a confirmed action closes the pane, so the confirmation
@@ -718,6 +798,7 @@ export const InternalBankRows: FC = () => {
               <DetailPane
                 key={selected.id}
                 row={selected}
+                isSuperUser={isSuperUser}
                 feedIsFilter={feed?.id === selected.bank_account_id}
                 onOnlyThisFeed={() =>
                   changeFeed({ id: selected.bank_account_id, label: feedLabel(selected) })
