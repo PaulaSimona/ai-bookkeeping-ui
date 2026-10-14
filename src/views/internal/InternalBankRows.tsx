@@ -56,6 +56,26 @@
 //                                   {reason} — the reason is required. Nobody
 //                                   else is shown the button; the server gives
 //                                   anyone else its 404.
+// and (Release D2, O-S89-4 / O-S89-5) on a row whose suggested match waits for
+// a decision, settled at the bank and in the books:
+//   Confirm match                 → POST staff/bank-rows/<this row>/match/confirm/
+//   Reject match                  → POST staff/bank-rows/<this row>/match/reject/
+//                                   {reason?} — the reason is optional. The
+//                                   plan says what follows for the ticket.
+// and on an unmatched row, settled at the bank and in the books:
+//   Match to a line…              → GET  staff/bank-rows/<this row>/match-candidates/
+//                                   for the picker (the live, free lines on the
+//                                   feed's account for the exact amount), then
+//                                   POST staff/bank-rows/<this row>/match/manual/
+//                                   {journal_line_id, note?}. The picker names a
+//                                   line by its entry, date, account and amount
+//                                   — never bank text.
+// and, for a SUPER USER only, on a row settled by a match and in the books:
+//   Unmatch                       → POST staff/bank-rows/<this row>/match/unmatch/
+//                                   {reason} — the reason is required; the
+//                                   ticket goes to review. Nobody else is
+//                                   shown the button; the server gives anyone
+//                                   else its 404.
 // Each asks the server for its plan first (a dry run), shows that plan in the
 // confirm dialog (PlanPreview), and carries it out only on Confirm — the same
 // request with confirm true. The server decides what is allowed: a refusal is
@@ -68,6 +88,7 @@ import { type FC, type ReactNode, useState } from 'react';
 
 import { ActionRefusal, noticeCls } from '@/components/internal/ActionRefusal';
 import {
+  MatchPlanPreview,
   MergePlanPreview,
   NoDocumentPlanPreview,
   ReleasePlanPreview,
@@ -94,26 +115,37 @@ import { useStaffMe } from '@/hooks/useStaffMe';
 import {
   BANK_ROW_TICKET_STATUSES,
   BANK_ROW_TICKET_STATUS_LABELS,
+  MATCH_REASON_MAX,
   NO_DOCUMENT_NOTE_MAX,
   NO_DOCUMENT_REASONS,
   NO_DOCUMENT_REASON_OTHER,
   POSSIBLE_DUPLICATE_REASON,
   REOPEN_REASON_MAX,
+  canDecideSuggestion,
+  canManualMatch,
   canMarkNoDocument,
   canReopenTicket,
+  canUnmatch,
   collectFeeds,
+  confirmBankMatch,
+  fetchMatchCandidates,
   labelOrCode,
+  manualMatchBankRow,
   markNoDocument,
   mergeBankRow,
+  rejectBankMatch,
   releaseBankRowFlag,
   reopenBankRow,
+  unmatchBankRow,
   useStaffBankRows,
   type BankFeedOption,
+  type BankMatchCandidate,
   type BankRow,
   type BankRowFilters,
   type BankRowSibling,
 } from '@/hooks/useStaffBankRows';
 import { type RemediationRefusal } from '@/hooks/useStaffResolution';
+import { formatEntryNumber } from '@/utils/entryStatus';
 
 const fieldCls =
   'rounded-lg bg-[#0A1628] border border-white/15 px-3 py-2 text-sm text-white ' +
@@ -220,6 +252,16 @@ const RowCard: FC<{ label: string; heading: string; row: RowSide }> = ({ label, 
 
 // ─── Actions ───────────────────────────────────────────────────────────────────
 
+// A candidate line in the picker: its entry (number, else id), date, account
+// and the one amount it carries, then the entry's description — the platform's
+// wording, as the match summary already shows staff. Never bank text.
+const candidateLabel = (candidate: BankMatchCandidate): string => {
+  const entry = formatEntryNumber(candidate.entry.entry_number) || candidate.entry.entry_id.slice(0, 8);
+  const amount =
+    candidate.line_debit != null ? `debit ${candidate.line_debit}` : `credit ${candidate.line_credit ?? '—'}`;
+  return `${entry} · ${candidate.entry.entry_date} · ${candidate.account_code} · ${amount} · ${candidate.entry_description}`;
+};
+
 // What ActionRefusal says on a 404: the row, or the sibling it would merge
 // with, is gone.
 const ROW_GONE = 'This row is no longer available.';
@@ -270,13 +312,48 @@ const RowActions: FC<{
   // "Reopen": its form is open, with the reason given so far.
   const [reopening, setReopening] = useState(false);
   const [reopenReason, setReopenReason] = useState('');
+  // "Reject match" (Release D2): its form is open, with the optional reason.
+  const [rejecting, setRejecting] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  // "Match to a line…" (Release D2): the candidates read for this row (null
+  // until they arrive), the line chosen and the optional note.
+  const [matching, setMatching] = useState(false);
+  const [candidates, setCandidates] = useState<BankMatchCandidate[] | null>(null);
+  const [lineId, setLineId] = useState('');
+  const [matchNote, setMatchNote] = useState('');
+  // "Unmatch" (Release D2, super users): its form is open, with the reason.
+  const [unmatching, setUnmatching] = useState(false);
+  const [unmatchReason, setUnmatchReason] = useState('');
   const sibling = row.duplicate_sibling;
 
   const flagged = row.routing_reason === POSSIBLE_DUPLICATE_REASON;
   const canClose = canMarkNoDocument(row);
   // Reopen is a super user's action only (O-S88-3): nobody else is shown it.
   const canReopen = isSuperUser && canReopenTicket(row);
-  if (!flagged && !canClose && !canReopen) return null;
+  // A suggested match waits for a decision (Release D2, O-S89-4).
+  const canDecide = canDecideSuggestion(row);
+  // An unmatched row may be matched by hand (Release D2, O-S89-4).
+  const canMatch = canManualMatch(row);
+  // Unmatch is a super user's action only (O-S89-4): nobody else is shown it.
+  const canTakeOff = isSuperUser && canUnmatch(row);
+  if (!flagged && !canClose && !canReopen && !canDecide && !canMatch && !canTakeOff) return null;
+
+  // Opens the manual-match form once the candidates are read. A refusal on
+  // the read is shown and the form stays closed.
+  const openMatching = async () => {
+    setBusy(true);
+    setRefusal(null);
+    setCandidates(null);
+    setLineId('');
+    const outcome = await fetchMatchCandidates(row.id);
+    setBusy(false);
+    if (!outcome.ok) {
+      setRefusal(outcome.refusal);
+      return;
+    }
+    setCandidates(outcome.candidates);
+    setMatching(true);
+  };
 
   // "Other" needs a note (spaces are not one); any other reason stands alone.
   const noteRequired = reason === NO_DOCUMENT_REASON_OTHER;
@@ -367,6 +444,34 @@ const RowActions: FC<{
             Not a duplicate: release flag
           </SecondaryButton>
         )}
+        {canDecide && (
+          <PrimaryButton
+            onClick={() =>
+              void ask(
+                (confirmed) => confirmBankMatch(row.id, confirmed),
+                (plan) => ({
+                  title: 'Confirm this match?',
+                  plan: <MatchPlanPreview plan={plan} />,
+                  done: 'Match confirmed.',
+                  rows: [{ label: 'Row', id: plan.row_id }],
+                }),
+              )
+            }
+            disabled={busy}
+          >
+            Confirm match
+          </PrimaryButton>
+        )}
+        {canDecide && (
+          <SecondaryButton onClick={() => setRejecting(true)} disabled={busy}>
+            Reject match
+          </SecondaryButton>
+        )}
+        {canMatch && (
+          <SecondaryButton onClick={() => void openMatching()} disabled={busy}>
+            Match to a line…
+          </SecondaryButton>
+        )}
         {canClose && (
           <SecondaryButton onClick={() => setClosing(true)} disabled={busy}>
             No document needed
@@ -377,7 +482,164 @@ const RowActions: FC<{
             Reopen
           </SecondaryButton>
         )}
+        {canTakeOff && (
+          <SecondaryButton onClick={() => setUnmatching(true)} disabled={busy}>
+            Unmatch
+          </SecondaryButton>
+        )}
       </div>
+
+      {/* Unmatch (super users): the reason first; the plan is asked for with
+          Preview. The ticket goes to review as unmatched by staff. */}
+      {canTakeOff && unmatching && !pending && (
+        <div className="space-y-3 rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+          <p className="text-sm text-white/70">
+            Take this match off: the row is unmatched and its ticket goes to review.
+          </p>
+          <textarea
+            value={unmatchReason}
+            onChange={(e) => setUnmatchReason(e.target.value)}
+            disabled={busy}
+            maxLength={MATCH_REASON_MAX}
+            rows={2}
+            aria-label="Reason for unmatching"
+            placeholder="Reason for unmatching"
+            className={`${fieldCls} w-full`}
+          />
+          <p className="text-xs text-white/40">A reason is required.</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <PrimaryButton
+              onClick={() =>
+                void ask(
+                  (confirmed) => unmatchBankRow(row.id, unmatchReason, confirmed),
+                  (plan) => ({
+                    title: 'Take this match off?',
+                    plan: <MatchPlanPreview plan={plan} />,
+                    done: 'Match taken off.',
+                    rows: [{ label: 'Row', id: plan.row_id }],
+                  }),
+                )
+              }
+              disabled={busy || unmatchReason.trim() === ''}
+            >
+              Preview
+            </PrimaryButton>
+            <SecondaryButton onClick={() => setUnmatching(false)} disabled={busy}>
+              Cancel
+            </SecondaryButton>
+          </div>
+        </div>
+      )}
+
+      {/* Reject match: an optional reason first; the plan is asked for with
+          Preview. The plan says where the row goes: its own entry, review, or
+          back to the drafting queue. */}
+      {canDecide && rejecting && !pending && (
+        <div className="space-y-3 rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+          <p className="text-sm text-white/70">
+            Reject this match: the row is re-linked to its own entry when it has one; otherwise it
+            goes to review, or back to the drafting queue.
+          </p>
+          <textarea
+            value={rejectReason}
+            onChange={(e) => setRejectReason(e.target.value)}
+            disabled={busy}
+            maxLength={MATCH_REASON_MAX}
+            rows={2}
+            aria-label="Reason for rejecting"
+            placeholder="Reason (optional)"
+            className={`${fieldCls} w-full`}
+          />
+          <p className="text-xs text-white/40">A reason is optional.</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <PrimaryButton
+              onClick={() =>
+                void ask(
+                  (confirmed) => rejectBankMatch(row.id, rejectReason, confirmed),
+                  (plan) => ({
+                    title: 'Reject this match?',
+                    plan: <MatchPlanPreview plan={plan} />,
+                    done: 'Match rejected.',
+                    rows: [{ label: 'Row', id: plan.row_id }],
+                  }),
+                )
+              }
+              disabled={busy}
+            >
+              Preview
+            </PrimaryButton>
+            <SecondaryButton onClick={() => setRejecting(false)} disabled={busy}>
+              Cancel
+            </SecondaryButton>
+          </div>
+        </div>
+      )}
+
+      {/* Match to a line: the candidates the server read for this row, one to
+          be chosen, and an optional note; the plan is asked for with Preview. */}
+      {canMatch && matching && candidates != null && !pending && (
+        <div className="space-y-3 rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+          {candidates.length === 0 ? (
+            <p className="text-sm text-white/70">
+              No posted line on this feed&apos;s account is free for this amount.
+            </p>
+          ) : (
+            <>
+              <p className="text-sm text-white/70">
+                Match this row by hand to a posted line on its feed&apos;s account for the same
+                amount. The ticket then waits for its document.
+              </p>
+              <select
+                value={lineId}
+                onChange={(e) => setLineId(e.target.value)}
+                disabled={busy}
+                aria-label="Line"
+                className={`${fieldCls} w-full`}
+              >
+                <option value="">Choose a line</option>
+                {candidates.map((candidate) => (
+                  <option key={candidate.journal_line_id} value={candidate.journal_line_id}>
+                    {candidateLabel(candidate)}
+                  </option>
+                ))}
+              </select>
+              <textarea
+                value={matchNote}
+                onChange={(e) => setMatchNote(e.target.value)}
+                disabled={busy}
+                maxLength={MATCH_REASON_MAX}
+                rows={2}
+                aria-label="Note for the match"
+                placeholder="Note (optional)"
+                className={`${fieldCls} w-full`}
+              />
+            </>
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {candidates.length > 0 && (
+              <PrimaryButton
+                onClick={() =>
+                  void ask(
+                    (confirmed) => manualMatchBankRow(row.id, lineId, matchNote, confirmed),
+                    (plan) => ({
+                      title: 'Match this row by hand?',
+                      plan: <MatchPlanPreview plan={plan} />,
+                      done: 'Matched by hand.',
+                      rows: [{ label: 'Row', id: plan.row_id }],
+                    }),
+                  )
+                }
+                disabled={busy || lineId === ''}
+              >
+                Preview
+              </PrimaryButton>
+            )}
+            <SecondaryButton onClick={() => setMatching(false)} disabled={busy}>
+              Cancel
+            </SecondaryButton>
+          </div>
+        </div>
+      )}
 
       {/* Reopen: the reason first; the plan is asked for with Preview. */}
       {canReopen && reopening && !pending && (

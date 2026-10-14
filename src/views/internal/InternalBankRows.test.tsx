@@ -14,6 +14,8 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import api from '@/utils/api';
 import {
   BANK_ROW_TICKET_STATUSES,
+  type BankMatchCandidate,
+  type BankMatchPlan,
   type BankMergePlan,
   type BankNoDocumentPlan,
   type BankReleasePlan,
@@ -1977,5 +1979,680 @@ describe('bank row: reopen', () => {
     expect(await screen.findByText(REOPEN_DONE)).toBeInTheDocument();
     expect(post).toHaveBeenCalledTimes(3);
     expect(post).toHaveBeenLastCalledWith(REOPEN_URL, { reason: 'Receipt turned up', confirm: true });
+  });
+});
+
+// ─── Match actions (Release D2; backend Release D1, O-S89-4 / O-S89-5) ─────────
+
+const SUGGESTED_ID = '56565656-5656-4565-8565-565656565656';
+const SUGGESTED_ENTRY = '61616161-0000-4000-8000-000000000003';
+
+// A money-out row parked on a suggested match: settled at the bank, in the
+// books, waiting for a reviewer's decision.
+const SUGGESTED = bankRow({
+  id: SUGGESTED_ID,
+  direction: 'money_out',
+  amount: '6.00',
+  counterparty_name: 'First Bank',
+  description: 'SUGGESTED ROW',
+  ticket_status: 'needs_review',
+  ticket_status_label: 'Needs Review',
+  routing_reason: 'suggested_match_review',
+  routing_reason_label: 'Suggested match needs a decision',
+  row_kind: 'suggested',
+  suggested_match: {
+    id: '71717171-0000-4000-8000-000000000001',
+    state: 'suggested',
+    similarity: '0.00',
+    date_delta_days: 1,
+    rationale: 'suggested: similarity 0.0000 below threshold',
+    created_at: '2026-09-21T10:00:00Z',
+    journal_line_id: '81818181-0000-4000-8000-000000000002',
+    entry_id: SUGGESTED_ENTRY,
+    entry_date: '2026-09-19',
+    entry_description: 'Monthly bank charges',
+    line_debit: null,
+    line_credit: '6.00',
+    account_code: '1010',
+  },
+});
+
+const CONFIRM_URL = `/api/accounting/staff/bank-rows/${SUGGESTED_ID}/match/confirm/`;
+const REJECT_URL = `/api/accounting/staff/bank-rows/${SUGGESTED_ID}/match/reject/`;
+
+// The plan as the server sends it (bank_match_actions.py MatchActionPlan._image).
+const CONFIRM_PLAN: BankMatchPlan = {
+  action: 'confirm',
+  row_id: SUGGESTED_ID,
+  row: { date: '2026-09-20', direction: 'money_out', amount: '6.00', currency: 'CAD' },
+  match: {
+    match_id: '71717171-0000-4000-8000-000000000001',
+    state: { before: 'suggested', after: 'confirmed' },
+    journal_line_id: '81818181-0000-4000-8000-000000000002',
+    account_code: '1010',
+    line_debit: null,
+    line_credit: '6.00',
+    entry: { entry_id: SUGGESTED_ENTRY, entry_number: 66, entry_date: '2026-09-19' },
+  },
+  ticket: {
+    before: { status: 'needs_review', routing_reason: 'suggested_match_review' },
+    after: { status: 'no_document_needed', routing_reason: 'account_rule' },
+  },
+  follow: 'account_rule',
+  relink: null,
+  reason: null,
+  note: null,
+  routing_reason_label: 'No-document account',
+};
+const REJECT_PLAN: BankMatchPlan = {
+  ...CONFIRM_PLAN,
+  action: 'reject',
+  match: { ...CONFIRM_PLAN.match, state: { before: 'suggested', after: 'rejected' } },
+  ticket: {
+    before: CONFIRM_PLAN.ticket.before,
+    after: { status: 'pending', routing_reason: null },
+  },
+  follow: 'pending',
+  reason: 'not this entry',
+  routing_reason_label: null,
+};
+
+const CONFIRM_MATCH = 'Confirm match';
+const REJECT_MATCH = 'Reject match';
+const CONFIRM_TITLE = 'Confirm this match?';
+const REJECT_TITLE = 'Reject this match?';
+const CONFIRM_DONE = 'Match confirmed.';
+const REJECT_DONE = 'Match rejected.';
+const rejectReason = () => screen.getByRole('textbox', { name: 'Reason for rejecting' });
+
+describe('bank row: confirm or reject a suggested match', () => {
+  it('offers Confirm match and Reject match only on a suggested row that is settled at the bank and in the books', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [SUGGESTED, FLAGGED, WAITING, PLAIN], me: 'reviewer' });
+    render(<InternalBankRows />);
+
+    await openRow(user, 'SUGGESTED ROW');
+    expect(button(CONFIRM_MATCH)).toBeEnabled();
+    expect(button(REJECT_MATCH)).toBeEnabled();
+    // Nothing is asked of the server until a button is pressed.
+    expect(post).not.toHaveBeenCalled();
+
+    // A suggestion on a row still pending at the bank; a settled row; an
+    // unmatched row: none of them.
+    for (const description of ['STAPLES STORE #114 TORONTO', 'MONTHLY FEE', 'REFUND 0042']) {
+      await openRow(user, description);
+      expect(screen.queryByRole('button', { name: CONFIRM_MATCH })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: REJECT_MATCH })).not.toBeInTheDocument();
+    }
+  });
+
+  it("asks for the confirm plan first and shows the server's plan; Confirm sends confirm true, then reads the list again and closes the pane", async () => {
+    const user = userEvent.setup();
+    serve({ rows: [SUGGESTED, PLAIN], me: 'reviewer' });
+    post
+      .mockResolvedValueOnce(planned(false, CONFIRM_PLAN))
+      .mockResolvedValueOnce(planned(true, CONFIRM_PLAN));
+    render(<InternalBankRows />);
+    await openRow(user, 'SUGGESTED ROW');
+
+    await user.click(button(CONFIRM_MATCH));
+    expect(await screen.findByRole('heading', { name: CONFIRM_TITLE })).toBeInTheDocument();
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(post).toHaveBeenCalledWith(CONFIRM_URL, { confirm: false });
+    const plan = screen.getByRole('region', { name: 'Match plan' });
+    expect(within(plan).getByText('The suggested match will be confirmed.')).toBeInTheDocument();
+    expect(plan).toHaveTextContent('suggested → confirmed');
+    expect(within(plan).getByText('No-document account')).toBeInTheDocument();
+    expect(within(plan).getByText('56565656')).toHaveAttribute('title', SUGGESTED_ID);
+
+    // What the server lists once the row is settled: it has left.
+    serve({ rows: [PLAIN], me: 'reviewer' });
+    await user.click(button('Confirm'));
+
+    expect(await screen.findByText(CONFIRM_DONE)).toBeInTheDocument();
+    expect(post).toHaveBeenCalledTimes(2);
+    expect(post).toHaveBeenLastCalledWith(CONFIRM_URL, { confirm: true });
+    await waitFor(() => expect(rowRequests()).toHaveLength(2));
+    expect(await screen.findByText('REFUND 0042')).toBeInTheDocument();
+    expect(screen.queryByText('SUGGESTED ROW')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: CONFIRM_TITLE })).not.toBeInTheDocument();
+    expect(pane()).not.toBeInTheDocument();
+  });
+
+  it('rejects with an optional reason: the form first, the reason trimmed in the plan request, then the same request with confirm true', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [SUGGESTED, PLAIN], me: 'reviewer' });
+    post
+      .mockResolvedValueOnce(planned(false, REJECT_PLAN))
+      .mockResolvedValueOnce(planned(true, REJECT_PLAN));
+    render(<InternalBankRows />);
+    await openRow(user, 'SUGGESTED ROW');
+
+    await user.click(button(REJECT_MATCH));
+    expect(screen.getByText('A reason is optional.')).toBeInTheDocument();
+    expect(rejectReason()).toHaveAttribute('maxlength', '200');
+    expect(button('Preview')).toBeEnabled();
+    await user.type(rejectReason(), '  not this entry ');
+    await user.click(button('Preview'));
+
+    expect(await screen.findByRole('heading', { name: REJECT_TITLE })).toBeInTheDocument();
+    expect(post).toHaveBeenCalledWith(REJECT_URL, { reason: 'not this entry', confirm: false });
+    const plan = screen.getByRole('region', { name: 'Match plan' });
+    expect(within(plan).getByText('The suggested match will be rejected.')).toBeInTheDocument();
+    expect(within(plan).getByText('The ticket goes back to the drafting queue.')).toBeInTheDocument();
+
+    serve({ rows: [PLAIN], me: 'reviewer' });
+    await user.click(button('Confirm'));
+
+    expect(await screen.findByText(REJECT_DONE)).toBeInTheDocument();
+    expect(post).toHaveBeenLastCalledWith(REJECT_URL, { reason: 'not this entry', confirm: true });
+    await waitFor(() => expect(rowRequests()).toHaveLength(2));
+    expect(pane()).not.toBeInTheDocument();
+  });
+
+  it('leaves a blank reason out of the rejection, and Cancel puts the form away with nothing sent', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [SUGGESTED], me: 'reviewer' });
+    post.mockResolvedValueOnce(planned(false, { ...REJECT_PLAN, reason: null }));
+    render(<InternalBankRows />);
+    await openRow(user, 'SUGGESTED ROW');
+
+    await user.click(button(REJECT_MATCH));
+    await user.type(rejectReason(), '   ');
+    await user.click(button('Cancel'));
+    expect(screen.queryByRole('textbox', { name: 'Reason for rejecting' })).not.toBeInTheDocument();
+    expect(post).not.toHaveBeenCalled();
+
+    await user.click(button(REJECT_MATCH));
+    await user.click(button('Preview'));
+    expect(await screen.findByRole('heading', { name: REJECT_TITLE })).toBeInTheDocument();
+    expect(post).toHaveBeenCalledWith(REJECT_URL, { confirm: false });
+  });
+
+  it("shows a refusal by the server's code and in its own words, before the plan or at the confirm", async () => {
+    const user = userEvent.setup();
+    serve({ rows: [SUGGESTED], me: 'reviewer' });
+    render(<InternalBankRows />);
+    await openRow(user, 'SUGGESTED ROW');
+
+    // Refused at the dry run (census L shape S5): no plan, no confirm dialog.
+    const notLive =
+      'This journal line cannot be confirmed: it reverses another line, or its entry has been reversed or corrected.';
+    post.mockResolvedValueOnce({ status: 409, data: { code: 'line_not_live', detail: notLive } });
+    await user.click(button(CONFIRM_MATCH));
+    const first = await screen.findByRole('alert');
+    expect(first).toHaveTextContent(notLive);
+    expect(within(first).getByText('line_not_live')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: CONFIRM_TITLE })).not.toBeInTheDocument();
+
+    // Refused at the confirm: the dialog closes and the refusal takes its place.
+    const gone = 'This row has no suggested match to decide.';
+    post
+      .mockResolvedValueOnce(planned(false, REJECT_PLAN))
+      .mockResolvedValueOnce({ status: 409, data: { code: 'no_suggestion', detail: gone } });
+    await user.click(button(REJECT_MATCH));
+    await user.click(button('Preview'));
+    await screen.findByRole('heading', { name: REJECT_TITLE });
+    await user.click(button('Confirm'));
+    const second = await screen.findByRole('alert');
+    expect(second).toHaveTextContent(gone);
+    expect(within(second).getByText('no_suggestion')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: REJECT_TITLE })).not.toBeInTheDocument();
+    expect(pane()).toBeInTheDocument();
+    expect(rowRequests()).toHaveLength(1);
+  });
+
+  it('counts a confirm as carried out only when the server says so: otherwise names the row, claims nothing and reads the list again', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [SUGGESTED], me: 'reviewer' });
+    post
+      .mockResolvedValueOnce(planned(false, CONFIRM_PLAN))
+      .mockResolvedValueOnce(planned(false, CONFIRM_PLAN));
+    render(<InternalBankRows />);
+    await openRow(user, 'SUGGESTED ROW');
+    await user.click(button(CONFIRM_MATCH));
+    await screen.findByRole('heading', { name: CONFIRM_TITLE });
+
+    await user.click(button('Confirm'));
+
+    const notice = (await screen.findByText('The server did not carry this out.')).closest(
+      '[role="alert"]',
+    ) as HTMLElement;
+    expect(within(notice).getByText('56565656')).toHaveAttribute('title', SUGGESTED_ID);
+    expect(screen.queryByText(CONFIRM_DONE)).not.toBeInTheDocument();
+    await waitFor(() => expect(rowRequests()).toHaveLength(2));
+  });
+
+  it("shows a stale-match or unmatched-by-staff reason by the server's label, in the list and in the pane", async () => {
+    const user = userEvent.setup();
+    serve({
+      rows: [
+        bankRow({
+          id: '91919191-0000-4000-8000-000000000001',
+          description: 'STALE ROW',
+          ticket_status: 'needs_review',
+          ticket_status_label: 'Needs Review',
+          routing_reason: 'stale_match',
+          routing_reason_label: 'Matched entry no longer live',
+        }),
+        bankRow({
+          id: '92929292-0000-4000-8000-000000000002',
+          description: 'UNMATCHED BY STAFF ROW',
+          ticket_status: 'needs_review',
+          ticket_status_label: 'Needs Review',
+          routing_reason: 'unmatched_by_staff',
+          routing_reason_label: 'Unmatched by staff',
+        }),
+      ],
+      me: 'reviewer',
+    });
+    render(<InternalBankRows />);
+
+    const stale = await rowOf('STALE ROW');
+    expect(cellsOf(stale)[6]).toBe('Matched entry no longer live');
+    expect(stale).not.toHaveTextContent('stale_match');
+    expect(cellsOf(await rowOf('UNMATCHED BY STAFF ROW'))[6]).toBe('Unmatched by staff');
+
+    const detail = await openRow(user, 'STALE ROW');
+    expect(within(detail).getByText('Matched entry no longer live')).toBeInTheDocument();
+    expect(detail).not.toHaveTextContent('stale_match');
+  });
+});
+
+// ─── A match made by hand (Release D2) ─────────────────────────────────────────
+
+const CANDIDATES_URL = `/api/accounting/staff/bank-rows/${PLAIN_ID}/match-candidates/`;
+const MANUAL_URL = `/api/accounting/staff/bank-rows/${PLAIN_ID}/match/manual/`;
+const LINE_A = 'a1a1a1a1-0000-4000-8000-000000000001';
+const LINE_B = 'b2b2b2b2-0000-4000-8000-000000000002';
+const ENTRY_A = 'c3c3c3c3-0000-4000-8000-000000000003';
+const ENTRY_B = 'd4d4d4d4-0000-4000-8000-000000000004';
+
+// The candidates as the server sends them (bank_match_actions.py
+// _candidate_image): PLAIN is money in, so each is a debit on the feed's
+// account for its amount.
+const CANDIDATES: BankMatchCandidate[] = [
+  {
+    journal_line_id: LINE_A,
+    entry: { entry_id: ENTRY_A, entry_number: 70, entry_date: '2026-09-18' },
+    entry_description: 'Refund received',
+    entry_source: 'manual',
+    account_code: '2150',
+    line_debit: '80.00',
+    line_credit: null,
+  },
+  {
+    journal_line_id: LINE_B,
+    entry: { entry_id: ENTRY_B, entry_number: null, entry_date: '2026-09-02' },
+    entry_description: 'Deposit recognised',
+    entry_source: 'deposit_recognition',
+    account_code: '2150',
+    line_debit: '80.00',
+    line_credit: null,
+  },
+];
+
+const MANUAL_PLAN: BankMatchPlan = {
+  action: 'manual_match',
+  row_id: PLAIN_ID,
+  row: { date: '2026-09-20', direction: 'money_in', amount: '80.00', currency: 'CAD' },
+  match: {
+    match_id: null,
+    state: { before: null, after: 'manually_matched' },
+    journal_line_id: LINE_A,
+    account_code: '2150',
+    line_debit: '80.00',
+    line_credit: null,
+    entry: { entry_id: ENTRY_A, entry_number: 70, entry_date: '2026-09-18' },
+  },
+  ticket: {
+    before: { status: 'pending', routing_reason: null },
+    after: { status: 'waiting_document', routing_reason: null },
+  },
+  follow: 'waiting_document',
+  relink: null,
+  reason: null,
+  note: 'by hand',
+  routing_reason_label: null,
+};
+
+const MATCH_BY_HAND = 'Match to a line…';
+const MANUAL_TITLE = 'Match this row by hand?';
+const MANUAL_DONE = 'Matched by hand.';
+const linePicker = () => screen.getByRole('combobox', { name: 'Line' });
+const matchNote = () => screen.getByRole('textbox', { name: 'Note for the match' });
+
+// Serves the list (PLAIN among the rows) and the candidates for it.
+const serveWithCandidates = (candidates: unknown = CANDIDATES, rows: BankRow[] = [PLAIN, SUGGESTED]) => {
+  serve({ rows, me: 'reviewer' });
+  const base = get.getMockImplementation()!;
+  get.mockImplementation((url, config) => {
+    if (url === CANDIDATES_URL) {
+      return Promise.resolve({ status: 200, data: { row_id: PLAIN_ID, candidates } });
+    }
+    return base(url, config);
+  });
+};
+
+describe('bank row: a match made by hand', () => {
+  it('offers Match to a line only on an unmatched row that is settled at the bank and in the books', async () => {
+    const user = userEvent.setup();
+    serve({
+      rows: [
+        PLAIN,
+        SUGGESTED,
+        WAITING,
+        bankRow({ id: '93939393-0000-4000-8000-000000000003', description: 'PENDING ROW', pending: true }),
+      ],
+      me: 'reviewer',
+    });
+    render(<InternalBankRows />);
+
+    await openRow(user, 'REFUND 0042');
+    expect(button(MATCH_BY_HAND)).toBeEnabled();
+    for (const description of ['SUGGESTED ROW', 'MONTHLY FEE', 'PENDING ROW']) {
+      await openRow(user, description);
+      expect(screen.queryByRole('button', { name: MATCH_BY_HAND })).not.toBeInTheDocument();
+    }
+    // Nothing is read or sent until the button is pressed.
+    expect(get.mock.calls.some(([url]) => String(url).endsWith('/match-candidates/'))).toBe(false);
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('reads the candidates when asked, and offers each by its entry, date, account and amount — never bank text; Preview waits for a choice', async () => {
+    const user = userEvent.setup();
+    serveWithCandidates();
+    render(<InternalBankRows />);
+    await openRow(user, 'REFUND 0042');
+
+    await user.click(button(MATCH_BY_HAND));
+
+    const picker = await screen.findByRole('combobox', { name: 'Line' });
+    expect(get).toHaveBeenCalledWith(CANDIDATES_URL);
+    const options = within(picker)
+      .getAllByRole('option')
+      .map((option) => option.textContent);
+    expect(options).toEqual([
+      'Choose a line',
+      'JE-0070 · 2026-09-18 · 2150 · debit 80.00 · Refund received',
+      'd4d4d4d4 · 2026-09-02 · 2150 · debit 80.00 · Deposit recognised',
+    ]);
+    expect(within(picker).queryByText(/REFUND 0042|Refund Co/)).not.toBeInTheDocument();
+    expect(button('Preview')).toBeDisabled();
+    await user.selectOptions(picker, LINE_A);
+    expect(button('Preview')).toBeEnabled();
+    expect(matchNote()).toHaveAttribute('maxlength', '200');
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('says so when no line fits, and shows a refusal reading the candidates in the server\'s words', async () => {
+    const user = userEvent.setup();
+    serveWithCandidates([]);
+    render(<InternalBankRows />);
+    await openRow(user, 'REFUND 0042');
+
+    await user.click(button(MATCH_BY_HAND));
+    expect(
+      await screen.findByText("No posted line on this feed's account is free for this amount."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Line' })).not.toBeInTheDocument();
+    await user.click(button('Cancel'));
+
+    // The read refused: no form, the refusal shown.
+    const base = get.getMockImplementation()!;
+    get.mockImplementation((url, config) =>
+      url === CANDIDATES_URL
+        ? Promise.resolve({ status: 409, data: { code: 'row_pending', detail: 'Still pending at the bank.' } })
+        : base(url, config),
+    );
+    await user.click(button(MATCH_BY_HAND));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Still pending at the bank.');
+    expect(within(alert).getByText('row_pending')).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Line' })).not.toBeInTheDocument();
+  });
+
+  it("asks for the plan with the chosen line and the trimmed note, shows the server's plan, and confirms with the same request and confirm true", async () => {
+    const user = userEvent.setup();
+    serveWithCandidates();
+    post
+      .mockResolvedValueOnce(planned(false, MANUAL_PLAN))
+      .mockResolvedValueOnce(planned(true, MANUAL_PLAN));
+    render(<InternalBankRows />);
+    await openRow(user, 'REFUND 0042');
+    await user.click(button(MATCH_BY_HAND));
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Line' }), LINE_A);
+    await user.type(matchNote(), '  by hand ');
+    await user.click(button('Preview'));
+
+    expect(await screen.findByRole('heading', { name: MANUAL_TITLE })).toBeInTheDocument();
+    expect(post).toHaveBeenCalledWith(MANUAL_URL, { journal_line_id: LINE_A, note: 'by hand', confirm: false });
+    const plan = screen.getByRole('region', { name: 'Match plan' });
+    expect(within(plan).getByText('This row will be matched to the line below by hand.')).toBeInTheDocument();
+    expect(plan).toHaveTextContent('new → manually_matched');
+    expect(plan).toHaveTextContent('JE-0070');
+
+    serve({ rows: [SUGGESTED], me: 'reviewer' });
+    await user.click(button('Confirm'));
+
+    expect(await screen.findByText(MANUAL_DONE)).toBeInTheDocument();
+    expect(post).toHaveBeenLastCalledWith(MANUAL_URL, { journal_line_id: LINE_A, note: 'by hand', confirm: true });
+    await waitFor(() => expect(rowRequests()).toHaveLength(2));
+    expect(pane()).not.toBeInTheDocument();
+  });
+
+  it('leaves a blank note out of the request', async () => {
+    const user = userEvent.setup();
+    serveWithCandidates();
+    post.mockResolvedValueOnce(planned(false, { ...MANUAL_PLAN, note: null }));
+    render(<InternalBankRows />);
+    await openRow(user, 'REFUND 0042');
+    await user.click(button(MATCH_BY_HAND));
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Line' }), LINE_B);
+    await user.type(matchNote(), '   ');
+    await user.click(button('Preview'));
+
+    await screen.findByRole('heading', { name: MANUAL_TITLE });
+    expect(post).toHaveBeenCalledWith(MANUAL_URL, { journal_line_id: LINE_B, confirm: false });
+  });
+
+  it("shows a refusal by the server's code and in its own words, and keeps the form as it was", async () => {
+    const user = userEvent.setup();
+    serveWithCandidates();
+    const mismatch = 'The journal line is for 80.00; the transaction is for 81.00. A match needs the exact amount.';
+    post.mockResolvedValueOnce({ status: 409, data: { code: 'amount_mismatch', detail: mismatch } });
+    render(<InternalBankRows />);
+    await openRow(user, 'REFUND 0042');
+    await user.click(button(MATCH_BY_HAND));
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Line' }), LINE_A);
+    await user.click(button('Preview'));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(mismatch);
+    expect(within(alert).getByText('amount_mismatch')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: MANUAL_TITLE })).not.toBeInTheDocument();
+    // The choice stands; the form was not put away.
+    expect(linePicker()).toHaveValue(LINE_A);
+    expect(rowRequests()).toHaveLength(1);
+  });
+
+  it('sends one request at a time: the picker, the note and the buttons wait for the answer', async () => {
+    const user = userEvent.setup();
+    serveWithCandidates();
+    const answers: ((value: unknown) => void)[] = [];
+    post.mockImplementation(() => new Promise((resolve) => answers.push(resolve)));
+    render(<InternalBankRows />);
+    await openRow(user, 'REFUND 0042');
+    await user.click(button(MATCH_BY_HAND));
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Line' }), LINE_A);
+    await user.click(button('Preview'));
+
+    expect(button('Preview')).toBeDisabled();
+    expect(linePicker()).toBeDisabled();
+    expect(matchNote()).toBeDisabled();
+    await user.click(button('Preview'));
+    expect(post).toHaveBeenCalledTimes(1);
+
+    await act(async () => answers[0](planned(false, MANUAL_PLAN)));
+    await screen.findByRole('heading', { name: MANUAL_TITLE });
+    await user.click(button('Confirm'));
+    expect(button('Confirm')).toBeDisabled();
+    await user.click(button('Confirm'));
+    expect(post).toHaveBeenCalledTimes(2);
+    await act(async () => answers[1](planned(true, MANUAL_PLAN)));
+    expect(await screen.findByText(MANUAL_DONE)).toBeInTheDocument();
+  });
+});
+
+// ─── Unmatch (Release D2; super users) ─────────────────────────────────────────
+
+const UNMATCH_URL = `/api/accounting/staff/bank-rows/${WAITING_ID}/match/unmatch/`;
+const UNMATCH_PLAN: BankMatchPlan = {
+  action: 'unmatch',
+  row_id: WAITING_ID,
+  row: { date: '2026-09-20', direction: 'money_out', amount: '80.00', currency: 'CAD' },
+  match: {
+    match_id: '31313131-0000-4000-8000-000000000001',
+    state: { before: 'auto_matched', after: 'unmatched' },
+    journal_line_id: '41414141-0000-4000-8000-000000000002',
+    account_code: '1010',
+    line_debit: null,
+    line_credit: '80.00',
+    entry: { entry_id: '51515151-0000-4000-8000-000000000003', entry_number: 68, entry_date: '2026-09-21' },
+  },
+  ticket: {
+    before: { status: 'waiting_document', routing_reason: null },
+    after: { status: 'needs_review', routing_reason: 'unmatched_by_staff' },
+  },
+  follow: 'needs_review',
+  relink: null,
+  reason: 'Matched to the wrong entry.',
+  note: null,
+  routing_reason_label: 'Unmatched by staff',
+};
+const UNMATCH = 'Unmatch';
+const UNMATCH_TITLE = 'Take this match off?';
+const UNMATCH_DONE = 'Match taken off.';
+const unmatchReason = () => screen.getByRole('textbox', { name: 'Reason for unmatching' });
+
+// Opens the waiting row, asks for the form, gives a reason and asks for the plan.
+const previewUnmatch = async (user: ReturnType<typeof userEvent.setup>, reason: string) => {
+  await openRow(user, 'MONTHLY FEE');
+  await user.click(await screen.findByRole('button', { name: UNMATCH }));
+  await user.type(unmatchReason(), reason);
+  await user.click(button('Preview'));
+};
+
+describe('bank row: unmatch', () => {
+  it('offers Unmatch to a super user on a settled row that is in the books, and on no other row', async () => {
+    const user = userEvent.setup();
+    serve({
+      rows: [
+        WAITING,
+        SUGGESTED,
+        PLAIN,
+        { ...WAITING, id: '94949494-0000-4000-8000-000000000004', description: 'EXCLUDED SETTLED', excluded: true, excluded_reason: 'plaid_removed' },
+      ],
+      me: 'super',
+    });
+    render(<InternalBankRows />);
+
+    await openRow(user, 'MONTHLY FEE');
+    expect(await screen.findByRole('button', { name: UNMATCH })).toBeEnabled();
+    expect(screen.queryByRole('textbox', { name: 'Reason for unmatching' })).not.toBeInTheDocument();
+    for (const description of ['SUGGESTED ROW', 'REFUND 0042', 'EXCLUDED SETTLED']) {
+      await openRow(user, description);
+      expect(screen.queryByRole('button', { name: UNMATCH })).not.toBeInTheDocument();
+    }
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it("never offers Unmatch to a reviewer, to a viewer who is not staff, or while the viewer's role is not known", async () => {
+    const user = userEvent.setup();
+    for (const me of ['reviewer', undefined, 'unanswered'] as const) {
+      serve({ rows: [WAITING], me });
+      const view = render(<InternalBankRows />);
+      await openRow(user, 'MONTHLY FEE');
+      await settle();
+      expect(screen.queryByRole('button', { name: UNMATCH })).not.toBeInTheDocument();
+      view.unmount();
+    }
+    serve({ rows: [WAITING], me: 'super' });
+    render(<InternalBankRows />);
+    await openRow(user, 'MONTHLY FEE');
+    expect(await screen.findByRole('button', { name: UNMATCH })).toBeInTheDocument();
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('needs a reason, holds it to 200 characters, and Cancel puts the form away with nothing sent', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [WAITING], me: 'super' });
+    render(<InternalBankRows />);
+    await openRow(user, 'MONTHLY FEE');
+    await user.click(await screen.findByRole('button', { name: UNMATCH }));
+
+    expect(screen.getByText('A reason is required.')).toBeInTheDocument();
+    expect(button('Preview')).toBeDisabled();
+    await user.type(unmatchReason(), '   ');
+    expect(button('Preview')).toBeDisabled();
+    await user.type(unmatchReason(), 'Wrong entry');
+    expect(button('Preview')).toBeEnabled();
+    expect(unmatchReason()).toHaveAttribute('maxlength', '200');
+    await user.click(button('Cancel'));
+    expect(screen.queryByRole('textbox', { name: 'Reason for unmatching' })).not.toBeInTheDocument();
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it("asks for the plan first with the reason trimmed and shows the server's plan; Confirm sends confirm true, then reads the list again and closes the pane", async () => {
+    const user = userEvent.setup();
+    serve({ rows: [WAITING, PLAIN], me: 'super' });
+    post
+      .mockResolvedValueOnce(planned(false, UNMATCH_PLAN))
+      .mockResolvedValueOnce(planned(true, UNMATCH_PLAN));
+    render(<InternalBankRows />);
+
+    await previewUnmatch(user, '  Matched to the wrong entry. ');
+    expect(await screen.findByRole('heading', { name: UNMATCH_TITLE })).toBeInTheDocument();
+    expect(post).toHaveBeenCalledWith(UNMATCH_URL, { reason: 'Matched to the wrong entry.', confirm: false });
+    const plan = screen.getByRole('region', { name: 'Match plan' });
+    expect(within(plan).getByText('The settled match will be taken off this row.')).toBeInTheDocument();
+    expect(plan).toHaveTextContent('auto_matched → unmatched');
+    expect(within(plan).getByText('Unmatched by staff')).toBeInTheDocument();
+    expect(within(plan).getByText('The ticket goes to review.')).toBeInTheDocument();
+
+    serve({ rows: [PLAIN], me: 'super' });
+    await user.click(button('Confirm'));
+
+    expect(await screen.findByText(UNMATCH_DONE)).toBeInTheDocument();
+    expect(post).toHaveBeenLastCalledWith(UNMATCH_URL, { reason: 'Matched to the wrong entry.', confirm: true });
+    await waitFor(() => expect(rowRequests()).toHaveLength(2));
+    expect(pane()).not.toBeInTheDocument();
+  });
+
+  it('says the row is no longer available on a 404, with a refresh', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [WAITING], me: 'super' });
+    post.mockResolvedValue({ status: 404, data: { detail: 'Not found.' } });
+    render(<InternalBankRows />);
+
+    await previewUnmatch(user, 'Wrong entry');
+    expect(await screen.findByText('This row is no longer available.')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: UNMATCH_TITLE })).not.toBeInTheDocument();
+    serve({ rows: [PLAIN], me: 'super' });
+    await user.click(button('Refresh'));
+    await waitFor(() => expect(rowRequests()).toHaveLength(2));
+    expect(pane()).not.toBeInTheDocument();
+  });
+
+  it('shows the hourly limit on a 429 and does not try again by itself', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [WAITING], me: 'super' });
+    post.mockResolvedValue({ status: 429, data: {} });
+    render(<InternalBankRows />);
+
+    await previewUnmatch(user, 'Wrong entry');
+    expect(await screen.findByText(LIMIT)).toBeInTheDocument();
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('heading', { name: UNMATCH_TITLE })).not.toBeInTheDocument();
   });
 });
