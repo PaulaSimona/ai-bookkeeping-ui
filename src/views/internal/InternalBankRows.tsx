@@ -88,6 +88,7 @@ import { type FC, type ReactNode, useState } from 'react';
 
 import { ActionRefusal, noticeCls } from '@/components/internal/ActionRefusal';
 import {
+  BankRemovalPlanPreview,
   BankReportPlanPreview,
   MatchPlanPreview,
   MergePlanPreview,
@@ -129,7 +130,9 @@ import {
   canAcceptBankChange,
   canDecideSuggestion,
   canKeepAsPosted,
+  canKeepBankRow,
   canManualMatch,
+  canMarkBankRemoved,
   canMarkNoDocument,
   canReopenTicket,
   canUnmatch,
@@ -137,8 +140,10 @@ import {
   confirmBankMatch,
   fetchMatchCandidates,
   keepAsPosted,
+  keepBankRow,
   labelOrCode,
   manualMatchBankRow,
+  markBankRemoved,
   markNoDocument,
   mergeBankRow,
   rejectBankMatch,
@@ -338,6 +343,21 @@ interface PendingAction extends PlanView {
   confirm: () => Promise<PlanOutcome<PlanView>>;
 }
 
+// A bank-report decision (Release D4): the change exits (O-S90-2) and the
+// removal exits (O-S90-3), and what each form says before its plan is asked
+// for.
+type ReportAction = 'accept' | 'keep_posted' | 'removed' | 'keep_row';
+const REPORT_FORM_TEXT: Record<ReportAction, string> = {
+  accept:
+    "Accept the bank's change: the row takes the bank's amount and date, and its entry is corrected to match.",
+  keep_posted:
+    "Keep this row as posted: the bank's values are set aside, and the ticket goes back to where it stood.",
+  removed:
+    "Accept the bank's removal: the row leaves the books, its match comes off and its entry is reversed.",
+  keep_row:
+    'Keep this row: it stays in the books and its ticket goes back to its lane — matched to its own entry again when that entry has a free bank line for the amount.',
+};
+
 const RowActions: FC<{
   row: BankRow;
   // The viewer is a super user (GET staff/me/). False for a reviewer, and
@@ -377,7 +397,7 @@ const RowActions: FC<{
   const [unmatchReason, setUnmatchReason] = useState('');
   // A bank-report decision (Release D4): which form is open, with the reason
   // given so far — kept while the plan is looked at.
-  const [reportAction, setReportAction] = useState<'accept' | 'keep_posted' | null>(null);
+  const [reportAction, setReportAction] = useState<ReportAction | null>(null);
   const [reportReason, setReportReason] = useState('');
   const sibling = row.duplicate_sibling;
 
@@ -395,6 +415,11 @@ const RowActions: FC<{
   // row as posted — reviewers and super users alike.
   const canAccept = canAcceptBankChange(row);
   const canKeepPosted = canKeepAsPosted(row);
+  // A removal the bank reported (O-S90-3): accepting it reverses posted work —
+  // a super user's action only, nobody else is shown it; keeping the row is
+  // any reviewer's.
+  const canRemove = isSuperUser && canMarkBankRemoved(row);
+  const canKeepRow = canKeepBankRow(row);
   if (
     !flagged &&
     !canClose &&
@@ -403,16 +428,21 @@ const RowActions: FC<{
     !canMatch &&
     !canTakeOff &&
     !canAccept &&
-    !canKeepPosted
+    !canKeepPosted &&
+    !canRemove &&
+    !canKeepRow
   ) {
     return null;
   }
 
   // The open decision, while the row still allows it.
   const reportOpen =
-    (reportAction === 'accept' && canAccept) || (reportAction === 'keep_posted' && canKeepPosted);
+    (reportAction === 'accept' && canAccept) ||
+    (reportAction === 'keep_posted' && canKeepPosted) ||
+    (reportAction === 'removed' && canRemove) ||
+    (reportAction === 'keep_row' && canKeepRow);
 
-  const openReport = (action: 'accept' | 'keep_posted') => {
+  const openReport = (action: ReportAction) => {
     setReportAction(action);
     setReportReason('');
     setRefusal(null);
@@ -437,6 +467,26 @@ const RowActions: FC<{
           title: 'Keep this row as posted?',
           plan: <BankReportPlanPreview plan={plan} />,
           done: 'Kept as posted.',
+          rows: [{ label: 'Row', id: plan.row_id }],
+        }),
+      );
+    } else if (reportAction === 'removed') {
+      void ask(
+        (confirmed) => markBankRemoved(row.id, reportReason, confirmed),
+        (plan) => ({
+          title: "Accept the bank's removal?",
+          plan: <BankRemovalPlanPreview plan={plan} />,
+          done: 'Removed: the row has left the books.',
+          rows: [{ label: 'Row', id: plan.row_id }],
+        }),
+      );
+    } else if (reportAction === 'keep_row') {
+      void ask(
+        (confirmed) => keepBankRow(row.id, reportReason, confirmed),
+        (plan) => ({
+          title: 'Keep this row?',
+          plan: <BankRemovalPlanPreview plan={plan} />,
+          done: 'Row kept.',
           rows: [{ label: 'Row', id: plan.row_id }],
         }),
       );
@@ -602,17 +652,23 @@ const RowActions: FC<{
             Keep as posted
           </SecondaryButton>
         )}
+        {canRemove && (
+          <PrimaryButton onClick={() => openReport('removed')} disabled={busy}>
+            Bank removed it
+          </PrimaryButton>
+        )}
+        {canKeepRow && (
+          <SecondaryButton onClick={() => openReport('keep_row')} disabled={busy}>
+            Keep row
+          </SecondaryButton>
+        )}
       </div>
 
       {/* A bank-report decision (Release D4): the reason first — required —
           then the plan is asked for with Preview. */}
       {reportOpen && !pending && (
         <div className="space-y-3 rounded-lg border border-white/10 bg-white/5 px-4 py-3">
-          <p className="text-sm text-white/70">
-            {reportAction === 'accept'
-              ? "Accept the bank's change: the row takes the bank's amount and date, and its entry is corrected to match."
-              : "Keep this row as posted: the bank's values are set aside, and the ticket goes back to where it stood."}
-          </p>
+          <p className="text-sm text-white/70">{REPORT_FORM_TEXT[reportAction as ReportAction]}</p>
           <textarea
             value={reportReason}
             onChange={(e) => setReportReason(e.target.value)}

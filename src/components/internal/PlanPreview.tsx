@@ -22,6 +22,7 @@ import {
   type BankMergePlan,
   type BankNoDocumentPlan,
   type BankReleasePlan,
+  type BankRemovalPlan,
   type BankReopenPlan,
   type BankReportPlan,
   type BankTicketImage,
@@ -456,6 +457,54 @@ export const BankReportPlanPreview: FC<{ plan: BankReportPlan }> = ({ plan }) =>
         {ticket.after?.routing_reason && (
           <Field label="Routing reason">
             {labelOrCode(plan.routing_reason_label, ticket.after.routing_reason)}
+          </Field>
+        )}
+      </dl>
+    </section>
+  );
+};
+
+// A removal the bank reported, decided (O-S90-3): accepted — the row leaves the
+// books, its match comes off and its entry is reversed (a correction's own
+// half only) — or rejected: the row stays and its ticket returns to its lane,
+// re-linked to its own entry's free bank line when there is one (A2).
+export const BankRemovalPlanPreview: FC<{ plan: BankRemovalPlan }> = ({ plan }) => {
+  const removed = plan.action === 'bank_removed';
+  return (
+    <section aria-label="Bank removal plan" className={planCls}>
+      <p>
+        {removed
+          ? 'The row leaves the books: it is excluded as removed by the bank.'
+          : 'The row stays in the books.'}
+      </p>
+      <p className="mt-1 text-white/50">
+        {plan.reverses ? 'Its entry is reversed.' : 'No journal entry is changed.'}
+      </p>
+      <dl className="mt-3">
+        <TicketPlanRow plan={plan} />
+        {plan.reverses && (
+          <Field label="Reverses">
+            <EntryLabel id={plan.reverses.entry_id} entryNumber={plan.reverses.entry_number} /> ·{' '}
+            {plan.reverses.entry_date}
+          </Field>
+        )}
+        {plan.unmatches && (
+          <Field label="Match">
+            match <ShortId className={idCls} id={plan.unmatches.match_id} /> · {plan.unmatches.state} →
+            unmatched
+          </Field>
+        )}
+        {plan.relink && (
+          <Field label="Re-linked to">
+            <EntryLabel id={plan.relink.entry.entry_id} entryNumber={plan.relink.entry.entry_number} /> ·{' '}
+            {plan.relink.entry.entry_date} · line on {plan.relink.account_code}
+          </Field>
+        )}
+        {plan.reason != null && <Field label="Reason">{plan.reason}</Field>}
+        <Field label="Ticket">{ticketChange(plan.ticket)}</Field>
+        {plan.ticket.after?.routing_reason && (
+          <Field label="Routing reason">
+            {labelOrCode(plan.routing_reason_label, plan.ticket.after.routing_reason)}
           </Field>
         )}
       </dl>

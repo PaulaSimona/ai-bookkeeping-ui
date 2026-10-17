@@ -19,6 +19,7 @@ import {
   type BankMergePlan,
   type BankNoDocumentPlan,
   type BankReleasePlan,
+  type BankRemovalPlan,
   type BankReopenPlan,
   type BankReportPlan,
   type BankRow,
@@ -2938,6 +2939,149 @@ describe('bank row: a change the bank reported', () => {
       expect(button(KEEP_POSTED)).toBeEnabled();
       view.unmount();
     }
+    expect(post).not.toHaveBeenCalled();
+  });
+});
+
+// ─── Bank reports: the R2 actions (Release D4, O-S90-3) ────────────────────────
+
+const REMOVED_IT = 'Bank removed it';
+const KEEP_ROW = 'Keep row';
+const REMOVAL_URL = (action: string) =>
+  `/api/accounting/staff/bank-rows/${REMOVED.id}/bank-report/${action}/`;
+
+// The plans exactly as the server sends them (posted_removal_service.py
+// RemovalPlan._image).
+const REMOVED_PLAN: BankRemovalPlan = {
+  action: 'bank_removed',
+  row_id: REMOVED.id,
+  row: { date: '2026-09-20', direction: 'money_out', amount: '42.00', currency: 'CAD' },
+  ticket: {
+    before: { status: 'needs_review', routing_reason: 'plaid_posted_removal_reported' },
+    after: { status: 'closed', routing_reason: 'plaid_removed' },
+  },
+  reverses: { entry_id: '73737373-0000-4000-8000-000000000001', entry_number: 95, entry_date: '2026-09-21' },
+  unmatches: null,
+  relink: null,
+  reason: 'No such charge on the statement.',
+  routing_reason_label: 'Removed by the bank',
+};
+const KEEP_ROW_PLAN: BankRemovalPlan = {
+  ...REMOVED_PLAN,
+  action: 'keep_row',
+  ticket: {
+    before: { status: 'needs_review', routing_reason: 'plaid_posted_removal_reported' },
+    after: { status: 'waiting_document', routing_reason: null },
+  },
+  reverses: null,
+  relink: {
+    entry: { entry_id: '73737373-0000-4000-8000-000000000001', entry_number: 95, entry_date: '2026-09-21' },
+    journal_line_id: '74747474-0000-4000-8000-000000000001',
+    account_code: '2120',
+  },
+  reason: 'The charge is on the statement.',
+  routing_reason_label: null,
+};
+
+describe('bank row: a removal the bank reported', () => {
+  it('Bank removed it is offered to a super user only', async () => {
+    const user = userEvent.setup();
+    for (const me of ['reviewer', undefined, 'unanswered'] as const) {
+      serve({ rows: [REMOVED], me });
+      const view = render(<InternalBankRows />);
+      await openRow(user, 'REMOVED BY BANK');
+      await settle();
+      expect(screen.queryByRole('button', { name: REMOVED_IT })).not.toBeInTheDocument();
+      view.unmount();
+    }
+    serve({ rows: [REMOVED], me: 'super' });
+    render(<InternalBankRows />);
+    await openRow(user, 'REMOVED BY BANK');
+    expect(await screen.findByRole('button', { name: REMOVED_IT })).toBeEnabled();
+    expect(button(KEEP_ROW)).toBeEnabled();
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('Bank removed it: reason required, Preview names the entry it reverses, Confirm', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [REMOVED, PLAIN], me: 'super' });
+    post.mockResolvedValueOnce(planned(false, REMOVED_PLAN)).mockResolvedValueOnce(planned(true, REMOVED_PLAN));
+    render(<InternalBankRows />);
+
+    await openRow(user, 'REMOVED BY BANK');
+    await user.click(await screen.findByRole('button', { name: REMOVED_IT }));
+    expect(screen.getByText('A reason is required.')).toBeInTheDocument();
+    expect(button('Preview')).toBeDisabled();
+    await user.type(reportReason(), ' No such charge on the statement. ');
+    await user.click(button('Preview'));
+
+    expect(await screen.findByRole('heading', { name: "Accept the bank's removal?" })).toBeInTheDocument();
+    expect(post).toHaveBeenCalledWith(REMOVAL_URL('bank-removed'), {
+      reason: 'No such charge on the statement.',
+      confirm: false,
+    });
+    const plan = screen.getByRole('region', { name: 'Bank removal plan' });
+    expect(plan).toHaveTextContent('The row leaves the books');
+    expect(plan).toHaveTextContent('Its entry is reversed.');
+    expect(within(plan).getByText('Reverses').nextElementSibling).toHaveTextContent('JE-0095');
+    expect(within(plan).getByText('Removed by the bank')).toBeInTheDocument();
+
+    serve({ rows: [PLAIN], me: 'super' });
+    await user.click(button('Confirm'));
+    expect(await screen.findByText('Removed: the row has left the books.')).toBeInTheDocument();
+    expect(post).toHaveBeenLastCalledWith(REMOVAL_URL('bank-removed'), {
+      reason: 'No such charge on the statement.',
+      confirm: true,
+    });
+    await waitFor(() => expect(rowRequests()).toHaveLength(2));
+    expect(pane()).not.toBeInTheDocument();
+  });
+
+  it('Keep: Preview names the lane, Confirm', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [REMOVED], me: 'reviewer' });
+    post.mockResolvedValueOnce(planned(false, KEEP_ROW_PLAN)).mockResolvedValueOnce(planned(true, KEEP_ROW_PLAN));
+    render(<InternalBankRows />);
+
+    await openRow(user, 'REMOVED BY BANK');
+    await user.click(await screen.findByRole('button', { name: KEEP_ROW }));
+    expect(button('Preview')).toBeDisabled();
+    await user.type(reportReason(), 'The charge is on the statement.');
+    await user.click(button('Preview'));
+
+    expect(await screen.findByRole('heading', { name: 'Keep this row?' })).toBeInTheDocument();
+    expect(post).toHaveBeenCalledWith(REMOVAL_URL('keep-row'), {
+      reason: 'The charge is on the statement.',
+      confirm: false,
+    });
+    const plan = screen.getByRole('region', { name: 'Bank removal plan' });
+    expect(plan).toHaveTextContent('The row stays in the books.');
+    expect(plan).toHaveTextContent('No journal entry is changed.');
+    expect(plan).toHaveTextContent('needs_review (plaid_posted_removal_reported) → waiting_document');
+    expect(within(plan).getByText('Re-linked to').nextElementSibling).toHaveTextContent('line on 2120');
+
+    serve({ rows: [], me: 'reviewer' });
+    await user.click(button('Confirm'));
+    expect(await screen.findByText('Row kept.')).toBeInTheDocument();
+    expect(post).toHaveBeenLastCalledWith(REMOVAL_URL('keep-row'), {
+      reason: 'The charge is on the statement.',
+      confirm: true,
+    });
+  });
+
+  it('a reviewer sees Keep but not Bank removed it', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [REMOVED, CHANGED], me: 'reviewer' });
+    render(<InternalBankRows />);
+
+    await openRow(user, 'REMOVED BY BANK');
+    expect(await screen.findByRole('button', { name: KEEP_ROW })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: REMOVED_IT })).not.toBeInTheDocument();
+    // A change report offers neither removal action.
+    await openRow(user, 'ADOBE SUBSCRIPTION');
+    await settle();
+    expect(screen.queryByRole('button', { name: KEEP_ROW })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: REMOVED_IT })).not.toBeInTheDocument();
     expect(post).not.toHaveBeenCalled();
   });
 });
