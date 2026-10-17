@@ -1,7 +1,8 @@
 // PlanPreview (S87 B2b U2, O-S87-8 / O-S87-9) — what the server says a staff
 // action will do, shown before staff confirm it: the bank-row merge, the flag
 // release, the "no document needed" close and its reopen, the match actions
-// of Release D2 (useStaffBankRows) and the feed re-point (useStaffRepoint).
+// of Release D2, the bank-report exits of Release D4 (useStaffBankRows) and the
+// feed re-point (useStaffRepoint).
 //
 // Every field of a plan is shown as returned. Amounts are the server's strings,
 // rendered untouched — never formatMoney: nothing regrouped, re-signed or given
@@ -22,6 +23,7 @@ import {
   type BankNoDocumentPlan,
   type BankReleasePlan,
   type BankReopenPlan,
+  type BankReportPlan,
   type BankTicketImage,
 } from '@/hooks/useStaffBankRows';
 import { type RepointPlan } from '@/hooks/useStaffRepoint';
@@ -384,6 +386,79 @@ export const RepointPlanPreview: FC<{ plan: RepointPlan }> = ({ plan }) => {
           </ul>
         </div>
       )}
+    </section>
+  );
+};
+
+// ─── Bank reports (Release D4; backend D3, O-S90-2) ────────────────────────────
+
+// What accepting the bank's change does with the work keyed to the books' old
+// values (plan.follow, DEFAULT 8), in one sentence; a value this screen does
+// not know is shown as sent.
+const ACCEPT_SENTENCE: Record<string, string> = {
+  correct:
+    "The row takes the bank's amount and date. Its entry is corrected at the new amount, and the row is matched to the correction.",
+  unmatch: "The row takes the bank's amount and date. Its match to another entry comes off.",
+  reject: "The row takes the bank's amount and date. Its suggested match is rejected.",
+  row_only: "The row takes the bank's amount and date.",
+};
+
+// A change the bank reported, decided: accepted (with the correction it
+// posts, or the match it takes off) or set aside. The bank's values and the
+// corrected lines' amounts are the server's strings.
+export const BankReportPlanPreview: FC<{ plan: BankReportPlan }> = ({ plan }) => {
+  const { reported, correction, match, ticket } = plan;
+  const accept = plan.action === 'accept_change';
+  const reportedText =
+    reported == null
+      ? 'not on record'
+      : [
+          reported.amount ?? '—',
+          reported.date ?? '—',
+          reported.direction && reported.direction !== plan.row.direction
+            ? directionText(reported.direction)
+            : null,
+        ]
+          .filter(Boolean)
+          .join(' · ');
+  return (
+    <section aria-label="Bank report plan" className={planCls}>
+      <p>
+        {accept
+          ? (ACCEPT_SENTENCE[plan.follow ?? ''] ?? plan.follow)
+          : "The bank's values are set aside; the row stays as posted."}
+      </p>
+      <p className="mt-1 text-white/50">
+        {correction ? 'One correcting journal entry is posted.' : 'No journal entry is changed.'}
+      </p>
+      <dl className="mt-3">
+        <TicketPlanRow plan={plan} />
+        <Field label="Bank reported">{reportedText}</Field>
+        {correction && (
+          <>
+            <Field label="Corrects">
+              <EntryLabel id={correction.entry.entry_id} entryNumber={correction.entry.entry_number} /> ·{' '}
+              {correction.entry.entry_date}
+            </Field>
+            <Field label="Corrected lines">
+              {correction.lines.map((line) => `${line.side} ${line.amount}`).join(' · ')}
+            </Field>
+          </>
+        )}
+        {match && (
+          <Field label="Match">
+            match <ShortId className={idCls} id={match.match_id} /> · {match.state} →{' '}
+            {plan.follow === 'reject' ? 'rejected' : 'unmatched'}
+          </Field>
+        )}
+        <Field label="Reason">{plan.reason}</Field>
+        <Field label="Ticket">{ticketChange(ticket)}</Field>
+        {ticket.after?.routing_reason && (
+          <Field label="Routing reason">
+            {labelOrCode(plan.routing_reason_label, ticket.after.routing_reason)}
+          </Field>
+        )}
+      </dl>
     </section>
   );
 };

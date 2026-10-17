@@ -20,6 +20,7 @@ import {
   type BankNoDocumentPlan,
   type BankReleasePlan,
   type BankReopenPlan,
+  type BankReportPlan,
   type BankRow,
 } from '@/hooks/useStaffBankRows';
 import { InternalBankRows } from './InternalBankRows';
@@ -2772,5 +2773,171 @@ describe('bank row: the bank reported panel', () => {
     expect(within(panel).getByText('Bank amount').nextElementSibling?.textContent).toBe('160.10');
     expect(within(panel).getByText('Bank date').nextElementSibling?.textContent).toBe('2026-09-21');
     expect(within(panel).getByText('2026-09-22T14:05:00Z')).toBeInTheDocument();
+  });
+});
+
+// ─── Bank reports: the R1 actions (Release D4, O-S90-2) ────────────────────────
+
+const ACCEPT = 'Accept bank change';
+const KEEP_POSTED = 'Keep as posted';
+const REPORT_URL = (action: string) =>
+  `/api/accounting/staff/bank-rows/${CHANGED.id}/bank-report/${action}/`;
+const reportReason = () => screen.getByRole('textbox', { name: 'Reason for the decision' });
+
+// The plans exactly as the server sends them (bank_report_service.py
+// ReportPlan._image).
+const ACCEPT_PLAN: BankReportPlan = {
+  action: 'accept_change',
+  row_id: CHANGED.id,
+  row: { date: '2026-09-20', direction: 'money_out', amount: '156.80', currency: 'CAD' },
+  reported: { amount: '160.10', direction: 'money_out', date: '2026-09-21', source: 'row' },
+  ticket: {
+    before: { status: 'needs_review', routing_reason: 'plaid_modified_after_posting' },
+    after: { status: 'waiting_document', routing_reason: null },
+  },
+  follow: 'correct',
+  correction: {
+    entry: { entry_id: '71717171-0000-4000-8000-000000000001', entry_number: 88, entry_date: '2026-09-20' },
+    lines: [
+      { account_id: '72727272-0000-4000-8000-000000000001', side: 'debit', amount: '160.10' },
+      { account_id: '72727272-0000-4000-8000-000000000002', side: 'credit', amount: '160.10' },
+    ],
+  },
+  match: null,
+  reason: 'Statement shows 160.10.',
+  routing_reason_label: null,
+};
+const KEEP_PLAN: BankReportPlan = {
+  ...ACCEPT_PLAN,
+  action: 'keep_as_posted',
+  follow: null,
+  correction: null,
+  reason: 'Books are right.',
+};
+
+describe('bank row: a change the bank reported', () => {
+  it('Accept bank change: reason required, Preview shows the correction plan, Confirm posts', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [CHANGED, PLAIN], me: 'reviewer' });
+    post.mockResolvedValueOnce(planned(false, ACCEPT_PLAN)).mockResolvedValueOnce(planned(true, ACCEPT_PLAN));
+    render(<InternalBankRows />);
+
+    await openRow(user, 'ADOBE SUBSCRIPTION');
+    await user.click(button(ACCEPT));
+    expect(screen.getByText('A reason is required.')).toBeInTheDocument();
+    expect(button('Preview')).toBeDisabled();
+    await user.type(reportReason(), '   ');
+    expect(button('Preview')).toBeDisabled();
+    expect(reportReason()).toHaveAttribute('maxlength', '200');
+    await user.type(reportReason(), ' Statement shows 160.10. ');
+    await user.click(button('Preview'));
+
+    expect(await screen.findByRole('heading', { name: "Accept the bank's change?" })).toBeInTheDocument();
+    expect(post).toHaveBeenCalledWith(REPORT_URL('accept-change'), {
+      reason: 'Statement shows 160.10.',
+      confirm: false,
+    });
+    const plan = screen.getByRole('region', { name: 'Bank report plan' });
+    expect(plan).toHaveTextContent('Its entry is corrected at the new amount');
+    expect(plan).toHaveTextContent('One correcting journal entry is posted.');
+    expect(plan).toHaveTextContent('debit 160.10 · credit 160.10');
+    expect(plan).toHaveTextContent('JE-0088');
+
+    serve({ rows: [PLAIN], me: 'reviewer' });
+    await user.click(button('Confirm'));
+
+    expect(await screen.findByText("The bank's change is accepted.")).toBeInTheDocument();
+    expect(post).toHaveBeenLastCalledWith(REPORT_URL('accept-change'), {
+      reason: 'Statement shows 160.10.',
+      confirm: true,
+    });
+    await waitFor(() => expect(rowRequests()).toHaveLength(2));
+    expect(pane()).not.toBeInTheDocument();
+  });
+
+  it('Keep as posted: reason required, Preview then Confirm', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [CHANGED], me: 'reviewer' });
+    post.mockResolvedValueOnce(planned(false, KEEP_PLAN)).mockResolvedValueOnce(planned(true, KEEP_PLAN));
+    render(<InternalBankRows />);
+
+    await openRow(user, 'ADOBE SUBSCRIPTION');
+    await user.click(button(KEEP_POSTED));
+    expect(button('Preview')).toBeDisabled();
+    await user.type(reportReason(), 'Books are right.');
+    await user.click(button('Preview'));
+
+    expect(await screen.findByRole('heading', { name: 'Keep this row as posted?' })).toBeInTheDocument();
+    expect(post).toHaveBeenCalledWith(REPORT_URL('keep-as-posted'), { reason: 'Books are right.', confirm: false });
+    const plan = screen.getByRole('region', { name: 'Bank report plan' });
+    expect(plan).toHaveTextContent("The bank's values are set aside; the row stays as posted.");
+    expect(plan).toHaveTextContent('No journal entry is changed.');
+    expect(plan).toHaveTextContent('needs_review (plaid_modified_after_posting) → waiting_document');
+
+    serve({ rows: [], me: 'reviewer' });
+    await user.click(button('Confirm'));
+    expect(await screen.findByText('Kept as posted.')).toBeInTheDocument();
+    expect(post).toHaveBeenLastCalledWith(REPORT_URL('keep-as-posted'), { reason: 'Books are right.', confirm: true });
+  });
+
+  it('a 409 accept_needs_manual_lines is shown in plain words and nothing changes', async () => {
+    const user = userEvent.setup();
+    const detail =
+      "This entry is not the bank line and one other line, so the bank's amount cannot be carried into it here. Keep the row as posted and correct the entry by hand.";
+    serve({ rows: [CHANGED], me: 'reviewer' });
+    post.mockResolvedValueOnce({ status: 409, data: { code: 'accept_needs_manual_lines', detail } });
+    render(<InternalBankRows />);
+
+    await openRow(user, 'ADOBE SUBSCRIPTION');
+    await user.click(button(ACCEPT));
+    await user.type(reportReason(), 'Statement shows 160.10.');
+    await user.click(button('Preview'));
+
+    expect(await screen.findByText(detail)).toBeInTheDocument();
+    expect(screen.getByText('accept_needs_manual_lines')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: "Accept the bank's change?" })).not.toBeInTheDocument();
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(rowRequests()).toHaveLength(1);
+    expect(pane()).toBeInTheDocument();
+  });
+
+  it('R1 actions are not offered on a row without an open change report', async () => {
+    const user = userEvent.setup();
+    const kept = {
+      ...CHANGED,
+      id: '61616161-0000-4000-8000-000000000006',
+      description: 'NO OPEN REPORT',
+      ticket_status: 'waiting_document',
+      ticket_status_label: 'Waiting for Document',
+      routing_reason: null,
+      routing_reason_label: null,
+      reported_amount: null,
+      reported_direction: null,
+      reported_date: null,
+      reported_at: null,
+    };
+    serve({ rows: [PLAIN, REMOVED, kept, { ...CHANGED, id: '61616161-0000-4000-8000-000000000007', description: 'PENDING CHANGE', pending: true }], me: 'super' });
+    render(<InternalBankRows />);
+
+    for (const description of ['REFUND 0042', 'REMOVED BY BANK', 'NO OPEN REPORT', 'PENDING CHANGE']) {
+      await openRow(user, description);
+      await settle();
+      expect(screen.queryByRole('button', { name: ACCEPT })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: KEEP_POSTED })).not.toBeInTheDocument();
+    }
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('a reviewer is offered both R1 actions', async () => {
+    const user = userEvent.setup();
+    for (const me of ['reviewer', 'super'] as const) {
+      serve({ rows: [CHANGED], me });
+      const view = render(<InternalBankRows />);
+      await openRow(user, 'ADOBE SUBSCRIPTION');
+      expect(await screen.findByRole('button', { name: ACCEPT })).toBeEnabled();
+      expect(button(KEEP_POSTED)).toBeEnabled();
+      view.unmount();
+    }
+    expect(post).not.toHaveBeenCalled();
   });
 });

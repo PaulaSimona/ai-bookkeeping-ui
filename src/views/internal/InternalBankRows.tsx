@@ -88,6 +88,7 @@ import { type FC, type ReactNode, useState } from 'react';
 
 import { ActionRefusal, noticeCls } from '@/components/internal/ActionRefusal';
 import {
+  BankReportPlanPreview,
   MatchPlanPreview,
   MergePlanPreview,
   NoDocumentPlanPreview,
@@ -115,6 +116,7 @@ import { useStaffMe } from '@/hooks/useStaffMe';
 import {
   BANK_CHANGE_REASON,
   BANK_REMOVAL_REASON,
+  BANK_REPORT_REASON_MAX,
   BANK_ROW_TICKET_STATUSES,
   BANK_ROW_TICKET_STATUS_LABELS,
   MATCH_REASON_MAX,
@@ -123,7 +125,10 @@ import {
   NO_DOCUMENT_REASON_OTHER,
   POSSIBLE_DUPLICATE_REASON,
   REOPEN_REASON_MAX,
+  acceptBankChange,
+  canAcceptBankChange,
   canDecideSuggestion,
+  canKeepAsPosted,
   canManualMatch,
   canMarkNoDocument,
   canReopenTicket,
@@ -131,6 +136,7 @@ import {
   collectFeeds,
   confirmBankMatch,
   fetchMatchCandidates,
+  keepAsPosted,
   labelOrCode,
   manualMatchBankRow,
   markNoDocument,
@@ -369,6 +375,10 @@ const RowActions: FC<{
   // "Unmatch" (Release D2, super users): its form is open, with the reason.
   const [unmatching, setUnmatching] = useState(false);
   const [unmatchReason, setUnmatchReason] = useState('');
+  // A bank-report decision (Release D4): which form is open, with the reason
+  // given so far — kept while the plan is looked at.
+  const [reportAction, setReportAction] = useState<'accept' | 'keep_posted' | null>(null);
+  const [reportReason, setReportReason] = useState('');
   const sibling = row.duplicate_sibling;
 
   const flagged = row.routing_reason === POSSIBLE_DUPLICATE_REASON;
@@ -381,7 +391,57 @@ const RowActions: FC<{
   const canMatch = canManualMatch(row);
   // Unmatch is a super user's action only (O-S89-4): nobody else is shown it.
   const canTakeOff = isSuperUser && canUnmatch(row);
-  if (!flagged && !canClose && !canReopen && !canDecide && !canMatch && !canTakeOff) return null;
+  // A change the bank reported (Release D4, O-S90-2): accept it or keep the
+  // row as posted — reviewers and super users alike.
+  const canAccept = canAcceptBankChange(row);
+  const canKeepPosted = canKeepAsPosted(row);
+  if (
+    !flagged &&
+    !canClose &&
+    !canReopen &&
+    !canDecide &&
+    !canMatch &&
+    !canTakeOff &&
+    !canAccept &&
+    !canKeepPosted
+  ) {
+    return null;
+  }
+
+  // The open decision, while the row still allows it.
+  const reportOpen =
+    (reportAction === 'accept' && canAccept) || (reportAction === 'keep_posted' && canKeepPosted);
+
+  const openReport = (action: 'accept' | 'keep_posted') => {
+    setReportAction(action);
+    setReportReason('');
+    setRefusal(null);
+  };
+
+  // The plan of the open bank-report decision, asked for with Preview.
+  const previewReport = () => {
+    if (reportAction === 'accept') {
+      void ask(
+        (confirmed) => acceptBankChange(row.id, reportReason, confirmed),
+        (plan) => ({
+          title: "Accept the bank's change?",
+          plan: <BankReportPlanPreview plan={plan} />,
+          done: "The bank's change is accepted.",
+          rows: [{ label: 'Row', id: plan.row_id }],
+        }),
+      );
+    } else if (reportAction === 'keep_posted') {
+      void ask(
+        (confirmed) => keepAsPosted(row.id, reportReason, confirmed),
+        (plan) => ({
+          title: 'Keep this row as posted?',
+          plan: <BankReportPlanPreview plan={plan} />,
+          done: 'Kept as posted.',
+          rows: [{ label: 'Row', id: plan.row_id }],
+        }),
+      );
+    }
+  };
 
   // Opens the manual-match form once the candidates are read. A refusal on
   // the read is shown and the form stays closed.
@@ -532,7 +592,48 @@ const RowActions: FC<{
             Unmatch
           </SecondaryButton>
         )}
+        {canAccept && (
+          <PrimaryButton onClick={() => openReport('accept')} disabled={busy}>
+            Accept bank change
+          </PrimaryButton>
+        )}
+        {canKeepPosted && (
+          <SecondaryButton onClick={() => openReport('keep_posted')} disabled={busy}>
+            Keep as posted
+          </SecondaryButton>
+        )}
       </div>
+
+      {/* A bank-report decision (Release D4): the reason first — required —
+          then the plan is asked for with Preview. */}
+      {reportOpen && !pending && (
+        <div className="space-y-3 rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+          <p className="text-sm text-white/70">
+            {reportAction === 'accept'
+              ? "Accept the bank's change: the row takes the bank's amount and date, and its entry is corrected to match."
+              : "Keep this row as posted: the bank's values are set aside, and the ticket goes back to where it stood."}
+          </p>
+          <textarea
+            value={reportReason}
+            onChange={(e) => setReportReason(e.target.value)}
+            disabled={busy}
+            maxLength={BANK_REPORT_REASON_MAX}
+            rows={2}
+            aria-label="Reason for the decision"
+            placeholder="Reason"
+            className={`${fieldCls} w-full`}
+          />
+          <p className="text-xs text-white/40">A reason is required.</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <PrimaryButton onClick={previewReport} disabled={busy || reportReason.trim() === ''}>
+              Preview
+            </PrimaryButton>
+            <SecondaryButton onClick={() => setReportAction(null)} disabled={busy}>
+              Cancel
+            </SecondaryButton>
+          </div>
+        </div>
+      )}
 
       {/* Unmatch (super users): the reason first; the plan is asked for with
           Preview. The ticket goes to review as unmatched by staff. */}
