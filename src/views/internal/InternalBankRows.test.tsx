@@ -3085,3 +3085,72 @@ describe('bank row: a removal the bank reported', () => {
     expect(post).not.toHaveBeenCalled();
   });
 });
+
+// ─── Bank reports: the list, its labels and the match actions (Release D4) ─────
+
+describe('bank rows: rows with an open bank report', () => {
+  it('the count includes settled rows with an open report', async () => {
+    // O-S90-4: a row a bank report sent to review is listed and counted even
+    // though it is settled; the screen shows the server's own count.
+    serve({ rows: [CHANGED, REMOVED, PLAIN], count: 3 });
+    render(<InternalBankRows />);
+
+    expect(await screen.findByText('3 bank rows (oldest first).')).toBeInTheDocument();
+    expect(screen.getByText('Bank rows (3)')).toBeInTheDocument();
+    for (const description of ['ADOBE SUBSCRIPTION', 'REMOVED BY BANK', 'REFUND 0042']) {
+      expect(await rowOf(description)).toBeInTheDocument();
+    }
+  });
+
+  it('Needs Review filter shows settled rows with an open report', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [CHANGED, REMOVED] });
+    render(<InternalBankRows />);
+    await rowOf('ADOBE SUBSCRIPTION');
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Ticket status' }), 'needs_review');
+
+    await waitFor(() => expect(lastRowRequest()).toMatchObject({ ticket_status: 'needs_review' }));
+    expect(await rowOf('ADOBE SUBSCRIPTION')).toBeInTheDocument();
+    expect(await rowOf('REMOVED BY BANK')).toBeInTheDocument();
+  });
+
+  it('both reasons show the server labels, never the codes', async () => {
+    serve({ rows: [CHANGED, REMOVED] });
+    render(<InternalBankRows />);
+
+    const changed = await rowOf('ADOBE SUBSCRIPTION');
+    const removed = await rowOf('REMOVED BY BANK');
+    expect(within(changed).getByText('Changed by the bank after posting')).toBeInTheDocument();
+    expect(within(removed).getByText('Removed by the bank after posting')).toBeInTheDocument();
+    expect(screen.queryByText('plaid_modified_after_posting')).not.toBeInTheDocument();
+    expect(screen.queryByText('plaid_posted_removal_reported')).not.toBeInTheDocument();
+  });
+
+  it('Confirm, Match to a line and Unmatch are hidden on a row with an open bank report; Reject stays', async () => {
+    const user = userEvent.setup();
+    const suggestion = FLAGGED.suggested_match!;
+    serve({
+      rows: [
+        { ...CHANGED, id: '63636363-0000-4000-8000-000000000001', description: 'CHANGED WITH SUGGESTION', row_kind: 'suggested', suggested_match: suggestion },
+        { ...REMOVED, id: '63636363-0000-4000-8000-000000000002', description: 'REMOVED UNMATCHED', row_kind: 'unmatched' },
+        { ...CHANGED, id: '63636363-0000-4000-8000-000000000003', description: 'CHANGED SETTLED', settled_match: { ...suggestion, state: 'auto_matched' } },
+      ],
+      me: 'super',
+    });
+    render(<InternalBankRows />);
+
+    await openRow(user, 'CHANGED WITH SUGGESTION');
+    expect(await screen.findByRole('button', { name: 'Reject match' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Confirm match' })).not.toBeInTheDocument();
+
+    await openRow(user, 'REMOVED UNMATCHED');
+    await settle();
+    expect(screen.queryByRole('button', { name: 'Match to a line…' })).not.toBeInTheDocument();
+
+    await openRow(user, 'CHANGED SETTLED');
+    expect(await screen.findByRole('button', { name: 'Accept bank change' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Unmatch' })).not.toBeInTheDocument();
+    expect(post).not.toHaveBeenCalled();
+  });
+});

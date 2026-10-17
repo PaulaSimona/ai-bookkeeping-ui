@@ -235,6 +235,9 @@ const FOLLOW_SENTENCE: Record<string, string> = {
   needs_review: 'The ticket goes to review.',
   pending: 'The ticket goes back to the drafting queue.',
   no_ticket: 'This row has no ticket.',
+  // Release D4 (D-S90-8): a rejection on a row with an open bank report takes
+  // the suggestion off and leaves the ticket where it is.
+  bank_report_open: 'The ticket stays in review: the bank report on this row is still open.',
 };
 
 // A match action: the match before and after, the line it points at with its

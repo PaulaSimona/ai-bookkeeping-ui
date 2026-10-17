@@ -77,8 +77,9 @@ export interface BankRow {
   source: string; // manual | csv | plaid
   suggested_match: BankRowMatchSummary | null;
   // The match that settled the row. A settled row is listed only while its
-  // ticket waits for its document (F-S88-6), or closed as "no document
-  // needed" when that status is asked for (O-S88-11).
+  // ticket waits for its document (F-S88-6), while it is in review (O-S90-4,
+  // Release D′ — so a row a bank report sent to review is never hidden), or
+  // closed as "no document needed" when that status is asked for (O-S88-11).
   settled_match: BankRowMatchSummary | null;
   row_kind: 'suggested' | 'matched' | 'unmatched';
   pending: boolean;
@@ -459,6 +460,13 @@ const hasOpenReport = (row: BankRow, reason: string): boolean =>
   row.routing_reason === reason &&
   !row.pending &&
   !row.excluded;
+
+// Any open bank report (DEFAULT 7): while one is open, confirm, manual match
+// and unmatch are not offered — the server refuses them (bank_report_open),
+// because they would settle or unsettle the row and drop the report unread.
+// Reject still is: it takes a suggestion off and leaves the report alone.
+export const hasOpenBankReport = (row: BankRow): boolean =>
+  row.routing_reason === BANK_CHANGE_REASON || row.routing_reason === BANK_REMOVAL_REASON;
 
 // A change the bank reported: accept it, or keep the row as posted. Assigned
 // reviewers and super users alike.

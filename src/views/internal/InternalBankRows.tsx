@@ -135,6 +135,7 @@ import {
   canMarkBankRemoved,
   canMarkNoDocument,
   canReopenTicket,
+  hasOpenBankReport,
   canUnmatch,
   collectFeeds,
   confirmBankMatch,
@@ -405,12 +406,17 @@ const RowActions: FC<{
   const canClose = canMarkNoDocument(row);
   // Reopen is a super user's action only (O-S88-3): nobody else is shown it.
   const canReopen = isSuperUser && canReopenTicket(row);
+  // An open bank report (Release D4, DEFAULT 7) is decided first: confirm,
+  // manual match and unmatch would drop it, so they are not offered on its
+  // row; reject still is (it leaves the report alone).
+  const reportBlocks = hasOpenBankReport(row);
   // A suggested match waits for a decision (Release D2, O-S89-4).
   const canDecide = canDecideSuggestion(row);
+  const canConfirmMatch = canDecide && !reportBlocks;
   // An unmatched row may be matched by hand (Release D2, O-S89-4).
-  const canMatch = canManualMatch(row);
+  const canMatch = canManualMatch(row) && !reportBlocks;
   // Unmatch is a super user's action only (O-S89-4): nobody else is shown it.
-  const canTakeOff = isSuperUser && canUnmatch(row);
+  const canTakeOff = isSuperUser && canUnmatch(row) && !reportBlocks;
   // A change the bank reported (Release D4, O-S90-2): accept it or keep the
   // row as posted — reviewers and super users alike.
   const canAccept = canAcceptBankChange(row);
@@ -599,7 +605,7 @@ const RowActions: FC<{
             Not a duplicate: release flag
           </SecondaryButton>
         )}
-        {canDecide && (
+        {canConfirmMatch && (
           <PrimaryButton
             onClick={() =>
               void ask(
