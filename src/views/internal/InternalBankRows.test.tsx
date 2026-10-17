@@ -75,6 +75,12 @@ const bankRow = (over: Partial<BankRow> = {}): BankRow => ({
   routing_reason_label: null,
   resolution_note: null,
   duplicate_sibling: null,
+  reported_amount: null,
+  reported_direction: null,
+  reported_date: null,
+  reported_at: null,
+  routed_from_status: null,
+  routed_from_reason: null,
   ...over,
 });
 

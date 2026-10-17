@@ -18,6 +18,17 @@ import {
   releaseBankRowFlag,
   reopenBankRow,
   MATCH_REASON_MAX,
+  BANK_CHANGE_REASON,
+  BANK_REMOVAL_REASON,
+  BANK_REPORT_REASON_MAX,
+  acceptBankChange,
+  canAcceptBankChange,
+  canKeepAsPosted,
+  canKeepBankRow,
+  canMarkBankRemoved,
+  keepAsPosted,
+  keepBankRow,
+  markBankRemoved,
   canDecideSuggestion,
   canManualMatch,
   canUnmatch,
@@ -31,7 +42,9 @@ import {
   type BankMergePlan,
   type BankNoDocumentPlan,
   type BankReleasePlan,
+  type BankRemovalPlan,
   type BankReopenPlan,
+  type BankReportPlan,
   type BankRow,
 } from './useStaffBankRows';
 
@@ -191,6 +204,12 @@ describe('feeds seen in the list', () => {
     routing_reason_label: null,
     resolution_note: null,
     duplicate_sibling: null,
+    reported_amount: null,
+    reported_direction: null,
+    reported_date: null,
+    reported_at: null,
+    routed_from_status: null,
+    routed_from_reason: null,
   });
 
   it('collects each feed once from the rows it has seen, in the order first seen', () => {
@@ -578,6 +597,12 @@ const row = (over: Partial<BankRow> = {}): BankRow => ({
   routing_reason_label: null,
   resolution_note: null,
   duplicate_sibling: null,
+  reported_amount: null,
+  reported_direction: null,
+  reported_date: null,
+  reported_at: null,
+  routed_from_status: null,
+  routed_from_reason: null,
   ...over,
 });
 const SUMMARY = {
@@ -701,5 +726,145 @@ describe('match actions: which rows offer which action', () => {
     expect(canUnmatch(row())).toBe(false);
     expect(canUnmatch(row({ row_kind: 'suggested', suggested_match: SUMMARY }))).toBe(false);
     expect(canUnmatch({ ...settled, excluded: true })).toBe(false);
+  });
+});
+
+// ─── Bank reports (Release D4; backend D3, O-S90-2 / O-S90-3) ──────────────────
+
+const REPORT_URL = (action: string) => `/api/accounting/staff/bank-rows/${ROW}/bank-report/${action}/`;
+
+// The plans exactly as the server sends them (bank_report_service.py
+// ReportPlan._image, posted_removal_service.py RemovalPlan._image).
+const REPORT_PLAN: BankReportPlan = {
+  action: 'accept_change',
+  row_id: ROW,
+  row: { date: '2026-09-20', direction: 'money_out', amount: '25.00', currency: 'CAD' },
+  reported: { amount: '26.40', direction: 'money_out', date: '2026-09-20', source: 'row' },
+  ticket: {
+    before: { status: 'needs_review', routing_reason: BANK_CHANGE_REASON },
+    after: { status: 'waiting_document', routing_reason: null },
+  },
+  follow: 'correct',
+  correction: {
+    entry: { entry_id: ENTRY, entry_number: 41, entry_date: '2026-09-20' },
+    lines: [
+      { account_id: 'a1a1a1a1-0000-4000-8000-000000000001', side: 'debit', amount: '26.40' },
+      { account_id: 'a1a1a1a1-0000-4000-8000-000000000002', side: 'credit', amount: '26.40' },
+    ],
+  },
+  match: null,
+  reason: 'Statement shows 26.40.',
+  routing_reason_label: null,
+};
+const REMOVAL_PLAN: BankRemovalPlan = {
+  action: 'bank_removed',
+  row_id: ROW,
+  row: { date: '2026-09-20', direction: 'money_out', amount: '25.00', currency: 'CAD' },
+  ticket: {
+    before: { status: 'needs_review', routing_reason: BANK_REMOVAL_REASON },
+    after: { status: 'closed', routing_reason: 'plaid_removed' },
+  },
+  reverses: { entry_id: ENTRY, entry_number: 41, entry_date: '2026-09-20' },
+  unmatches: null,
+  relink: null,
+  reason: 'No such charge on the statement.',
+  routing_reason_label: 'Removed by the bank',
+};
+
+describe('bank reports: which rows offer which action', () => {
+  const report = (reason: string, over: Partial<BankRow> = {}) =>
+    row({ ticket_status: 'needs_review', routing_reason: reason, ...over });
+
+  it('change actions only on an open change report in the books', () => {
+    const open = report(BANK_CHANGE_REASON);
+    for (const can of [canAcceptBankChange, canKeepAsPosted]) {
+      expect(can(open)).toBe(true);
+      expect(can(report(BANK_REMOVAL_REASON))).toBe(false);
+      expect(can(report('unmatched_by_staff'))).toBe(false);
+      expect(can(row({ routing_reason: BANK_CHANGE_REASON, ticket_status: 'waiting_document' }))).toBe(false);
+      expect(can({ ...open, pending: true })).toBe(false);
+      expect(can({ ...open, excluded: true })).toBe(false);
+    }
+  });
+
+  it('removal actions only on an open removal report in the books', () => {
+    const open = report(BANK_REMOVAL_REASON);
+    for (const can of [canMarkBankRemoved, canKeepBankRow]) {
+      expect(can(open)).toBe(true);
+      expect(can(report(BANK_CHANGE_REASON))).toBe(false);
+      expect(can(row({ routing_reason: BANK_REMOVAL_REASON, ticket_status: 'closed' }))).toBe(false);
+      expect(can({ ...open, pending: true })).toBe(false);
+      expect(can({ ...open, excluded: true })).toBe(false);
+    }
+  });
+});
+
+describe('bank reports: the four requests', () => {
+  it('acceptBankChange posts {reason, confirm} and hands back the plan', async () => {
+    post.mockResolvedValueOnce(ok(false, REPORT_PLAN)).mockResolvedValueOnce(ok(true, REPORT_PLAN));
+
+    expect(await acceptBankChange(ROW, '  Statement shows 26.40. ', false)).toEqual({
+      ok: true,
+      executed: false,
+      plan: REPORT_PLAN,
+    });
+    expect(await acceptBankChange(ROW, 'Statement shows 26.40.', true)).toEqual({
+      ok: true,
+      executed: true,
+      plan: REPORT_PLAN,
+    });
+    expect(post.mock.calls).toEqual([
+      [REPORT_URL('accept-change'), { reason: 'Statement shows 26.40.', confirm: false }],
+      [REPORT_URL('accept-change'), { reason: 'Statement shows 26.40.', confirm: true }],
+    ]);
+    expect(BANK_REPORT_REASON_MAX).toBe(200);
+  });
+
+  it('keepAsPosted posts to keep-as-posted/', async () => {
+    const plan = { ...REPORT_PLAN, action: 'keep_as_posted' as const, follow: null, correction: null };
+    post.mockResolvedValueOnce(ok(true, plan));
+
+    expect(await keepAsPosted(ROW, ' Books are right. ', true)).toEqual({ ok: true, executed: true, plan });
+    expect(post).toHaveBeenCalledWith(REPORT_URL('keep-as-posted'), { reason: 'Books are right.', confirm: true });
+  });
+
+  it('markBankRemoved posts to bank-removed/', async () => {
+    post.mockResolvedValueOnce(ok(false, REMOVAL_PLAN));
+
+    expect(await markBankRemoved(ROW, ' No such charge. ', false)).toEqual({
+      ok: true,
+      executed: false,
+      plan: REMOVAL_PLAN,
+    });
+    expect(post).toHaveBeenCalledWith(REPORT_URL('bank-removed'), { reason: 'No such charge.', confirm: false });
+  });
+
+  it('keepBankRow posts to keep-row/', async () => {
+    const plan = { ...REMOVAL_PLAN, action: 'keep_row' as const, reverses: null };
+    post.mockResolvedValueOnce(ok(true, plan));
+
+    expect(await keepBankRow(ROW, 'Charge is real.', true)).toEqual({ ok: true, executed: true, plan });
+    expect(post).toHaveBeenCalledWith(REPORT_URL('keep-row'), { reason: 'Charge is real.', confirm: true });
+  });
+
+  it('a 409 refusal reaches the caller with its code', async () => {
+    const detail = 'This entry is not the bank line and one other line.';
+    post.mockResolvedValueOnce({ status: 409, data: { code: 'accept_needs_manual_lines', detail } });
+    expect(await acceptBankChange(ROW, 'x', true)).toEqual({
+      ok: false,
+      refusal: {
+        status: 409,
+        code: 'accept_needs_manual_lines',
+        detail,
+        context: { code: 'accept_needs_manual_lines', detail },
+      },
+    });
+    post.mockResolvedValueOnce({ status: 409, data: { code: 'no_bank_removal', detail: 'No report.' } });
+    expect(await keepBankRow(ROW, 'x', false)).toMatchObject({
+      ok: false,
+      refusal: { status: 409, code: 'no_bank_removal' },
+    });
+    post.mockResolvedValueOnce({ status: 404, data: { detail: 'Not found.' } });
+    expect(await markBankRemoved(ROW, 'x', false)).toMatchObject({ ok: false, refusal: { status: 404 } });
   });
 });
