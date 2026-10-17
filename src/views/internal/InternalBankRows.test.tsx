@@ -19,7 +19,9 @@ import {
   type BankMergePlan,
   type BankNoDocumentPlan,
   type BankReleasePlan,
+  type BankRemovalPlan,
   type BankReopenPlan,
+  type BankReportPlan,
   type BankRow,
 } from '@/hooks/useStaffBankRows';
 import { InternalBankRows } from './InternalBankRows';
@@ -75,6 +77,12 @@ const bankRow = (over: Partial<BankRow> = {}): BankRow => ({
   routing_reason_label: null,
   resolution_note: null,
   duplicate_sibling: null,
+  reported_amount: null,
+  reported_direction: null,
+  reported_date: null,
+  reported_at: null,
+  routed_from_status: null,
+  routed_from_reason: null,
   ...over,
 });
 
@@ -2654,5 +2662,495 @@ describe('bank row: unmatch', () => {
     expect(await screen.findByText(LIMIT)).toBeInTheDocument();
     expect(post).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('heading', { name: UNMATCH_TITLE })).not.toBeInTheDocument();
+  });
+});
+
+// ─── Bank reports (Release D4; backend D3, O-S90-1 / O-S90-3) ──────────────────
+
+// A row the bank changed after it posted (plaid_modified_after_posting): in
+// review, settled-matched (listed since O-S90-4), the bank's values beside it.
+const CHANGED = bankRow({
+  id: '61616161-0000-4000-8000-000000000001',
+  direction: 'money_out',
+  amount: '156.80',
+  description: 'ADOBE SUBSCRIPTION',
+  ticket_status: 'needs_review',
+  ticket_status_label: 'Needs Review',
+  routing_reason: 'plaid_modified_after_posting',
+  routing_reason_label: 'Changed by the bank after posting',
+  row_kind: 'matched',
+  reported_amount: '160.10',
+  reported_direction: 'money_out',
+  reported_date: '2026-09-21',
+  reported_at: '2026-09-22T14:05:00Z',
+  routed_from_status: 'waiting_document',
+});
+// A settled row the bank reported removed (plaid_posted_removal_reported).
+const REMOVED = bankRow({
+  id: '62626262-0000-4000-8000-000000000002',
+  direction: 'money_out',
+  amount: '42.00',
+  description: 'REMOVED BY BANK',
+  ticket_status: 'needs_review',
+  ticket_status_label: 'Needs Review',
+  routing_reason: 'plaid_posted_removal_reported',
+  routing_reason_label: 'Removed by the bank after posting',
+  row_kind: 'matched',
+  routed_from_status: 'waiting_document',
+});
+
+const reportPanel = () => screen.queryByRole('region', { name: 'Bank reported' });
+
+describe('bank row: the bank reported panel', () => {
+  it('shows stored vs reported amount and date for an open change report', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [CHANGED] });
+    render(<InternalBankRows />);
+
+    await openRow(user, 'ADOBE SUBSCRIPTION');
+
+    const panel = reportPanel() as HTMLElement;
+    expect(panel).toBeInTheDocument();
+    const value = (label: string) => within(panel).getByText(label).nextElementSibling?.textContent;
+    expect(value('Books amount')).toBe('156.80 CAD');
+    expect(value('Bank amount')).toBe('160.10');
+    expect(value('Books date')).toBe('2026-09-20');
+    expect(value('Bank date')).toBe('2026-09-21');
+  });
+
+  it('shows the report date and flags a direction change', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [CHANGED, { ...CHANGED, id: '61616161-0000-4000-8000-000000000003', description: 'FLIPPED', reported_direction: 'money_in' }] });
+    render(<InternalBankRows />);
+
+    await openRow(user, 'ADOBE SUBSCRIPTION');
+    let panel = reportPanel() as HTMLElement;
+    expect(within(panel).getByText('2026-09-22T14:05:00Z')).toBeInTheDocument();
+    expect(within(panel).queryByText('Bank direction')).not.toBeInTheDocument();
+
+    await openRow(user, 'FLIPPED');
+    panel = reportPanel() as HTMLElement;
+    expect(within(panel).getByText('Bank direction').nextElementSibling?.textContent).toBe(
+      'Money in (the books say money out)',
+    );
+  });
+
+  it('shows the removal panel for an open removal report', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [REMOVED] });
+    render(<InternalBankRows />);
+
+    await openRow(user, 'REMOVED BY BANK');
+
+    const panel = reportPanel() as HTMLElement;
+    expect(within(panel).getByText('Removed by the bank after posting')).toBeInTheDocument();
+    expect(within(panel).queryByText('Bank amount')).not.toBeInTheDocument();
+    expect(within(panel).queryByText('Reported')).not.toBeInTheDocument();
+  });
+
+  it('shows no report panel on a row with no report', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [PLAIN, FLAGGED, { ...CHANGED, id: '61616161-0000-4000-8000-000000000004', description: 'KEPT AS POSTED', ticket_status: 'waiting_document', ticket_status_label: 'Waiting for Document', routing_reason: null, routing_reason_label: null, reported_amount: null, reported_direction: null, reported_date: null, reported_at: null, routed_from_status: null }] });
+    render(<InternalBankRows />);
+
+    for (const description of ['REFUND 0042', 'STAPLES STORE #114 TORONTO', 'KEPT AS POSTED']) {
+      await openRow(user, description);
+      expect(reportPanel()).not.toBeInTheDocument();
+    }
+  });
+
+  it('audit-sourced values show the same as stored ones', async () => {
+    // A report made before migration 0059: the server reads its values from
+    // the report's audit row and sends them in the same fields; nothing on the
+    // row says where they came from, and the panel reads them the same way.
+    const user = userEvent.setup();
+    const fromAudit = { ...CHANGED, id: '61616161-0000-4000-8000-000000000005', description: 'PRE 0059 REPORT', routed_from_status: null };
+    serve({ rows: [fromAudit] });
+    render(<InternalBankRows />);
+
+    await openRow(user, 'PRE 0059 REPORT');
+
+    const panel = reportPanel() as HTMLElement;
+    expect(within(panel).getByText('Bank amount').nextElementSibling?.textContent).toBe('160.10');
+    expect(within(panel).getByText('Bank date').nextElementSibling?.textContent).toBe('2026-09-21');
+    expect(within(panel).getByText('2026-09-22T14:05:00Z')).toBeInTheDocument();
+  });
+});
+
+// ─── Bank reports: the R1 actions (Release D4, O-S90-2) ────────────────────────
+
+const ACCEPT = 'Accept bank change';
+const KEEP_POSTED = 'Keep as posted';
+const REPORT_URL = (action: string) =>
+  `/api/accounting/staff/bank-rows/${CHANGED.id}/bank-report/${action}/`;
+const reportReason = () => screen.getByRole('textbox', { name: 'Reason for the decision' });
+
+// The plans exactly as the server sends them (bank_report_service.py
+// ReportPlan._image).
+const ACCEPT_PLAN: BankReportPlan = {
+  action: 'accept_change',
+  row_id: CHANGED.id,
+  row: { date: '2026-09-20', direction: 'money_out', amount: '156.80', currency: 'CAD' },
+  reported: { amount: '160.10', direction: 'money_out', date: '2026-09-21', source: 'row' },
+  ticket: {
+    before: { status: 'needs_review', routing_reason: 'plaid_modified_after_posting' },
+    after: { status: 'waiting_document', routing_reason: null },
+  },
+  follow: 'correct',
+  correction: {
+    entry: { entry_id: '71717171-0000-4000-8000-000000000001', entry_number: 88, entry_date: '2026-09-20' },
+    lines: [
+      { account_id: '72727272-0000-4000-8000-000000000001', side: 'debit', amount: '160.10' },
+      { account_id: '72727272-0000-4000-8000-000000000002', side: 'credit', amount: '160.10' },
+    ],
+  },
+  match: null,
+  reason: 'Statement shows 160.10.',
+  routing_reason_label: null,
+};
+const KEEP_PLAN: BankReportPlan = {
+  ...ACCEPT_PLAN,
+  action: 'keep_as_posted',
+  follow: null,
+  correction: null,
+  reason: 'Books are right.',
+};
+
+describe('bank row: a change the bank reported', () => {
+  it('Accept bank change: reason required, Preview shows the correction plan, Confirm posts', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [CHANGED, PLAIN], me: 'reviewer' });
+    post.mockResolvedValueOnce(planned(false, ACCEPT_PLAN)).mockResolvedValueOnce(planned(true, ACCEPT_PLAN));
+    render(<InternalBankRows />);
+
+    await openRow(user, 'ADOBE SUBSCRIPTION');
+    await user.click(button(ACCEPT));
+    expect(screen.getByText('A reason is required.')).toBeInTheDocument();
+    expect(button('Preview')).toBeDisabled();
+    await user.type(reportReason(), '   ');
+    expect(button('Preview')).toBeDisabled();
+    expect(reportReason()).toHaveAttribute('maxlength', '200');
+    await user.type(reportReason(), ' Statement shows 160.10. ');
+    await user.click(button('Preview'));
+
+    expect(await screen.findByRole('heading', { name: "Accept the bank's change?" })).toBeInTheDocument();
+    expect(post).toHaveBeenCalledWith(REPORT_URL('accept-change'), {
+      reason: 'Statement shows 160.10.',
+      confirm: false,
+    });
+    const plan = screen.getByRole('region', { name: 'Bank report plan' });
+    expect(plan).toHaveTextContent('Its entry is corrected at the new amount');
+    expect(plan).toHaveTextContent('One correcting journal entry is posted.');
+    expect(plan).toHaveTextContent('debit 160.10 · credit 160.10');
+    expect(plan).toHaveTextContent('JE-0088');
+
+    serve({ rows: [PLAIN], me: 'reviewer' });
+    await user.click(button('Confirm'));
+
+    expect(await screen.findByText("The bank's change is accepted.")).toBeInTheDocument();
+    expect(post).toHaveBeenLastCalledWith(REPORT_URL('accept-change'), {
+      reason: 'Statement shows 160.10.',
+      confirm: true,
+    });
+    await waitFor(() => expect(rowRequests()).toHaveLength(2));
+    expect(pane()).not.toBeInTheDocument();
+  });
+
+  it('Keep as posted: reason required, Preview then Confirm', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [CHANGED], me: 'reviewer' });
+    post.mockResolvedValueOnce(planned(false, KEEP_PLAN)).mockResolvedValueOnce(planned(true, KEEP_PLAN));
+    render(<InternalBankRows />);
+
+    await openRow(user, 'ADOBE SUBSCRIPTION');
+    await user.click(button(KEEP_POSTED));
+    expect(button('Preview')).toBeDisabled();
+    await user.type(reportReason(), 'Books are right.');
+    await user.click(button('Preview'));
+
+    expect(await screen.findByRole('heading', { name: 'Keep this row as posted?' })).toBeInTheDocument();
+    expect(post).toHaveBeenCalledWith(REPORT_URL('keep-as-posted'), { reason: 'Books are right.', confirm: false });
+    const plan = screen.getByRole('region', { name: 'Bank report plan' });
+    expect(plan).toHaveTextContent("The bank's values are set aside; the row stays as posted.");
+    expect(plan).toHaveTextContent('No journal entry is changed.');
+    expect(plan).toHaveTextContent('needs_review (plaid_modified_after_posting) → waiting_document');
+
+    serve({ rows: [], me: 'reviewer' });
+    await user.click(button('Confirm'));
+    expect(await screen.findByText('Kept as posted.')).toBeInTheDocument();
+    expect(post).toHaveBeenLastCalledWith(REPORT_URL('keep-as-posted'), { reason: 'Books are right.', confirm: true });
+  });
+
+  it('a 409 accept_needs_manual_lines is shown in plain words and nothing changes', async () => {
+    const user = userEvent.setup();
+    const detail =
+      "This entry is not the bank line and one other line, so the bank's amount cannot be carried into it here. Keep the row as posted and correct the entry by hand.";
+    serve({ rows: [CHANGED], me: 'reviewer' });
+    post.mockResolvedValueOnce({ status: 409, data: { code: 'accept_needs_manual_lines', detail } });
+    render(<InternalBankRows />);
+
+    await openRow(user, 'ADOBE SUBSCRIPTION');
+    await user.click(button(ACCEPT));
+    await user.type(reportReason(), 'Statement shows 160.10.');
+    await user.click(button('Preview'));
+
+    expect(await screen.findByText(detail)).toBeInTheDocument();
+    expect(screen.getByText('accept_needs_manual_lines')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: "Accept the bank's change?" })).not.toBeInTheDocument();
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(rowRequests()).toHaveLength(1);
+    expect(pane()).toBeInTheDocument();
+  });
+
+  it('R1 actions are not offered on a row without an open change report', async () => {
+    const user = userEvent.setup();
+    const kept = {
+      ...CHANGED,
+      id: '61616161-0000-4000-8000-000000000006',
+      description: 'NO OPEN REPORT',
+      ticket_status: 'waiting_document',
+      ticket_status_label: 'Waiting for Document',
+      routing_reason: null,
+      routing_reason_label: null,
+      reported_amount: null,
+      reported_direction: null,
+      reported_date: null,
+      reported_at: null,
+    };
+    serve({ rows: [PLAIN, REMOVED, kept, { ...CHANGED, id: '61616161-0000-4000-8000-000000000007', description: 'PENDING CHANGE', pending: true }], me: 'super' });
+    render(<InternalBankRows />);
+
+    for (const description of ['REFUND 0042', 'REMOVED BY BANK', 'NO OPEN REPORT', 'PENDING CHANGE']) {
+      await openRow(user, description);
+      await settle();
+      expect(screen.queryByRole('button', { name: ACCEPT })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: KEEP_POSTED })).not.toBeInTheDocument();
+    }
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('a reviewer is offered both R1 actions', async () => {
+    const user = userEvent.setup();
+    for (const me of ['reviewer', 'super'] as const) {
+      serve({ rows: [CHANGED], me });
+      const view = render(<InternalBankRows />);
+      await openRow(user, 'ADOBE SUBSCRIPTION');
+      expect(await screen.findByRole('button', { name: ACCEPT })).toBeEnabled();
+      expect(button(KEEP_POSTED)).toBeEnabled();
+      view.unmount();
+    }
+    expect(post).not.toHaveBeenCalled();
+  });
+});
+
+// ─── Bank reports: the R2 actions (Release D4, O-S90-3) ────────────────────────
+
+const REMOVED_IT = 'Bank removed it';
+const KEEP_ROW = 'Keep row';
+const REMOVAL_URL = (action: string) =>
+  `/api/accounting/staff/bank-rows/${REMOVED.id}/bank-report/${action}/`;
+
+// The plans exactly as the server sends them (posted_removal_service.py
+// RemovalPlan._image).
+const REMOVED_PLAN: BankRemovalPlan = {
+  action: 'bank_removed',
+  row_id: REMOVED.id,
+  row: { date: '2026-09-20', direction: 'money_out', amount: '42.00', currency: 'CAD' },
+  ticket: {
+    before: { status: 'needs_review', routing_reason: 'plaid_posted_removal_reported' },
+    after: { status: 'closed', routing_reason: 'plaid_removed' },
+  },
+  reverses: { entry_id: '73737373-0000-4000-8000-000000000001', entry_number: 95, entry_date: '2026-09-21' },
+  unmatches: null,
+  relink: null,
+  reason: 'No such charge on the statement.',
+  routing_reason_label: 'Removed by the bank',
+};
+const KEEP_ROW_PLAN: BankRemovalPlan = {
+  ...REMOVED_PLAN,
+  action: 'keep_row',
+  ticket: {
+    before: { status: 'needs_review', routing_reason: 'plaid_posted_removal_reported' },
+    after: { status: 'waiting_document', routing_reason: null },
+  },
+  reverses: null,
+  relink: {
+    entry: { entry_id: '73737373-0000-4000-8000-000000000001', entry_number: 95, entry_date: '2026-09-21' },
+    journal_line_id: '74747474-0000-4000-8000-000000000001',
+    account_code: '2120',
+  },
+  reason: 'The charge is on the statement.',
+  routing_reason_label: null,
+};
+
+describe('bank row: a removal the bank reported', () => {
+  it('Bank removed it is offered to a super user only', async () => {
+    const user = userEvent.setup();
+    for (const me of ['reviewer', undefined, 'unanswered'] as const) {
+      serve({ rows: [REMOVED], me });
+      const view = render(<InternalBankRows />);
+      await openRow(user, 'REMOVED BY BANK');
+      await settle();
+      expect(screen.queryByRole('button', { name: REMOVED_IT })).not.toBeInTheDocument();
+      view.unmount();
+    }
+    serve({ rows: [REMOVED], me: 'super' });
+    render(<InternalBankRows />);
+    await openRow(user, 'REMOVED BY BANK');
+    expect(await screen.findByRole('button', { name: REMOVED_IT })).toBeEnabled();
+    expect(button(KEEP_ROW)).toBeEnabled();
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('Bank removed it: reason required, Preview names the entry it reverses, Confirm', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [REMOVED, PLAIN], me: 'super' });
+    post.mockResolvedValueOnce(planned(false, REMOVED_PLAN)).mockResolvedValueOnce(planned(true, REMOVED_PLAN));
+    render(<InternalBankRows />);
+
+    await openRow(user, 'REMOVED BY BANK');
+    await user.click(await screen.findByRole('button', { name: REMOVED_IT }));
+    expect(screen.getByText('A reason is required.')).toBeInTheDocument();
+    expect(button('Preview')).toBeDisabled();
+    await user.type(reportReason(), ' No such charge on the statement. ');
+    await user.click(button('Preview'));
+
+    expect(await screen.findByRole('heading', { name: "Accept the bank's removal?" })).toBeInTheDocument();
+    expect(post).toHaveBeenCalledWith(REMOVAL_URL('bank-removed'), {
+      reason: 'No such charge on the statement.',
+      confirm: false,
+    });
+    const plan = screen.getByRole('region', { name: 'Bank removal plan' });
+    expect(plan).toHaveTextContent('The row leaves the books');
+    expect(plan).toHaveTextContent('Its entry is reversed.');
+    expect(within(plan).getByText('Reverses').nextElementSibling).toHaveTextContent('JE-0095');
+    expect(within(plan).getByText('Removed by the bank')).toBeInTheDocument();
+
+    serve({ rows: [PLAIN], me: 'super' });
+    await user.click(button('Confirm'));
+    expect(await screen.findByText('Removed: the row has left the books.')).toBeInTheDocument();
+    expect(post).toHaveBeenLastCalledWith(REMOVAL_URL('bank-removed'), {
+      reason: 'No such charge on the statement.',
+      confirm: true,
+    });
+    await waitFor(() => expect(rowRequests()).toHaveLength(2));
+    expect(pane()).not.toBeInTheDocument();
+  });
+
+  it('Keep: Preview names the lane, Confirm', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [REMOVED], me: 'reviewer' });
+    post.mockResolvedValueOnce(planned(false, KEEP_ROW_PLAN)).mockResolvedValueOnce(planned(true, KEEP_ROW_PLAN));
+    render(<InternalBankRows />);
+
+    await openRow(user, 'REMOVED BY BANK');
+    await user.click(await screen.findByRole('button', { name: KEEP_ROW }));
+    expect(button('Preview')).toBeDisabled();
+    await user.type(reportReason(), 'The charge is on the statement.');
+    await user.click(button('Preview'));
+
+    expect(await screen.findByRole('heading', { name: 'Keep this row?' })).toBeInTheDocument();
+    expect(post).toHaveBeenCalledWith(REMOVAL_URL('keep-row'), {
+      reason: 'The charge is on the statement.',
+      confirm: false,
+    });
+    const plan = screen.getByRole('region', { name: 'Bank removal plan' });
+    expect(plan).toHaveTextContent('The row stays in the books.');
+    expect(plan).toHaveTextContent('No journal entry is changed.');
+    expect(plan).toHaveTextContent('needs_review (plaid_posted_removal_reported) → waiting_document');
+    expect(within(plan).getByText('Re-linked to').nextElementSibling).toHaveTextContent('line on 2120');
+
+    serve({ rows: [], me: 'reviewer' });
+    await user.click(button('Confirm'));
+    expect(await screen.findByText('Row kept.')).toBeInTheDocument();
+    expect(post).toHaveBeenLastCalledWith(REMOVAL_URL('keep-row'), {
+      reason: 'The charge is on the statement.',
+      confirm: true,
+    });
+  });
+
+  it('a reviewer sees Keep but not Bank removed it', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [REMOVED, CHANGED], me: 'reviewer' });
+    render(<InternalBankRows />);
+
+    await openRow(user, 'REMOVED BY BANK');
+    expect(await screen.findByRole('button', { name: KEEP_ROW })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: REMOVED_IT })).not.toBeInTheDocument();
+    // A change report offers neither removal action.
+    await openRow(user, 'ADOBE SUBSCRIPTION');
+    await settle();
+    expect(screen.queryByRole('button', { name: KEEP_ROW })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: REMOVED_IT })).not.toBeInTheDocument();
+    expect(post).not.toHaveBeenCalled();
+  });
+});
+
+// ─── Bank reports: the list, its labels and the match actions (Release D4) ─────
+
+describe('bank rows: rows with an open bank report', () => {
+  it('the count includes settled rows with an open report', async () => {
+    // O-S90-4: a row a bank report sent to review is listed and counted even
+    // though it is settled; the screen shows the server's own count.
+    serve({ rows: [CHANGED, REMOVED, PLAIN], count: 3 });
+    render(<InternalBankRows />);
+
+    expect(await screen.findByText('3 bank rows (oldest first).')).toBeInTheDocument();
+    expect(screen.getByText('Bank rows (3)')).toBeInTheDocument();
+    for (const description of ['ADOBE SUBSCRIPTION', 'REMOVED BY BANK', 'REFUND 0042']) {
+      expect(await rowOf(description)).toBeInTheDocument();
+    }
+  });
+
+  it('Needs Review filter shows settled rows with an open report', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [CHANGED, REMOVED] });
+    render(<InternalBankRows />);
+    await rowOf('ADOBE SUBSCRIPTION');
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Ticket status' }), 'needs_review');
+
+    await waitFor(() => expect(lastRowRequest()).toMatchObject({ ticket_status: 'needs_review' }));
+    expect(await rowOf('ADOBE SUBSCRIPTION')).toBeInTheDocument();
+    expect(await rowOf('REMOVED BY BANK')).toBeInTheDocument();
+  });
+
+  it('both reasons show the server labels, never the codes', async () => {
+    serve({ rows: [CHANGED, REMOVED] });
+    render(<InternalBankRows />);
+
+    const changed = await rowOf('ADOBE SUBSCRIPTION');
+    const removed = await rowOf('REMOVED BY BANK');
+    expect(within(changed).getByText('Changed by the bank after posting')).toBeInTheDocument();
+    expect(within(removed).getByText('Removed by the bank after posting')).toBeInTheDocument();
+    expect(screen.queryByText('plaid_modified_after_posting')).not.toBeInTheDocument();
+    expect(screen.queryByText('plaid_posted_removal_reported')).not.toBeInTheDocument();
+  });
+
+  it('Confirm, Match to a line and Unmatch are hidden on a row with an open bank report; Reject stays', async () => {
+    const user = userEvent.setup();
+    const suggestion = FLAGGED.suggested_match!;
+    serve({
+      rows: [
+        { ...CHANGED, id: '63636363-0000-4000-8000-000000000001', description: 'CHANGED WITH SUGGESTION', row_kind: 'suggested', suggested_match: suggestion },
+        { ...REMOVED, id: '63636363-0000-4000-8000-000000000002', description: 'REMOVED UNMATCHED', row_kind: 'unmatched' },
+        { ...CHANGED, id: '63636363-0000-4000-8000-000000000003', description: 'CHANGED SETTLED', settled_match: { ...suggestion, state: 'auto_matched' } },
+      ],
+      me: 'super',
+    });
+    render(<InternalBankRows />);
+
+    await openRow(user, 'CHANGED WITH SUGGESTION');
+    expect(await screen.findByRole('button', { name: 'Reject match' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Confirm match' })).not.toBeInTheDocument();
+
+    await openRow(user, 'REMOVED UNMATCHED');
+    await settle();
+    expect(screen.queryByRole('button', { name: 'Match to a line…' })).not.toBeInTheDocument();
+
+    await openRow(user, 'CHANGED SETTLED');
+    expect(await screen.findByRole('button', { name: 'Accept bank change' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Unmatch' })).not.toBeInTheDocument();
+    expect(post).not.toHaveBeenCalled();
   });
 });

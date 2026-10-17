@@ -9,10 +9,14 @@ import {
   type BankMergePlan,
   type BankNoDocumentPlan,
   type BankReleasePlan,
+  type BankRemovalPlan,
   type BankReopenPlan,
+  type BankReportPlan,
 } from '@/hooks/useStaffBankRows';
 import { type RepointPlan } from '@/hooks/useStaffRepoint';
 import {
+  BankRemovalPlanPreview,
+  BankReportPlanPreview,
   MatchPlanPreview,
   MergePlanPreview,
   NoDocumentPlanPreview,
@@ -630,5 +634,87 @@ describe('match plan', () => {
     expect(value('Reason').textContent).toBe('Matched to the wrong entry.');
     expect(value('Routing reason').textContent).toBe('Unmatched by staff');
     expect(value('Then').textContent).toBe('The ticket goes to review.');
+  });
+});
+
+// ─── Bank reports (Release D4; backend D3, O-S90-2 / O-S90-3) ──────────────────
+
+const ACCEPT_REPORT: BankReportPlan = {
+  action: 'accept_change',
+  row_id: ROW,
+  row: { date: '2026-09-20', direction: 'money_out', amount: '156.80', currency: 'CAD' },
+  reported: { amount: '160.10', direction: 'money_out', date: '2026-09-21', source: 'audit' },
+  ticket: {
+    before: { status: 'needs_review', routing_reason: 'plaid_modified_after_posting' },
+    after: { status: 'waiting_document', routing_reason: null },
+  },
+  follow: 'correct',
+  correction: {
+    entry: { entry_id: ENTRY, entry_number: 88, entry_date: '2026-09-20' },
+    lines: [
+      { account_id: ACCOUNT, side: 'debit', amount: '160.10' },
+      { account_id: FEED, side: 'credit', amount: '160.10' },
+    ],
+  },
+  match: null,
+  reason: 'Statement shows 160.10.',
+  routing_reason_label: null,
+};
+const REMOVAL: BankRemovalPlan = {
+  action: 'bank_removed',
+  row_id: ROW,
+  row: { date: '2026-09-20', direction: 'money_out', amount: '42.00', currency: 'CAD' },
+  ticket: {
+    before: { status: 'needs_review', routing_reason: 'plaid_posted_removal_reported' },
+    after: { status: 'closed', routing_reason: 'plaid_removed' },
+  },
+  reverses: { entry_id: OTHER_ENTRY, entry_number: 95, entry_date: '2026-09-21' },
+  unmatches: { match_id: MATCH, state: 'auto_matched' },
+  relink: null,
+  reason: 'No such charge.',
+  routing_reason_label: 'Removed by the bank',
+};
+
+describe('bank report plans', () => {
+  it('bank report plans render their rows and ticket after', () => {
+    const { unmount } = render(<BankReportPlanPreview plan={ACCEPT_REPORT} />);
+    expect(screen.getByRole('region', { name: 'Bank report plan' })).toBeInTheDocument();
+    expect(value('Amount').textContent).toBe('Money out 156.80 CAD');
+    expect(value('Bank reported').textContent).toBe('160.10 · 2026-09-21');
+    expect(value('Corrects')).toHaveTextContent('JE-0088');
+    expect(value('Corrected lines').textContent).toBe('debit 160.10 · credit 160.10');
+    expect(value('Ticket').textContent).toBe('needs_review (plaid_modified_after_posting) → waiting_document');
+    unmount();
+
+    render(<BankRemovalPlanPreview plan={REMOVAL} />);
+    expect(screen.getByRole('region', { name: 'Bank removal plan' })).toBeInTheDocument();
+    expect(value('Reverses')).toHaveTextContent('JE-0095');
+    expect(field('Match')).toHaveTextContent('auto_matched → unmatched');
+    expect(value('Ticket').textContent).toBe(
+      'needs_review (plaid_posted_removal_reported) → closed (plaid_removed)',
+    );
+    expect(value('Routing reason').textContent).toBe('Removed by the bank');
+  });
+
+  it('a rejection on a row with an open bank report says the ticket stays in review', () => {
+    render(
+      <MatchPlanPreview
+        plan={{
+          ...CONFIRM,
+          action: 'reject',
+          match: { ...CONFIRM.match, state: { before: 'suggested', after: 'rejected' } },
+          ticket: {
+            before: { status: 'needs_review', routing_reason: 'plaid_modified_after_posting' },
+            after: { status: 'needs_review', routing_reason: 'plaid_modified_after_posting' },
+          },
+          follow: 'bank_report_open',
+          routing_reason_label: 'Changed by the bank after posting',
+        }}
+      />,
+    );
+    expect(value('Then').textContent).toBe(
+      'The ticket stays in review: the bank report on this row is still open.',
+    );
+    expect(value('Routing reason').textContent).toBe('Changed by the bank after posting');
   });
 });

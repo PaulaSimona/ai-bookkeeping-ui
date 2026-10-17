@@ -88,6 +88,8 @@ import { type FC, type ReactNode, useState } from 'react';
 
 import { ActionRefusal, noticeCls } from '@/components/internal/ActionRefusal';
 import {
+  BankRemovalPlanPreview,
+  BankReportPlanPreview,
   MatchPlanPreview,
   MergePlanPreview,
   NoDocumentPlanPreview,
@@ -113,6 +115,9 @@ import { type PlanOutcome } from '@/hooks/staffPlan';
 import { useOrgsList } from '@/hooks/useInternalAdmin';
 import { useStaffMe } from '@/hooks/useStaffMe';
 import {
+  BANK_CHANGE_REASON,
+  BANK_REMOVAL_REASON,
+  BANK_REPORT_REASON_MAX,
   BANK_ROW_TICKET_STATUSES,
   BANK_ROW_TICKET_STATUS_LABELS,
   MATCH_REASON_MAX,
@@ -121,16 +126,25 @@ import {
   NO_DOCUMENT_REASON_OTHER,
   POSSIBLE_DUPLICATE_REASON,
   REOPEN_REASON_MAX,
+  acceptBankChange,
+  canAcceptBankChange,
   canDecideSuggestion,
+  canKeepAsPosted,
+  canKeepBankRow,
   canManualMatch,
+  canMarkBankRemoved,
   canMarkNoDocument,
   canReopenTicket,
+  hasOpenBankReport,
   canUnmatch,
   collectFeeds,
   confirmBankMatch,
   fetchMatchCandidates,
+  keepAsPosted,
+  keepBankRow,
   labelOrCode,
   manualMatchBankRow,
+  markBankRemoved,
   markNoDocument,
   mergeBankRow,
   rejectBankMatch,
@@ -197,6 +211,49 @@ const Detail: FC<{ label: string; children: ReactNode }> = ({ label, children })
     <dd className="text-white/80 break-words">{children}</dd>
   </div>
 );
+
+// Release D4 (backend D3, O-S90-1 / O-S90-3): what the bank reported on a row
+// that already has posted work, beside the books. A change shows the books'
+// amount and date and the bank's, the bank's direction when it differs, and
+// when the report was recorded — all the server's strings, shown as sent. Values
+// the server read from a report made before migration 0059 (its audit row,
+// DEFAULT 6) come in the same fields and show the same way. A removal shows the
+// server's label for it: no date is recorded for one (DEFAULT 16). No report,
+// no panel.
+const BankReportPanel: FC<{ row: BankRow }> = ({ row }) => {
+  const removal = row.routing_reason === BANK_REMOVAL_REASON;
+  const change = row.reported_at != null || row.routing_reason === BANK_CHANGE_REASON;
+  if (!removal && !change) return null;
+  if (removal) {
+    return (
+      <section aria-label="Bank reported" className="rounded-lg border border-amber-400/30 bg-amber-400/5 px-4 py-3">
+        <div className={`${labelCls} mb-1`}>Bank reported</div>
+        <p className="text-sm text-white/80">{labelOrCode(row.routing_reason_label, row.routing_reason)}</p>
+        <p className="mt-1 text-xs text-white/50">
+          The bank says this settled row was removed. Keep the row, or accept the removal.
+        </p>
+      </section>
+    );
+  }
+  const directionChanged = row.reported_direction != null && row.reported_direction !== row.direction;
+  return (
+    <section aria-label="Bank reported" className="rounded-lg border border-amber-400/30 bg-amber-400/5 px-4 py-3">
+      <div className={`${labelCls} mb-1`}>Bank reported</div>
+      <dl className="grid grid-cols-2 gap-3 text-sm">
+        <Detail label="Books amount">{`${row.amount} ${row.currency}`}</Detail>
+        <Detail label="Bank amount">{row.reported_amount ?? '—'}</Detail>
+        <Detail label="Books date">{row.date}</Detail>
+        <Detail label="Bank date">{row.reported_date ?? '—'}</Detail>
+        {directionChanged && (
+          <Detail label="Bank direction">
+            {`${directionLabel(row.reported_direction as string)} (the books say ${directionLabel(row.direction).toLowerCase()})`}
+          </Detail>
+        )}
+        <Detail label="Reported">{row.reported_at ?? '—'}</Detail>
+      </dl>
+    </section>
+  );
+};
 
 // What a row is flagged with: still pending at the bank, a possible copy of
 // another row, out of the books.
@@ -287,6 +344,21 @@ interface PendingAction extends PlanView {
   confirm: () => Promise<PlanOutcome<PlanView>>;
 }
 
+// A bank-report decision (Release D4): the change exits (O-S90-2) and the
+// removal exits (O-S90-3), and what each form says before its plan is asked
+// for.
+type ReportAction = 'accept' | 'keep_posted' | 'removed' | 'keep_row';
+const REPORT_FORM_TEXT: Record<ReportAction, string> = {
+  accept:
+    "Accept the bank's change: the row takes the bank's amount and date, and its entry is corrected to match.",
+  keep_posted:
+    "Keep this row as posted: the bank's values are set aside, and the ticket goes back to where it stood.",
+  removed:
+    "Accept the bank's removal: the row leaves the books, its match comes off and its entry is reversed.",
+  keep_row:
+    'Keep this row: it stays in the books and its ticket goes back to its lane — matched to its own entry again when that entry has a free bank line for the amount.',
+};
+
 const RowActions: FC<{
   row: BankRow;
   // The viewer is a super user (GET staff/me/). False for a reviewer, and
@@ -324,19 +396,108 @@ const RowActions: FC<{
   // "Unmatch" (Release D2, super users): its form is open, with the reason.
   const [unmatching, setUnmatching] = useState(false);
   const [unmatchReason, setUnmatchReason] = useState('');
+  // A bank-report decision (Release D4): which form is open, with the reason
+  // given so far — kept while the plan is looked at.
+  const [reportAction, setReportAction] = useState<ReportAction | null>(null);
+  const [reportReason, setReportReason] = useState('');
   const sibling = row.duplicate_sibling;
 
   const flagged = row.routing_reason === POSSIBLE_DUPLICATE_REASON;
   const canClose = canMarkNoDocument(row);
   // Reopen is a super user's action only (O-S88-3): nobody else is shown it.
   const canReopen = isSuperUser && canReopenTicket(row);
+  // An open bank report (Release D4, DEFAULT 7) is decided first: confirm,
+  // manual match and unmatch would drop it, so they are not offered on its
+  // row; reject still is (it leaves the report alone).
+  const reportBlocks = hasOpenBankReport(row);
   // A suggested match waits for a decision (Release D2, O-S89-4).
   const canDecide = canDecideSuggestion(row);
+  const canConfirmMatch = canDecide && !reportBlocks;
   // An unmatched row may be matched by hand (Release D2, O-S89-4).
-  const canMatch = canManualMatch(row);
+  const canMatch = canManualMatch(row) && !reportBlocks;
   // Unmatch is a super user's action only (O-S89-4): nobody else is shown it.
-  const canTakeOff = isSuperUser && canUnmatch(row);
-  if (!flagged && !canClose && !canReopen && !canDecide && !canMatch && !canTakeOff) return null;
+  const canTakeOff = isSuperUser && canUnmatch(row) && !reportBlocks;
+  // A change the bank reported (Release D4, O-S90-2): accept it or keep the
+  // row as posted — reviewers and super users alike.
+  const canAccept = canAcceptBankChange(row);
+  const canKeepPosted = canKeepAsPosted(row);
+  // A removal the bank reported (O-S90-3): accepting it reverses posted work —
+  // a super user's action only, nobody else is shown it; keeping the row is
+  // any reviewer's.
+  const canRemove = isSuperUser && canMarkBankRemoved(row);
+  const canKeepRow = canKeepBankRow(row);
+  if (
+    !flagged &&
+    !canClose &&
+    !canReopen &&
+    !canDecide &&
+    !canMatch &&
+    !canTakeOff &&
+    !canAccept &&
+    !canKeepPosted &&
+    !canRemove &&
+    !canKeepRow
+  ) {
+    return null;
+  }
+
+  // The open decision, while the row still allows it.
+  const reportOpen =
+    (reportAction === 'accept' && canAccept) ||
+    (reportAction === 'keep_posted' && canKeepPosted) ||
+    (reportAction === 'removed' && canRemove) ||
+    (reportAction === 'keep_row' && canKeepRow);
+
+  const openReport = (action: ReportAction) => {
+    setReportAction(action);
+    setReportReason('');
+    setRefusal(null);
+  };
+
+  // The plan of the open bank-report decision, asked for with Preview.
+  const previewReport = () => {
+    if (reportAction === 'accept') {
+      void ask(
+        (confirmed) => acceptBankChange(row.id, reportReason, confirmed),
+        (plan) => ({
+          title: "Accept the bank's change?",
+          plan: <BankReportPlanPreview plan={plan} />,
+          done: "The bank's change is accepted.",
+          rows: [{ label: 'Row', id: plan.row_id }],
+        }),
+      );
+    } else if (reportAction === 'keep_posted') {
+      void ask(
+        (confirmed) => keepAsPosted(row.id, reportReason, confirmed),
+        (plan) => ({
+          title: 'Keep this row as posted?',
+          plan: <BankReportPlanPreview plan={plan} />,
+          done: 'Kept as posted.',
+          rows: [{ label: 'Row', id: plan.row_id }],
+        }),
+      );
+    } else if (reportAction === 'removed') {
+      void ask(
+        (confirmed) => markBankRemoved(row.id, reportReason, confirmed),
+        (plan) => ({
+          title: "Accept the bank's removal?",
+          plan: <BankRemovalPlanPreview plan={plan} />,
+          done: 'Removed: the row has left the books.',
+          rows: [{ label: 'Row', id: plan.row_id }],
+        }),
+      );
+    } else if (reportAction === 'keep_row') {
+      void ask(
+        (confirmed) => keepBankRow(row.id, reportReason, confirmed),
+        (plan) => ({
+          title: 'Keep this row?',
+          plan: <BankRemovalPlanPreview plan={plan} />,
+          done: 'Row kept.',
+          rows: [{ label: 'Row', id: plan.row_id }],
+        }),
+      );
+    }
+  };
 
   // Opens the manual-match form once the candidates are read. A refusal on
   // the read is shown and the form stays closed.
@@ -444,7 +605,7 @@ const RowActions: FC<{
             Not a duplicate: release flag
           </SecondaryButton>
         )}
-        {canDecide && (
+        {canConfirmMatch && (
           <PrimaryButton
             onClick={() =>
               void ask(
@@ -487,7 +648,54 @@ const RowActions: FC<{
             Unmatch
           </SecondaryButton>
         )}
+        {canAccept && (
+          <PrimaryButton onClick={() => openReport('accept')} disabled={busy}>
+            Accept bank change
+          </PrimaryButton>
+        )}
+        {canKeepPosted && (
+          <SecondaryButton onClick={() => openReport('keep_posted')} disabled={busy}>
+            Keep as posted
+          </SecondaryButton>
+        )}
+        {canRemove && (
+          <PrimaryButton onClick={() => openReport('removed')} disabled={busy}>
+            Bank removed it
+          </PrimaryButton>
+        )}
+        {canKeepRow && (
+          <SecondaryButton onClick={() => openReport('keep_row')} disabled={busy}>
+            Keep row
+          </SecondaryButton>
+        )}
       </div>
+
+      {/* A bank-report decision (Release D4): the reason first — required —
+          then the plan is asked for with Preview. */}
+      {reportOpen && !pending && (
+        <div className="space-y-3 rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+          <p className="text-sm text-white/70">{REPORT_FORM_TEXT[reportAction as ReportAction]}</p>
+          <textarea
+            value={reportReason}
+            onChange={(e) => setReportReason(e.target.value)}
+            disabled={busy}
+            maxLength={BANK_REPORT_REASON_MAX}
+            rows={2}
+            aria-label="Reason for the decision"
+            placeholder="Reason"
+            className={`${fieldCls} w-full`}
+          />
+          <p className="text-xs text-white/40">A reason is required.</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <PrimaryButton onClick={previewReport} disabled={busy || reportReason.trim() === ''}>
+              Preview
+            </PrimaryButton>
+            <SecondaryButton onClick={() => setReportAction(null)} disabled={busy}>
+              Cancel
+            </SecondaryButton>
+          </div>
+        </div>
+      )}
 
       {/* Unmatch (super users): the reason first; the plan is asked for with
           Preview. The ticket goes to review as unmatched by staff. */}
@@ -832,6 +1040,8 @@ const DetailPane: FC<{
             {/* The staff note of a closed ticket, in the words it was written in. */}
             {row.resolution_note && <Detail label="Note">{row.resolution_note}</Detail>}
           </dl>
+
+          <BankReportPanel row={row} />
 
           {match && (
             <section aria-label={matchHeading}>

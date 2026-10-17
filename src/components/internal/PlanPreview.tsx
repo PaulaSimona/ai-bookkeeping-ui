@@ -1,7 +1,8 @@
 // PlanPreview (S87 B2b U2, O-S87-8 / O-S87-9) — what the server says a staff
 // action will do, shown before staff confirm it: the bank-row merge, the flag
 // release, the "no document needed" close and its reopen, the match actions
-// of Release D2 (useStaffBankRows) and the feed re-point (useStaffRepoint).
+// of Release D2, the bank-report exits of Release D4 (useStaffBankRows) and the
+// feed re-point (useStaffRepoint).
 //
 // Every field of a plan is shown as returned. Amounts are the server's strings,
 // rendered untouched — never formatMoney: nothing regrouped, re-signed or given
@@ -21,7 +22,9 @@ import {
   type BankMergePlan,
   type BankNoDocumentPlan,
   type BankReleasePlan,
+  type BankRemovalPlan,
   type BankReopenPlan,
+  type BankReportPlan,
   type BankTicketImage,
 } from '@/hooks/useStaffBankRows';
 import { type RepointPlan } from '@/hooks/useStaffRepoint';
@@ -232,6 +235,9 @@ const FOLLOW_SENTENCE: Record<string, string> = {
   needs_review: 'The ticket goes to review.',
   pending: 'The ticket goes back to the drafting queue.',
   no_ticket: 'This row has no ticket.',
+  // Release D4 (D-S90-8): a rejection on a row with an open bank report takes
+  // the suggestion off and leaves the ticket where it is.
+  bank_report_open: 'The ticket stays in review: the bank report on this row is still open.',
 };
 
 // A match action: the match before and after, the line it points at with its
@@ -384,6 +390,127 @@ export const RepointPlanPreview: FC<{ plan: RepointPlan }> = ({ plan }) => {
           </ul>
         </div>
       )}
+    </section>
+  );
+};
+
+// ─── Bank reports (Release D4; backend D3, O-S90-2) ────────────────────────────
+
+// What accepting the bank's change does with the work keyed to the books' old
+// values (plan.follow, DEFAULT 8), in one sentence; a value this screen does
+// not know is shown as sent.
+const ACCEPT_SENTENCE: Record<string, string> = {
+  correct:
+    "The row takes the bank's amount and date. Its entry is corrected at the new amount, and the row is matched to the correction.",
+  unmatch: "The row takes the bank's amount and date. Its match to another entry comes off.",
+  reject: "The row takes the bank's amount and date. Its suggested match is rejected.",
+  row_only: "The row takes the bank's amount and date.",
+};
+
+// A change the bank reported, decided: accepted (with the correction it
+// posts, or the match it takes off) or set aside. The bank's values and the
+// corrected lines' amounts are the server's strings.
+export const BankReportPlanPreview: FC<{ plan: BankReportPlan }> = ({ plan }) => {
+  const { reported, correction, match, ticket } = plan;
+  const accept = plan.action === 'accept_change';
+  const reportedText =
+    reported == null
+      ? 'not on record'
+      : [
+          reported.amount ?? '—',
+          reported.date ?? '—',
+          reported.direction && reported.direction !== plan.row.direction
+            ? directionText(reported.direction)
+            : null,
+        ]
+          .filter(Boolean)
+          .join(' · ');
+  return (
+    <section aria-label="Bank report plan" className={planCls}>
+      <p>
+        {accept
+          ? (ACCEPT_SENTENCE[plan.follow ?? ''] ?? plan.follow)
+          : "The bank's values are set aside; the row stays as posted."}
+      </p>
+      <p className="mt-1 text-white/50">
+        {correction ? 'One correcting journal entry is posted.' : 'No journal entry is changed.'}
+      </p>
+      <dl className="mt-3">
+        <TicketPlanRow plan={plan} />
+        <Field label="Bank reported">{reportedText}</Field>
+        {correction && (
+          <>
+            <Field label="Corrects">
+              <EntryLabel id={correction.entry.entry_id} entryNumber={correction.entry.entry_number} /> ·{' '}
+              {correction.entry.entry_date}
+            </Field>
+            <Field label="Corrected lines">
+              {correction.lines.map((line) => `${line.side} ${line.amount}`).join(' · ')}
+            </Field>
+          </>
+        )}
+        {match && (
+          <Field label="Match">
+            match <ShortId className={idCls} id={match.match_id} /> · {match.state} →{' '}
+            {plan.follow === 'reject' ? 'rejected' : 'unmatched'}
+          </Field>
+        )}
+        <Field label="Reason">{plan.reason}</Field>
+        <Field label="Ticket">{ticketChange(ticket)}</Field>
+        {ticket.after?.routing_reason && (
+          <Field label="Routing reason">
+            {labelOrCode(plan.routing_reason_label, ticket.after.routing_reason)}
+          </Field>
+        )}
+      </dl>
+    </section>
+  );
+};
+
+// A removal the bank reported, decided (O-S90-3): accepted — the row leaves the
+// books, its match comes off and its entry is reversed (a correction's own
+// half only) — or rejected: the row stays and its ticket returns to its lane,
+// re-linked to its own entry's free bank line when there is one (A2).
+export const BankRemovalPlanPreview: FC<{ plan: BankRemovalPlan }> = ({ plan }) => {
+  const removed = plan.action === 'bank_removed';
+  return (
+    <section aria-label="Bank removal plan" className={planCls}>
+      <p>
+        {removed
+          ? 'The row leaves the books: it is excluded as removed by the bank.'
+          : 'The row stays in the books.'}
+      </p>
+      <p className="mt-1 text-white/50">
+        {plan.reverses ? 'Its entry is reversed.' : 'No journal entry is changed.'}
+      </p>
+      <dl className="mt-3">
+        <TicketPlanRow plan={plan} />
+        {plan.reverses && (
+          <Field label="Reverses">
+            <EntryLabel id={plan.reverses.entry_id} entryNumber={plan.reverses.entry_number} /> ·{' '}
+            {plan.reverses.entry_date}
+          </Field>
+        )}
+        {plan.unmatches && (
+          <Field label="Match">
+            match <ShortId className={idCls} id={plan.unmatches.match_id} /> · {plan.unmatches.state} →
+            unmatched
+          </Field>
+        )}
+        {plan.relink && (
+          <Field label="Re-linked to">
+            <EntryLabel id={plan.relink.entry.entry_id} entryNumber={plan.relink.entry.entry_number} /> ·{' '}
+            {plan.relink.entry.entry_date} · line on {plan.relink.account_code}
+          </Field>
+        )}
+        {plan.reason != null && <Field label="Reason">{plan.reason}</Field>}
+        <Field label="Ticket">{ticketChange(plan.ticket)}</Field>
+        {plan.ticket.after?.routing_reason && (
+          <Field label="Routing reason">
+            {labelOrCode(plan.routing_reason_label, plan.ticket.after.routing_reason)}
+          </Field>
+        )}
+      </dl>
     </section>
   );
 };
