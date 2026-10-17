@@ -2662,3 +2662,115 @@ describe('bank row: unmatch', () => {
     expect(screen.queryByRole('heading', { name: UNMATCH_TITLE })).not.toBeInTheDocument();
   });
 });
+
+// ─── Bank reports (Release D4; backend D3, O-S90-1 / O-S90-3) ──────────────────
+
+// A row the bank changed after it posted (plaid_modified_after_posting): in
+// review, settled-matched (listed since O-S90-4), the bank's values beside it.
+const CHANGED = bankRow({
+  id: '61616161-0000-4000-8000-000000000001',
+  direction: 'money_out',
+  amount: '156.80',
+  description: 'ADOBE SUBSCRIPTION',
+  ticket_status: 'needs_review',
+  ticket_status_label: 'Needs Review',
+  routing_reason: 'plaid_modified_after_posting',
+  routing_reason_label: 'Changed by the bank after posting',
+  row_kind: 'matched',
+  reported_amount: '160.10',
+  reported_direction: 'money_out',
+  reported_date: '2026-09-21',
+  reported_at: '2026-09-22T14:05:00Z',
+  routed_from_status: 'waiting_document',
+});
+// A settled row the bank reported removed (plaid_posted_removal_reported).
+const REMOVED = bankRow({
+  id: '62626262-0000-4000-8000-000000000002',
+  direction: 'money_out',
+  amount: '42.00',
+  description: 'REMOVED BY BANK',
+  ticket_status: 'needs_review',
+  ticket_status_label: 'Needs Review',
+  routing_reason: 'plaid_posted_removal_reported',
+  routing_reason_label: 'Removed by the bank after posting',
+  row_kind: 'matched',
+  routed_from_status: 'waiting_document',
+});
+
+const reportPanel = () => screen.queryByRole('region', { name: 'Bank reported' });
+
+describe('bank row: the bank reported panel', () => {
+  it('shows stored vs reported amount and date for an open change report', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [CHANGED] });
+    render(<InternalBankRows />);
+
+    await openRow(user, 'ADOBE SUBSCRIPTION');
+
+    const panel = reportPanel() as HTMLElement;
+    expect(panel).toBeInTheDocument();
+    const value = (label: string) => within(panel).getByText(label).nextElementSibling?.textContent;
+    expect(value('Books amount')).toBe('156.80 CAD');
+    expect(value('Bank amount')).toBe('160.10');
+    expect(value('Books date')).toBe('2026-09-20');
+    expect(value('Bank date')).toBe('2026-09-21');
+  });
+
+  it('shows the report date and flags a direction change', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [CHANGED, { ...CHANGED, id: '61616161-0000-4000-8000-000000000003', description: 'FLIPPED', reported_direction: 'money_in' }] });
+    render(<InternalBankRows />);
+
+    await openRow(user, 'ADOBE SUBSCRIPTION');
+    let panel = reportPanel() as HTMLElement;
+    expect(within(panel).getByText('2026-09-22T14:05:00Z')).toBeInTheDocument();
+    expect(within(panel).queryByText('Bank direction')).not.toBeInTheDocument();
+
+    await openRow(user, 'FLIPPED');
+    panel = reportPanel() as HTMLElement;
+    expect(within(panel).getByText('Bank direction').nextElementSibling?.textContent).toBe(
+      'Money in (the books say money out)',
+    );
+  });
+
+  it('shows the removal panel for an open removal report', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [REMOVED] });
+    render(<InternalBankRows />);
+
+    await openRow(user, 'REMOVED BY BANK');
+
+    const panel = reportPanel() as HTMLElement;
+    expect(within(panel).getByText('Removed by the bank after posting')).toBeInTheDocument();
+    expect(within(panel).queryByText('Bank amount')).not.toBeInTheDocument();
+    expect(within(panel).queryByText('Reported')).not.toBeInTheDocument();
+  });
+
+  it('shows no report panel on a row with no report', async () => {
+    const user = userEvent.setup();
+    serve({ rows: [PLAIN, FLAGGED, { ...CHANGED, id: '61616161-0000-4000-8000-000000000004', description: 'KEPT AS POSTED', ticket_status: 'waiting_document', ticket_status_label: 'Waiting for Document', routing_reason: null, routing_reason_label: null, reported_amount: null, reported_direction: null, reported_date: null, reported_at: null, routed_from_status: null }] });
+    render(<InternalBankRows />);
+
+    for (const description of ['REFUND 0042', 'STAPLES STORE #114 TORONTO', 'KEPT AS POSTED']) {
+      await openRow(user, description);
+      expect(reportPanel()).not.toBeInTheDocument();
+    }
+  });
+
+  it('audit-sourced values show the same as stored ones', async () => {
+    // A report made before migration 0059: the server reads its values from
+    // the report's audit row and sends them in the same fields; nothing on the
+    // row says where they came from, and the panel reads them the same way.
+    const user = userEvent.setup();
+    const fromAudit = { ...CHANGED, id: '61616161-0000-4000-8000-000000000005', description: 'PRE 0059 REPORT', routed_from_status: null };
+    serve({ rows: [fromAudit] });
+    render(<InternalBankRows />);
+
+    await openRow(user, 'PRE 0059 REPORT');
+
+    const panel = reportPanel() as HTMLElement;
+    expect(within(panel).getByText('Bank amount').nextElementSibling?.textContent).toBe('160.10');
+    expect(within(panel).getByText('Bank date').nextElementSibling?.textContent).toBe('2026-09-21');
+    expect(within(panel).getByText('2026-09-22T14:05:00Z')).toBeInTheDocument();
+  });
+});

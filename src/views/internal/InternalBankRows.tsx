@@ -113,6 +113,8 @@ import { type PlanOutcome } from '@/hooks/staffPlan';
 import { useOrgsList } from '@/hooks/useInternalAdmin';
 import { useStaffMe } from '@/hooks/useStaffMe';
 import {
+  BANK_CHANGE_REASON,
+  BANK_REMOVAL_REASON,
   BANK_ROW_TICKET_STATUSES,
   BANK_ROW_TICKET_STATUS_LABELS,
   MATCH_REASON_MAX,
@@ -197,6 +199,49 @@ const Detail: FC<{ label: string; children: ReactNode }> = ({ label, children })
     <dd className="text-white/80 break-words">{children}</dd>
   </div>
 );
+
+// Release D4 (backend D3, O-S90-1 / O-S90-3): what the bank reported on a row
+// that already has posted work, beside the books. A change shows the books'
+// amount and date and the bank's, the bank's direction when it differs, and
+// when the report was recorded — all the server's strings, shown as sent. Values
+// the server read from a report made before migration 0059 (its audit row,
+// DEFAULT 6) come in the same fields and show the same way. A removal shows the
+// server's label for it: no date is recorded for one (DEFAULT 16). No report,
+// no panel.
+const BankReportPanel: FC<{ row: BankRow }> = ({ row }) => {
+  const removal = row.routing_reason === BANK_REMOVAL_REASON;
+  const change = row.reported_at != null || row.routing_reason === BANK_CHANGE_REASON;
+  if (!removal && !change) return null;
+  if (removal) {
+    return (
+      <section aria-label="Bank reported" className="rounded-lg border border-amber-400/30 bg-amber-400/5 px-4 py-3">
+        <div className={`${labelCls} mb-1`}>Bank reported</div>
+        <p className="text-sm text-white/80">{labelOrCode(row.routing_reason_label, row.routing_reason)}</p>
+        <p className="mt-1 text-xs text-white/50">
+          The bank says this settled row was removed. Keep the row, or accept the removal.
+        </p>
+      </section>
+    );
+  }
+  const directionChanged = row.reported_direction != null && row.reported_direction !== row.direction;
+  return (
+    <section aria-label="Bank reported" className="rounded-lg border border-amber-400/30 bg-amber-400/5 px-4 py-3">
+      <div className={`${labelCls} mb-1`}>Bank reported</div>
+      <dl className="grid grid-cols-2 gap-3 text-sm">
+        <Detail label="Books amount">{`${row.amount} ${row.currency}`}</Detail>
+        <Detail label="Bank amount">{row.reported_amount ?? '—'}</Detail>
+        <Detail label="Books date">{row.date}</Detail>
+        <Detail label="Bank date">{row.reported_date ?? '—'}</Detail>
+        {directionChanged && (
+          <Detail label="Bank direction">
+            {`${directionLabel(row.reported_direction as string)} (the books say ${directionLabel(row.direction).toLowerCase()})`}
+          </Detail>
+        )}
+        <Detail label="Reported">{row.reported_at ?? '—'}</Detail>
+      </dl>
+    </section>
+  );
+};
 
 // What a row is flagged with: still pending at the bank, a possible copy of
 // another row, out of the books.
@@ -832,6 +877,8 @@ const DetailPane: FC<{
             {/* The staff note of a closed ticket, in the words it was written in. */}
             {row.resolution_note && <Detail label="Note">{row.resolution_note}</Detail>}
           </dl>
+
+          <BankReportPanel row={row} />
 
           {match && (
             <section aria-label={matchHeading}>
