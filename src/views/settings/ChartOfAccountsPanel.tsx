@@ -85,7 +85,17 @@ const AccountModal: FC<ModalProps> = ({ mode, initial, accounts, onClose, onSave
   // Auto-set normal balance when type changes (identical to shipped page).
   useEffect(() => { setNormalBalance(DEFAULT_NORMAL_BALANCE[type]); }, [type]);
 
-  const fieldError = (field: string) => serverErrors?.[field]?.[0] ?? serverErrors?.['detail']?.[0];
+  // The server's general message (`detail`) is shown once, in the banner, and
+  // is not repeated under the fields. A field error is a list of messages and
+  // shows under its field; the machine code of a refusal ("error_code", or
+  // "code" on an older server) is a plain string, never an error of the Code
+  // field.
+  const errorsByKey: Record<string, unknown> | null = serverErrors;
+  const firstMessage = (value: unknown): string | undefined =>
+    Array.isArray(value) && typeof value[0] === 'string' ? value[0] : undefined;
+  const detail = errorsByKey?.detail;
+  const bannerError = typeof detail === 'string' ? detail : firstMessage(detail);
+  const fieldError = (field: string) => firstMessage(errorsByKey?.[field]);
 
   // An existing parent, shown read-only as "code — name". The response carries
   // the parent's id and code but not its name, so the name comes from the
@@ -122,8 +132,8 @@ const AccountModal: FC<ModalProps> = ({ mode, initial, accounts, onClose, onSave
           </div>
 
           <form onSubmit={handleSubmit} className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
-            {fieldError('detail') && (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">{fieldError('detail')}</div>
+            {bannerError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">{bannerError}</div>
             )}
 
             <div className="grid grid-cols-2 gap-4">

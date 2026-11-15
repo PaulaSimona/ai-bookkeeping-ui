@@ -151,3 +151,63 @@ describe('ChartOfAccountsPanel parent account', () => {
     expect(form.getByText('1000')).toBeInTheDocument();
   });
 });
+
+// J1c-1 U4 (UI half of CE-S94-6): a general server message is shown once, in
+// the banner, and no longer repeated under every field; a real field error
+// still shows under its field. The machine code may arrive as "error_code"
+// (after J1c-1 backend) or as "code" (before it).
+describe('ChartOfAccountsPanel server message', () => {
+  // Text copied from accounting/models.py ACCOUNT_HAS_HISTORY_DETAIL.
+  const FROZEN =
+    'This account has posted transactions. Its code, type and normal balance ' +
+    'can no longer be changed. Create a new account instead.';
+
+  const saveRent = async () => {
+    const user = userEvent.setup();
+    serve([CASH, RENT]);
+    render(<ChartOfAccountsPanel />);
+    await user.click(await screen.findByRole('button', { name: 'Edit Rent Expense' }));
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(patch).toHaveBeenCalledTimes(1));
+  };
+
+  it.each([['error_code'], ['code']])(
+    'shows the account-freeze message once when the machine code is under "%s"',
+    async (key) => {
+      patch.mockResolvedValue({ status: 400, data: { detail: FROZEN, [key]: 'account_has_history' } });
+      await saveRent();
+
+      expect(await within(dialog()).findByText(FROZEN)).toBeInTheDocument();
+      expect(within(dialog()).getAllByText(FROZEN)).toHaveLength(1);
+      expect(within(dialog()).queryByText('account_has_history')).not.toBeInTheDocument();
+    },
+  );
+
+  it.each([['error_code'], ['code']])(
+    'shows the whole message once when the refusal is thrown with the machine code under "%s"',
+    async (key) => {
+      patch.mockRejectedValue({
+        response: { status: 400, data: { detail: FROZEN, [key]: 'account_has_history' } },
+      });
+      await saveRent();
+
+      expect(await within(dialog()).findByText(FROZEN)).toBeInTheDocument();
+      expect(within(dialog()).getAllByText(FROZEN)).toHaveLength(1);
+      // Neither the machine code nor a letter of it lands under the Code field.
+      expect(within(dialog()).queryByText('account_has_history')).not.toBeInTheDocument();
+      expect(within(dialog()).queryByText('a')).not.toBeInTheDocument();
+    },
+  );
+
+  it('still shows a real field error under its field, and no banner', async () => {
+    const TAKEN = 'An account with this code already exists.';
+    patch.mockResolvedValue({ status: 400, data: { code: [TAKEN] } });
+    await saveRent();
+
+    const message = await within(dialog()).findByText(TAKEN);
+    expect(within(dialog()).getAllByText(TAKEN)).toHaveLength(1);
+    // Under the Code field: the same block as the Code input.
+    expect(message.parentElement).toContainElement(screen.getByPlaceholderText('e.g. 5999'));
+    expect(message.parentElement).not.toContainElement(screen.getByPlaceholderText('Account name'));
+  });
+});

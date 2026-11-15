@@ -30,6 +30,7 @@ import { TaxProfileTab } from './TaxProfileTab';
 import { PlaidConnectionsCard } from './PlaidConnectionsCard';
 import { StripeConnectCard } from './StripeConnectCard';
 import { ChartOfAccountsPanel } from './ChartOfAccountsPanel';
+import { ProjectsSettingsTab } from './ProjectsSettingsTab';
 import { TeamAccessTab } from './TeamAccessTab';
 import { UnifiedBusinessProfile } from './UnifiedBusinessProfile';
 
@@ -529,7 +530,7 @@ const SecuritySection: FC<ToastFns> = ({ showSuccess, showError }) => {
 };
 
 // ─── Tabbed shell ─────────────────────────────────────────────────────────────
-// The three Tier-2 tabs (Tax profile, Chart of accounts) are shown ONLY to
+// The Tier-2 tabs (Tax profile, Chart of accounts, Projects) are shown ONLY to
 // entitled orgs, resolved via the same convention the s23 accounting surfaces use
 // (App.tsx RequireTier2): redux auth `has_tier2`. Non-entitled users see the U1
 // four-tab set unchanged. Team & access is U3.
@@ -538,6 +539,7 @@ const BASE_TABS = {
   tax:          { id: 'tax',          label: 'Tax profile' },
   integrations: { id: 'integrations', label: 'Bank & integrations' },
   chart:        { id: 'chart',        label: 'Chart of accounts' },
+  projects:     { id: 'projects',     label: 'Projects' },
   subscription: { id: 'subscription', label: 'Subscription' },
   security:     { id: 'security',     label: 'Security' },
   team:         { id: 'team',         label: 'Team & access' },
@@ -553,7 +555,7 @@ export const Settings: FC = () => {
 
   // Team & access is LAST in the tab bar (ruled order).
   const tabs = hasTier2
-    ? [BASE_TABS.business, BASE_TABS.tax, BASE_TABS.integrations, BASE_TABS.chart, BASE_TABS.subscription, BASE_TABS.security, BASE_TABS.team]
+    ? [BASE_TABS.business, BASE_TABS.tax, BASE_TABS.integrations, BASE_TABS.chart, BASE_TABS.projects, BASE_TABS.subscription, BASE_TABS.security, BASE_TABS.team]
     : [BASE_TABS.business, BASE_TABS.integrations, BASE_TABS.subscription, BASE_TABS.security];
 
   // O-S62-1b: ?tab=<id> deep link. Added because the Cards page's back
@@ -575,7 +577,8 @@ export const Settings: FC = () => {
       {/* max-w-5xl (F-S24-2): matches the sibling accounting pages and fits all
           seven tabs on one row at desktop widths; cards inherit this width for a
           consistent, un-lopsided page. Narrow viewports fall back to the TabBar's
-          visible horizontal scroll. */}
+          visible horizontal scroll. J1c-1 added an eighth tab (Projects) for
+          entitled orgs; the one-row fit was measured with seven. */}
       <div className="mx-auto max-w-5xl px-6 py-8">
         <PageHeader
           title="Settings"
@@ -611,6 +614,7 @@ export const Settings: FC = () => {
             </div>
           )}
           {active === 'chart'        && hasTier2 && <ChartOfAccountsPanel />}
+          {active === 'projects'     && hasTier2 && <ProjectsSettingsTab />}
           {active === 'subscription' && <SubscriptionSection showError={showError} />}
           {active === 'security'     && <SecuritySection showSuccess={showSuccess} showError={showError} />}
           {active === 'team'         && hasTier2 && <TeamAccessTab showSuccess={showSuccess} showError={showError} />}

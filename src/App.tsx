@@ -5,6 +5,7 @@ import { useSelector } from 'react-redux';
 import { type RootState } from '@/store/store';
 import { useUser } from '@/api/user/useUser';
 import { OrgProvider } from '@/context/OrgContext';
+import { ProjectSettingsProvider } from '@/context/ProjectSettingsProvider';
 import { staffAwareHomePath } from '@/utils/activeOrg';
 import { RedirectPage } from '@/components/Redirect';
 import { PageLoader } from '@/components/Loader';
@@ -40,6 +41,7 @@ import { Suppliers } from '@/views/accounting/Suppliers';
 import { InvoiceList } from '@/views/accounting/invoices/InvoiceList';
 import { InvoiceForm } from '@/views/accounting/invoices/InvoiceForm';
 import { InvoiceDetail } from '@/views/accounting/invoices/InvoiceDetail';
+import { ProjectsPage } from '@/views/accounting/projects/ProjectsPage';
 import { Reports as AccountingReports } from '@/views/accounting/Reports';
 import { AccountLedgerPage } from '@/views/accounting/reports/AccountLedgerPage';
 import { Taxes as AccountingTaxes } from '@/views/accounting/Taxes';
@@ -125,6 +127,9 @@ const App: FC = () => {
 
   return (
     <OrgProvider>
+    {/* J1c-1: "Projects is on" for the Sidebar and the Projects screens. Reads
+        projects/settings/ once for a has_tier2 user; no call for anyone else. */}
+    <ProjectSettingsProvider>
     <Routes>
       <Route path="/" element={<HomeRedirect />} />
 
@@ -164,6 +169,8 @@ const App: FC = () => {
         <Route path="/accounting/invoices/new" element={<RequireTier2><InvoiceForm /></RequireTier2>} />
         <Route path="/accounting/invoices/:id/edit" element={<RequireTier2><InvoiceForm /></RequireTier2>} />
         <Route path="/accounting/invoices/:id" element={<RequireTier2><InvoiceDetail /></RequireTier2>} />
+        {/* J1c-1 (D-J1C-1): the list of projects. */}
+        <Route path="/accounting/projects" element={<RequireTier2><ProjectsPage /></RequireTier2>} />
         <Route path="/accounting/reports" element={<RequireTier2><AccountingReports /></RequireTier2>} />
         {/* S68 E3 (O-S68-30): report drill-down — one account's ledger over the
             same URL-backed period as the report row it was reached from. */}
@@ -243,6 +250,7 @@ const App: FC = () => {
 
       <Route path="*" element={<NotFound />} />
     </Routes>
+    </ProjectSettingsProvider>
     </OrgProvider>
   );
 };
