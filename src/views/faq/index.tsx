@@ -29,12 +29,12 @@ const FAQ_DATA: FaqCategory[] = [
       {
         question: 'What file formats are supported?',
         answer:
-          'We accept JPG, PNG, PDF, and HEIC files. Phone photos, scanned PDFs, and digital invoices all work. For best results, make sure the document is legible and well-lit.',
+          'We accept JPG, PNG, WEBP, PDF and HEIC files. Phone photos, scanned PDFs and digital invoices all work; keep the document legible and well-lit. Bank statement files are not booked as documents — bank activity comes in through your bank connection.',
       },
       {
         question: 'How quickly are receipts processed?',
         answer:
-          'Most receipts are extracted within a few seconds. The AI reads vendor name, date, total amount, tax amount, and assigns a business expense category automatically.',
+          'The AI reads the vendor, date, total, tax amount and expense category from each document shortly after you upload it.',
       },
       {
         question: 'Do I need an accountant to use this?',
@@ -49,22 +49,22 @@ const FAQ_DATA: FaqCategory[] = [
       {
         question: 'What plans are available?',
         answer:
-          'We offer three active plans: Starter (ideal for sole proprietors with light receipt volume), Growth (for growing businesses with higher volume and reporting needs), and Pro (for businesses that need advanced reporting and priority support). The Bookkeeping Service adds full double-entry bookkeeping, bank and card connections, and financial statements, and is available to purchase.',
+          'Two products. Receipt Automation reads and categorizes your documents: Starter, Growth and Pro at $29 / $49 / $69 CAD/USD per month for 100 / 300 / 500 documents per month, with 1 / 5 / 20 GB of storage — the plans differ only by volume and storage. The Bookkeeping Service keeps complete double-entry books with bank and card connections, financial statements and a bookkeeper\'s review: Starter, Growth and Pro at $99 / $199 / $399 CAD/USD per month for 150 / 250 / 500 documents. Taxes are extra.',
       },
       {
         question: 'Is there a free trial?',
         answer:
-          'Free trial — 5 documents included, no credit card required. That lets you try the upload and extraction features before committing. Paid plans are billed monthly and you can cancel at any time.',
+          'Yes. Receipt Automation: 5 documents included, no credit card required. Bookkeeping Service: a 15-day free trial. Paid plans are billed monthly and you can cancel at any time.',
       },
       {
         question: 'Can I upgrade or downgrade my plan?',
         answer:
-          'Yes. You can change your plan at any time from the Subscription page in your account. Upgrades take effect immediately; downgrades apply at the start of your next billing cycle.',
+          'Yes. Receipt Automation plans are changed on the Subscription page; a new plan\'s document allowance starts at your next billing date. Bookkeeping Service plans are changed in the billing portal.',
       },
       {
         question: 'Do you offer refunds?',
         answer:
-          'We handle refund requests on a case-by-case basis. If you have an issue with a charge, contact us at customerservice@ai-bookkeeping.ai and we will work with you to make it right.',
+          'We handle refund requests on a case-by-case basis. If you have an issue with a charge, contact us at support@ai-bookkeeping.ai and we will work with you to make it right.',
       },
       {
         question: 'Are prices in Canadian dollars?',
@@ -83,12 +83,12 @@ const FAQ_DATA: FaqCategory[] = [
       {
         question: 'Which provinces are supported?',
         answer:
-          'All Canadian provinces and territories are supported. GST and HST amounts are extracted from your receipts and tracked for input tax credits, and provincial sales tax is treated according to the rules that apply in your province.',
+          'All Canadian provinces and territories. GST and HST on your purchases are tracked for input tax credits. Provincial sales tax (PST in British Columbia, Saskatchewan and Manitoba, and QST in Quebec) is not yet recorded separately, so have your accountant check any PST before you file your GST/HST return.',
       },
       {
         question: 'Can I use the export for my T2125 (business income tax)?',
         answer:
-          'Yes. The annual Excel workbook organizes expenses by CRA-recognized categories (advertising, office, travel, meals, etc.) that map directly to the T2125 Statement of Business Activities. Your accountant or tax preparer can use it to file your return.',
+          'Yes. The annual Excel workbook groups your expenses into categories your accountant or tax preparer can use when preparing your T2125 Statement of Business Activities.',
       },
       {
         question: 'Does the AI classify expenses to CRA categories?',
@@ -108,7 +108,7 @@ const FAQ_DATA: FaqCategory[] = [
       {
         question: 'Is my data encrypted?',
         answer:
-          'All data in transit is protected by TLS/HTTPS. Passwords are hashed and never stored in plaintext, and sensitive credentials such as bank connection tokens are encrypted at rest. No system can be guaranteed 100% secure, but a formal security review program is in place and independent assessment is planned as the platform scales.',
+          'All data in transit is protected by TLS/HTTPS. Passwords are hashed and never stored in plain text, and bank connection tokens are encrypted at rest. No system can be guaranteed 100% secure.',
       },
       {
         question: 'Do you sell or share my financial data?',
@@ -121,7 +121,7 @@ const FAQ_DATA: FaqCategory[] = [
           'No. Documents are processed by our AI provider under commercial API terms that do not permit your data to be used for model training.',
       },
       {
-        question: 'What happens to my data if I cancel?',
+        question: 'What happens to my data if I cancel or delete my account?',
         // F-S61-5 / O-S63-1: pinned to PrivacyPolicy.tsx §9. The previous answer
         // claimed deletion "within 30 days" and CRA retention of "typically 6
         // years" — neither appears in the policy, and the 30-day version is
@@ -129,7 +129,7 @@ const FAQ_DATA: FaqCategory[] = [
         // clause below maps to §9: erasure on delete, statutory retention only,
         // erasure on request at the address the policy itself names.
         answer:
-          'When you delete a document or your account, the underlying files are erased from storage — not just the records pointing to them. Where the law requires specific records to be kept, they are retained for that period and no longer. You can request erasure of your personal information at any time by emailing support@ai-bookkeeping.ai.',
+          'Cancelling does not delete your records. When a Bookkeeping Service subscription ends, its screens and exports are no longer available, so download your reports before it ends. Deleting a document in Receipt Automation erases the file from storage. To have your account and records erased, email support@ai-bookkeeping.ai; where the law requires records to be kept, they are retained for that period and no longer.',
       },
     ],
   },
@@ -159,7 +159,7 @@ const FAQ_DATA: FaqCategory[] = [
       {
         question: 'How do I contact support?',
         answer:
-          'Use the Support page inside the app to submit a ticket, or email customerservice@ai-bookkeeping.ai. We typically respond within one business day.',
+          'Use the Support page inside the app to submit a ticket, or email support@ai-bookkeeping.ai.',
       },
     ],
   },
@@ -279,7 +279,7 @@ export const FAQ: FC = () => {
           <p className="text-sm font-semibold text-gray-800 mb-1">Still have questions?</p>
           <p className="text-sm text-gray-500 mb-4">Our team responds within one business day.</p>
           <a
-            href="mailto:customerservice@ai-bookkeeping.ai"
+            href="mailto:support@ai-bookkeeping.ai"
             className="inline-block text-sm font-medium bg-[#0066FF] text-white px-5 py-2 rounded-lg hover:bg-[#0052cc] transition-colors"
           >
             Contact Support

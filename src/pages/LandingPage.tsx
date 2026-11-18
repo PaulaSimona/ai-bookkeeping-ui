@@ -1226,16 +1226,6 @@ export const LandingPage: FC = () => {
               the open: same href, same rel, now visible at the size the badges
               are actually drawn. */}
           <div className="mt-5 flex flex-wrap items-center gap-4">
-            <a href="https://launchbuff.com" target="_blank" rel="noopener noreferrer" title="Featured on LaunchBuff">
-              <img
-                src="https://launchbuff.com/badge-featured-dark.svg"
-                alt="Featured on LaunchBuff"
-                width={128}
-                height={40}
-                loading="lazy"
-                className="h-10 w-auto"
-              />
-            </a>
             <a href="https://tools.cafe" target="_blank" rel="noopener noreferrer" title="Featured on tools.cafe">
               <img
                 src="https://tools.cafe/b/dark.svg"
