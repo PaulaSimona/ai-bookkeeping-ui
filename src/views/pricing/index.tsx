@@ -41,7 +41,7 @@ const PLANS = [
     id: 'starter',
     name: 'Starter',
     price: 29,
-    docs: '100 receipts / month',
+    docs: '100 documents per month',
     storage: '1 GB storage',
     features: SHARED_FEATURES,
     highlight: false,
@@ -50,7 +50,7 @@ const PLANS = [
     id: 'growth',
     name: 'Growth',
     price: 49,
-    docs: '300 receipts / month',
+    docs: '300 documents per month',
     storage: '5 GB storage',
     features: SHARED_FEATURES,
     highlight: true,
@@ -60,7 +60,7 @@ const PLANS = [
     id: 'pro',
     name: 'Pro',
     price: 69,
-    docs: '500 receipts / month',
+    docs: '500 documents per month',
     storage: '20 GB storage',
     features: SHARED_FEATURES,
     highlight: false,
@@ -74,8 +74,8 @@ const PLANS = [
 // settings.TIER2_PLAN_MAPPING, which resolve_org_daily_limit applies as a DAILY
 // agent-document cap — not a monthly allowance — so any time period attached
 // here ("/ month") would be a false claim. The Receipt Automation tiers above
-// keep "receipts / month" because that quota genuinely is monthly
-// (billing/plans.py _PLAN_QUOTA). Matches the landing page's ratified wording.
+// say "documents per month" (O-S96-2): that quota genuinely is monthly and counts
+// every uploaded document (billing/plans.py _PLAN_QUOTA). Matches the landing page.
 const BOOKKEEPING_SERVICE_PLANS = [
   { id: 'bs-starter', name: 'Starter', price: 99, docs: '150 docs', highlight: false },
   { id: 'bs-growth', name: 'Growth', price: 199, docs: '250 docs', highlight: true, badge: 'Most chosen' },
@@ -121,7 +121,7 @@ export const Pricing: FC = () => {
               </svg>
               <span>
                 <span className="font-semibold text-white">Free trial</span>
-                {' — '}5 receipts included{' · '}no credit card required
+                {' — '}5 documents included{' · '}no credit card required
               </span>
             </div>
           </div>
@@ -158,7 +158,7 @@ export const Pricing: FC = () => {
                   <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">{plan.name}</p>
                   <div className="mt-3 flex items-end gap-1">
                     <span className="text-4xl font-bold text-gray-900">${plan.price}</span>
-                    <span className="text-sm text-gray-400 mb-1.5">CAD / mo</span>
+                    <span className="text-sm text-gray-400 mb-1.5">CAD/USD per month</span>
                   </div>
                   <div className="mt-4 space-y-1.5">
                     <p className="text-sm font-medium text-gray-700">{plan.docs}</p>
@@ -224,7 +224,7 @@ export const Pricing: FC = () => {
                     <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">{plan.name}</p>
                     <div className="mt-3 flex items-end gap-1">
                       <span className="text-4xl font-bold text-gray-900">${plan.price}</span>
-                      <span className="text-sm text-gray-400 mb-1.5">CAD / mo</span>
+                      <span className="text-sm text-gray-400 mb-1.5">CAD/USD per month</span>
                     </div>
                     <div className="mt-4 space-y-1.5">
                       <p className="text-sm font-medium text-gray-700">{plan.docs}</p>
@@ -256,7 +256,7 @@ export const Pricing: FC = () => {
 
           {/* Footer note */}
           <p className="max-w-6xl mx-auto mt-8 text-center text-xs text-gray-400">
-            Prices in CAD. GST/HST may apply. Cancel anytime from your billing portal.
+            Prices in CAD/USD. Taxes may apply. Cancel anytime from your billing portal.
             By subscribing you agree to our{' '}
             <NavLink to="/terms-of-service" className="underline hover:text-gray-600 transition-colors">Terms of Service</NavLink>.
           </p>

@@ -20,7 +20,7 @@ const PLANS = [
     name: 'Starter',
     price: 29,
     priceId: import.meta.env.VITE_STRIPE_STARTER_PRICE_ID as string,
-    docs: '100 receipts / month',
+    docs: '100 documents per month',
     storage: '1 GB storage',
     features: SHARED_FEATURES,
     highlight: false,
@@ -30,7 +30,7 @@ const PLANS = [
     name: 'Growth',
     price: 49,
     priceId: import.meta.env.VITE_STRIPE_GROWTH_PRICE_ID as string,
-    docs: '300 receipts / month',
+    docs: '300 documents per month',
     storage: '5 GB storage',
     features: SHARED_FEATURES,
     highlight: true,
@@ -41,7 +41,7 @@ const PLANS = [
     name: 'Pro',
     price: 69,
     priceId: import.meta.env.VITE_STRIPE_PRO_PRICE_ID as string,
-    docs: '500 receipts / month',
+    docs: '500 documents per month',
     storage: '20 GB storage',
     features: SHARED_FEATURES,
     highlight: false,
@@ -168,7 +168,7 @@ export const Subscription: FC = () => {
                   <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">{plan.name}</p>
                   <div className="mt-3 flex items-end gap-1">
                     <span className="text-4xl font-bold text-gray-900">${plan.price}</span>
-                    <span className="text-sm text-gray-400 mb-1.5">CAD / mo</span>
+                    <span className="text-sm text-gray-400 mb-1.5">CAD/USD per month</span>
                   </div>
                   <div className="mt-4 space-y-1.5">
                     <p className="text-sm font-medium text-gray-700">{plan.docs}</p>
@@ -215,7 +215,7 @@ export const Subscription: FC = () => {
                 <p className="mt-1.5 text-sm text-white/70 max-w-xl">
                   Complete double-entry books — bank and card connections, supplier and
                   customer invoices, reconciliation, and financial statements. Plans at
-                  $99, $199, or $399 CAD per month for 150, 250, or 500 documents.
+                  $99, $199, or $399 CAD/USD per month for 150, 250, or 500 documents.
                   15-day free trial.
                 </p>
               </div>
@@ -230,7 +230,7 @@ export const Subscription: FC = () => {
 
           {/* Footer note */}
           <p className="max-w-6xl mx-auto mt-8 text-center text-xs text-gray-400">
-            Prices in CAD. GST/HST may apply. Cancel anytime from your billing portal.
+            Prices in CAD/USD. GST/HST may apply. Cancel anytime from your billing portal.
             By subscribing you agree to our Terms of Service.
           </p>
 

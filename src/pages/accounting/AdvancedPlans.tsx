@@ -28,8 +28,8 @@ const T2_PLANS: PlanDef[] = [
   {
     key: 'starter',
     name: 'Starter',
-    price: '$99 CAD / month',
-    docs: 'Up to 150 documents per month',
+    price: '$99 CAD/USD per month',
+    docs: '150 documents',
     note: 'For owner-operated businesses with steady, modest volume.',
     tag: null,
     highlight: false,
@@ -38,8 +38,8 @@ const T2_PLANS: PlanDef[] = [
   {
     key: 'growth',
     name: 'Growth',
-    price: '$199 CAD / month',
-    docs: 'Up to 250 documents per month',
+    price: '$199 CAD/USD per month',
+    docs: '250 documents',
     note: 'For growing businesses with suppliers, clients, and regular invoicing.',
     tag: 'Most chosen',
     highlight: true,
@@ -48,8 +48,8 @@ const T2_PLANS: PlanDef[] = [
   {
     key: 'pro',
     name: 'Pro',
-    price: '$399 CAD / month',
-    docs: 'Up to 500 documents per month',
+    price: '$399 CAD/USD per month',
+    docs: '500 documents',
     note: 'For higher-volume businesses that want everything maintained.',
     tag: null,
     highlight: false,
