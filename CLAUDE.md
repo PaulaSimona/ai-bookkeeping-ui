@@ -82,7 +82,7 @@ A bad `lucide-react` import once failed the whole build (`TS2307: Cannot find mo
 
 Most marketing, SEO, blog, and directory/badge work happens in **this** repo (the public-facing site).
 
-- **"Featured On" badge strip** — lives in `pages/LandingPage.tsx`, between the "What Our Users Say" testimonial section and the footer. It's a centered `flex-wrap` row (`gap-6`) so new badges drop in with **no restructuring**. Badges are normalized to a matched height (`h-11 w-auto`) so they sit as a tidy set. Live badges: **BetaList, LaunchBuff**. Add new ones (tools.cafe, PeerPush, Capterra, G2, …) as additional `<a><img></a>` entries in this row. **Footer stays copyright + nav links only — no badges in the footer.**
+- **"Featured On" badge strip** — lives in `pages/LandingPage.tsx`, between the "What Our Users Say" testimonial section and the footer. It's a centered `flex-wrap` row (`gap-6`) so new badges drop in with **no restructuring**. Badges are normalized to a matched height (`h-11 w-auto`) so they sit as a tidy set. Live badges: **BetaList**. The LaunchBuff badge was removed (O-S97, 2026-11-18). Add new ones (tools.cafe, PeerPush, Capterra, G2, …) as additional `<a><img></a>` entries in this row. **Footer stays copyright + nav links only — no badges in the footer.**
 - **Blog** content is markdown registered in a content index, with new slugs also added to `sitemap.xml`. Confirm the exact in-repo paths (`src/content/blog/` and its index) before editing rather than assuming.
 - For any badge that requires the directory to **verify** it on your site, see the SPA-crawler trap below — the rendered strip alone will NOT pass a JS-blind verifier.
 
@@ -90,9 +90,9 @@ Most marketing, SEO, blog, and directory/badge work happens in **this** repo (th
 
 This is a Vite + React SPA: the production `index.html` ships an almost-empty `<body>` with just `<div id="root"></div>`. **Everything visible — including any badge rendered in `LandingPage.tsx` — is injected by JavaScript after load.**
 
-Many directory/badge verifiers (**LaunchBuff confirmed**; expect the same from Capterra, G2, and similar) fetch the **raw HTML and do NOT run JavaScript**. They see the empty root, not the rendered badge, and report "badge not found" even though the badge is clearly visible in a browser.
+Many directory/badge verifiers (LaunchBuff's was one; expect the same from Capterra, G2, and similar) fetch the **raw HTML and do NOT run JavaScript**. They see the empty root, not the rendered badge, and report "badge not found" even though the badge is clearly visible in a browser.
 
-**FIX:** add the required badge as a **static, visually-hidden `<a><img></a>` directly in `index.html`**, immediately after `<div id="root"></div>`. Vite copies `index.html` through to `dist/` and preserves static markup, so it survives the build and lives in the raw server HTML the crawler reads. Hide it with the 1px/`clip:rect(0 0 0 0)` technique so users never see it — the visible badge stays the rendered one in `LandingPage.tsx`.
+**LaunchBuff — removed (O-S97, 2026-11-18).** Its verifier was first satisfied by a visually hidden `<a><img></a>` in `index.html`; O-S78-11 replaced that with a visible badge in `LandingPage.tsx`, and O-S97 removed the badge altogether. The hidden-link technique this section used to describe is no longer used: prerender guard G5 (`scripts/prerender.mjs`, "no visually hidden `<a>`") fails the build on any `<a>` styled `width:1px` or `clip:rect(0 …)`.
 
 **Confirm after deploy** before clicking the verifier's "Verify" button:
 ```
