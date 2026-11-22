@@ -1,6 +1,7 @@
-import { type FC, type ReactNode } from 'react';
+import { type FC, type ReactNode, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ReceiptViewer } from '@/components/internal/ReceiptViewer';
+import { TaxDecisionForm } from '@/components/internal/TaxDecisionForm';
 import { directionLabel, taxKindLabel } from '@/components/internal/taxReviewLabels';
 import {
   CenteredSpinner,
@@ -12,6 +13,7 @@ import {
 } from '@/components/internal/ui';
 import {
   type TaxCondition,
+  type TaxDecisionPlan,
   type TaxGuardCheck,
   type TaxPeriod,
   type TaxReviewEntry,
@@ -27,11 +29,13 @@ import { formatEntryNumber } from '@/utils/entryStatus';
  * its strings, the org is its org_id, and nothing is worked out here. Each
  * read of the file is audited by the server and signs a new receipt link, so
  * the file is read once when the page opens and again only when staff ask.
- * A row that is not in tax review is shown read-only.
+ * A row that is not in tax review is shown read-only: the decision form is
+ * there only while the server says the row is in tax review.
  */
 
 export const TAX_FILE_GONE = 'This bank row is gone, or it is not one you can review.';
 export const TAX_FILE_NOT_IN_REVIEW = 'Not in tax review';
+export const TAX_FILE_DECIDED = 'Decision recorded.';
 
 const labelCls = 'text-[11px] uppercase tracking-wide text-white/30';
 const thCls = 'py-2 px-3 font-medium';
@@ -176,14 +180,47 @@ const EntryCard: FC<{ entry: TaxReviewEntry }> = ({ entry }) => (
   </li>
 );
 
+// What a confirmed decision posted, in the file's own entry numbers. The
+// plan names entries by id; the number is read from the reloaded file's
+// chain, and is left out until the chain carries the entry.
+const DecidedNotice: FC<{ plan: TaxDecisionPlan; file: TaxReviewFile }> = ({ plan, file }) => {
+  const numberOf = (entryId: string): string | null => {
+    const entry = file.entry_chain.find((candidate) => candidate.id === entryId);
+    return entry ? formatEntryNumber(entry.entry_number) : null;
+  };
+  const posted = plan.entry_id ? numberOf(plan.entry_id) : null;
+  const reversal = plan.reversal_entry_id ? numberOf(plan.reversal_entry_id) : null;
+  return (
+    <div
+      role="status"
+      aria-label="Decision result"
+      className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200"
+    >
+      {TAX_FILE_DECIDED}
+      {plan.entry_id && (posted ? ` Entry ${posted} was posted.` : ' An entry was posted.')}
+      {plan.reversal_entry_id &&
+        (reversal
+          ? ` Entry ${reversal} reversed the earlier adjustment.`
+          : ' The earlier adjustment was reversed.')}
+      {!plan.entry_id && !plan.reversal_entry_id && ' No entry was posted.'}
+    </div>
+  );
+};
+
 const FileSections: FC<{
+  rowId: string;
   file: TaxReviewFile;
   reloading: boolean;
   onReload: () => void;
-}> = ({ file, reloading, onReload }) => {
+}> = ({ rowId, file, reloading, onReload }) => {
   const { bank_row: row, ticket, extraction, guard, dates } = file;
+  const [decided, setDecided] = useState<TaxDecisionPlan | null>(null);
+  // A confirmed decision starts the form again; a reload of the file (a new
+  // receipt link) never does, so nothing the reviewer typed is lost to it.
+  const [formEpoch, setFormEpoch] = useState(0);
   return (
     <>
+      {decided && <DecidedNotice plan={decided} file={file} />}
       {!file.in_tax_review && (
         <div
           role="status"
@@ -374,6 +411,25 @@ const FileSections: FC<{
         </dl>
       </SectionCard>
 
+      {file.in_tax_review && (
+        <SectionCard
+          title="Decision"
+          description="Preview shows the server's plan. Nothing is written until you confirm."
+        >
+          <TaxDecisionForm
+            key={`${rowId}:${formEpoch}`}
+            rowId={rowId}
+            file={file}
+            onDecided={(plan) => {
+              setDecided(plan);
+              setFormEpoch((epoch) => epoch + 1);
+              onReload();
+            }}
+            onReload={onReload}
+          />
+        </SectionCard>
+      )}
+
       <SectionCard title="Audit history" description="Oldest first.">
         {file.audit_history.length === 0 ? (
           <p className="text-sm text-white/50">No audit row.</p>
@@ -433,7 +489,13 @@ export const InternalTaxReviewFile: FC = () => {
       )}
       {state.kind === 'error' && <ErrorBanner message={state.message} onRetry={reload} />}
       {state.kind === 'ready' && (
-        <FileSections file={state.file} reloading={reloading} onReload={reload} />
+        <FileSections
+          key={rowId}
+          rowId={rowId}
+          file={state.file}
+          reloading={reloading}
+          onReload={reload}
+        />
       )}
     </PageContainer>
   );

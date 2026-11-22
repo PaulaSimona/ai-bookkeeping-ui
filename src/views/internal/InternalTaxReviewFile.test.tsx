@@ -278,11 +278,157 @@ describe('InternalTaxReviewFile — a row not in tax review', () => {
     expect(post).not.toHaveBeenCalled();
   });
 
+  it('has no decision controls', async () => {
+    serveFile({ in_tax_review: false, open_conditions: [] });
+    renderPage();
+    await section('Audit history');
+    expect(screen.queryByRole('heading', { name: 'Decision' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Preview' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Confirm decision' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Reason')).not.toBeInTheDocument();
+    // The form's reads are not made either.
+    const urls = get.mock.calls.map(([url]) => url);
+    expect(urls).not.toContain(FX_PURPOSES_URL);
+    expect(urls).not.toContain(FX_PROJECTS_URL);
+  });
+
+  it('the server decides: open conditions without in_tax_review give no controls', async () => {
+    serveFile({ in_tax_review: false });
+    renderPage();
+    await section('Open conditions (2)');
+    expect(screen.queryByRole('heading', { name: 'Decision' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Preview' })).not.toBeInTheDocument();
+  });
+
   it('a row in tax review carries no such notice', async () => {
     serveFile();
     renderPage();
     await section('Bank row and ticket');
     expect(screen.queryByText('Not in tax review')).not.toBeInTheDocument();
+  });
+});
+
+describe('InternalTaxReviewFile — the decision', () => {
+  const NEW_ENTRY = 'd0000000-0000-4000-8000-000000000003';
+  const planB = (over: Record<string, unknown> = {}) => ({
+    decision: 'B',
+    outcome: 'no_entry',
+    kinds: ['tax_unverified', 'tax_unexplained_amount'],
+    current_lines: [],
+    target_lines: null,
+    entry_lines: [],
+    entry_description: null,
+    itc_debit: '0.00',
+    tax_breakdown: null,
+    reverses_adjustment_entry_id: null,
+    transaction_date: '2026-11-02',
+    transaction_date_source: 'extraction',
+    original_tax_period: null,
+    adjustment_date: '2026-11-22',
+    adjustment_tax_period: null,
+    locked_through_date: null,
+    ...over,
+  });
+
+  const decide = async (confirmedPlan: Record<string, unknown>, after: () => TaxReviewFile) => {
+    let decided = false;
+    serve(() => (decided ? after() : taxFile()));
+    post
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { executed: false, plan: planB(), preview_token: 'tok-1' },
+      })
+      .mockImplementationOnce(() => {
+        decided = true;
+        return Promise.resolve({ status: 200, data: { executed: true, plan: confirmedPlan } });
+      });
+    renderPage();
+    const card = await section('Decision');
+    fireEvent.click(within(card).getByRole('radio', { name: /^B —/ }));
+    fireEvent.change(within(card).getByLabelText('Reason'), {
+      target: { value: 'Invented reason' },
+    });
+    fireEvent.click(within(card).getByRole('button', { name: 'Preview' }));
+    fireEvent.click(await within(card).findByRole('button', { name: 'Confirm decision' }));
+    return screen.findByRole('status', { name: 'Decision result' });
+  };
+
+  it('a row in tax review has the form, addressed to the row in the route', async () => {
+    serveFile();
+    renderPage();
+    const card = await section('Decision');
+    expect(within(card).getAllByRole('radio')).toHaveLength(2);
+    expect(within(card).getByRole('button', { name: 'Preview' })).toBeInTheDocument();
+    expect(get.mock.calls.map(([url]) => url)).toContain(FX_PURPOSES_URL);
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('after success the file is read again and the notice names the posted entry', async () => {
+    const before = taxFile();
+    const notice = await decide(planB({ outcome: 'reclassification_posted', entry_id: NEW_ENTRY }), () =>
+      taxFile({
+        in_tax_review: false,
+        open_conditions: [],
+        entry_chain: [
+          ...before.entry_chain,
+          { ...before.entry_chain[0], id: NEW_ENTRY, role: 'reclassification', entry_number: 43 },
+        ],
+      }),
+    );
+    await waitFor(() =>
+      expect(notice).toHaveTextContent('Decision recorded. Entry JE-0043 was posted.'),
+    );
+    expect(fileReads()).toHaveLength(2);
+    expect(post).toHaveBeenCalledTimes(2);
+    expect(post.mock.calls[1][0]).toBe(FX_FILE_URL);
+    // The reloaded file is no longer in tax review: the form is gone.
+    await waitFor(() =>
+      expect(screen.queryByRole('heading', { name: 'Decision' })).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText('Not in tax review')).toBeInTheDocument();
+  });
+
+  it('a decision that posted nothing says so', async () => {
+    const notice = await decide(planB({ entry_id: null, reversal_entry_id: null }), () =>
+      taxFile({ in_tax_review: false, open_conditions: [] }),
+    );
+    expect(notice).toHaveTextContent('Decision recorded. No entry was posted.');
+    await waitFor(() => expect(fileReads()).toHaveLength(2));
+  });
+
+  it('names the entry that reversed the earlier adjustment', async () => {
+    const before = taxFile();
+    const notice = await decide(
+      planB({ outcome: 'adjustment_reversed', entry_id: null, reversal_entry_id: NEW_ENTRY }),
+      () =>
+        taxFile({
+          in_tax_review: false,
+          open_conditions: [],
+          entry_chain: [
+            ...before.entry_chain,
+            { ...before.entry_chain[0], id: NEW_ENTRY, role: 'reversal', entry_number: 44 },
+          ],
+        }),
+    );
+    await waitFor(() =>
+      expect(notice).toHaveTextContent(
+        'Decision recorded. Entry JE-0044 reversed the earlier adjustment.',
+      ),
+    );
+    expect(notice).not.toHaveTextContent('No entry was posted.');
+  });
+
+  it('a receipt reload keeps what the reviewer typed', async () => {
+    serve(() => taxFile({ receipt: { url: FX_SIGNED_URL, expires_in: 0, content_type: 'image/png' } }));
+    renderPage();
+    const card = await section('Decision');
+    fireEvent.change(within(card).getByLabelText('Reason'), {
+      target: { value: 'Invented reason, kept' },
+    });
+    fireEvent.click(within(await section('Receipt')).getByRole('button', { name: 'Reload' }));
+    await waitFor(() => expect(fileReads()).toHaveLength(2));
+    expect(within(card).getByLabelText('Reason')).toHaveValue('Invented reason, kept');
   });
 });
 
