@@ -67,6 +67,9 @@ import { InternalClients } from '@/views/internal/InternalClients';
 import { InternalClientEntries } from '@/views/internal/InternalClientEntries';
 import { InternalClientCards } from '@/views/internal/InternalClientCards';
 import { InternalClientNoDocumentAccounts } from '@/views/internal/InternalClientNoDocumentAccounts';
+import { InternalClientAccountPurposes } from '@/views/internal/InternalClientAccountPurposes';
+import { InternalTaxReview } from '@/views/internal/InternalTaxReview';
+import { InternalTaxReviewFile } from '@/views/internal/InternalTaxReviewFile';
 import { InternalClientReports } from '@/views/internal/InternalClientReports';
 import { InternalClientAccountLedger } from '@/views/internal/InternalClientAccountLedger';
 import { InternalStaff } from '@/views/internal/InternalStaff';
@@ -230,6 +233,10 @@ const App: FC = () => {
         <Route path="/internal/queue"       element={<RequireInternalStaff><InternalQueue /></RequireInternalStaff>} />
         {/* S87 B2b (O-S87-8): the staff bank-rows screen. */}
         <Route path="/internal/bank-rows"   element={<RequireInternalStaff><InternalBankRows /></RequireInternalStaff>} />
+        {/* S98 P1d (U1): bank rows waiting for a tax decision, and one row's
+            tax-review file. Staff only — reviewers and super users. */}
+        <Route path="/internal/tax-review"  element={<RequireInternalStaff><InternalTaxReview /></RequireInternalStaff>} />
+        <Route path="/internal/tax-review/:rowId" element={<RequireInternalStaff><InternalTaxReviewFile /></RequireInternalStaff>} />
         <Route path="/internal/clients"     element={<RequireInternalStaff><InternalClients /></RequireInternalStaff>} />
         <Route path="/internal/clients/:orgId/entries" element={<RequireInternalStaff><InternalClientEntries /></RequireInternalStaff>} />
         {/* O-S31-1 C4: per-org drill-in, same shape as the s28 entries surface
@@ -239,6 +246,9 @@ const App: FC = () => {
         {/* Release C2 U7 (O-S88-4): the org's "no document" accounts — a per-org
             drill-in like the cards above, for reviewers and super users. */}
         <Route path="/internal/clients/:orgId/no-document-accounts" element={<RequireInternalStaff><InternalClientNoDocumentAccounts /></RequireInternalStaff>} />
+        {/* S98 P1d (U7): the org's account purposes — a per-org drill-in like
+            the two above, for reviewers and super users. */}
+        <Route path="/internal/clients/:orgId/account-purposes" element={<RequireInternalStaff><InternalClientAccountPurposes /></RequireInternalStaff>} />
         {/* S69 E5-UI / E8 (O-S69-16): a client's reports + account drill-down as
             seen by staff — read-only, org-addressed staff endpoints only. The
             router ranks by specificity, so declaration order is not relied on. */}

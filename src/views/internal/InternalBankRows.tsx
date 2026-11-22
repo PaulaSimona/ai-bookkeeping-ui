@@ -85,6 +85,7 @@
 // says so, names the plan's rows and reads the list again. With no answer at
 // all (a lost connection) the dialog stays open, to be confirmed again.
 import { type FC, type ReactNode, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import { ActionRefusal, noticeCls } from '@/components/internal/ActionRefusal';
 import {
@@ -1042,6 +1043,20 @@ const DetailPane: FC<{
           </dl>
 
           <BankReportPanel row={row} />
+
+          {/* S98 P1d (U1): a row with open tax conditions has a tax-review
+              file. Only the server's list decides; a row without one (or a
+              read that does not carry it) shows no link. */}
+          {(row.tax_condition_kinds ?? []).length > 0 && (
+            <div>
+              <Link
+                to={`/internal/tax-review/${row.id}`}
+                className="text-sm text-[#4DA6FF] hover:underline"
+              >
+                Open the tax-review file →
+              </Link>
+            </div>
+          )}
 
           {match && (
             <section aria-label={matchHeading}>
