@@ -103,6 +103,13 @@ export interface BankRow {
   // Where the ticket stood before a report sent it to review.
   routed_from_status: string | null;
   routed_from_reason: string | null;
+  // S98 P1d (backend P1d): the row's OPEN tax conditions. The kinds are the
+  // server's codes, sorted; an empty list is a row with nothing to decide.
+  // Optional here because a list read before P1d does not carry them.
+  tax_condition_kinds?: string[];
+  tax_condition_raised_at?: string | null; // held since
+  tax_matched_document_id?: number | null;
+  tax_evidence_summary?: string | null;
 }
 
 // The routing reason of a row intake flagged as a possible copy
