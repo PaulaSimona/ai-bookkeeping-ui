@@ -105,6 +105,8 @@ export const InternalClients: FC = () => {
                     <th className="py-2 px-5 font-medium text-right">Cards</th>
                     {/* Release C2 U7 (O-S88-4): the org's "no document" accounts. */}
                     <th className="py-2 px-5 font-medium text-right">No-document accounts</th>
+                    {/* S98 P1d (U7, Amendment B): what each of the org's accounts is for. */}
+                    <th className="py-2 px-5 font-medium text-right">Account purposes</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -155,6 +157,18 @@ export const InternalClients: FC = () => {
                           className="text-white/60 hover:text-white"
                         >
                           No-document accounts →
+                        </Link>
+                      </td>
+                      {/* S98 P1d: same stopPropagation Link pattern; the org
+                          name rides along for the page's subtitle. */}
+                      <td className="py-2.5 px-5 text-right">
+                        <Link
+                          to={`/internal/clients/${o.id}/account-purposes`}
+                          state={{ orgName: o.name }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-white/60 hover:text-white"
+                        >
+                          Account purposes →
                         </Link>
                       </td>
                     </tr>

@@ -303,3 +303,23 @@ export const effectiveTotal = (entry: EntryTotalsSource): string | null =>
 // strings whenever they are present.
 export const formatEntryNumber = (entryNumber: number | null | undefined): string | null =>
   entryNumber == null ? null : `JE-${String(entryNumber).padStart(4, '0')}`;
+
+// The source of an entry as a screen names it (S98 P1d item 8, P-7). A
+// customer — the owner and their accountant — reads both staff sources as one
+// word, "Correction": which staff route posted an entry is not theirs to see.
+// Staff read the two apart. Every other source reads the same in both lanes.
+// DISPLAY ONLY: logic keeps testing the raw value (Void on
+// accountant_adjustment), never this label.
+export type SourceLane = 'customer' | 'staff';
+
+const CUSTOMER_SOURCE_LABELS = new Map<string, string>([
+  ['staff_correction', 'Correction'],
+  ['staff_reclassification', 'Correction'],
+]);
+
+export const entrySourceLabel = (source: string, lane: SourceLane = 'customer'): string => {
+  const customerLabel = lane === 'customer' ? CUSTOMER_SOURCE_LABELS.get(source) : undefined;
+  if (customerLabel !== undefined) return customerLabel;
+  const text = source.replace(/_/g, ' ').trim();
+  return text.length === 0 ? '—' : text.charAt(0).toUpperCase() + text.slice(1);
+};

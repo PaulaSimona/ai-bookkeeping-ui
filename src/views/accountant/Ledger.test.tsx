@@ -354,3 +354,41 @@ describe('accountant ledger — actions on the live entry only (D-S85-13)', () =
     expect(await screen.findByText('Not found.')).toBeInTheDocument();
   });
 });
+
+// S98 P1d item 8 (P-7): the accountant is a customer lane — both staff sources
+// read "Correction", in the list and in the drawer.
+describe('accountant ledger — the source of a staff entry', () => {
+  const rowOf = (description: string) => screen.getByText(description).parentElement as HTMLElement;
+
+  it('the list badge reads "Correction" for both; another source keeps its text', async () => {
+    serve([
+      entry({ description: 'Invented correction', source: 'staff_correction' }),
+      entry({ id: 'e-91', entry_number_display: 'JE-0091', description: 'Invented reclassification', source: 'staff_reclassification' }),
+      entry({ id: 'e-92', entry_number_display: 'JE-0092', description: 'Invented adjustment', source: 'accountant_adjustment' }),
+    ]);
+    renderPage();
+    await screen.findByText('Invented correction');
+
+    expect(within(rowOf('Invented correction')).getByText('Correction')).toBeInTheDocument();
+    expect(within(rowOf('Invented reclassification')).getByText('Correction')).toBeInTheDocument();
+    expect(within(rowOf('Invented adjustment')).getByText('Accountant adjustment')).toBeInTheDocument();
+    expect(screen.queryByText(/staff (correction|reclassification)/i)).not.toBeInTheDocument();
+  });
+
+  it('the drawer badge reads "Correction" too', async () => {
+    serve([entry({ description: 'Invented reclassification', source: 'staff_reclassification' })]);
+    renderPage();
+    await userEvent.click(await screen.findByText('Invented reclassification'));
+
+    // The row's own badge and the drawer header's (the one that also carries
+    // the status badge): both "Correction".
+    const drawerHeader = () =>
+      screen.getAllByText('JE-0068')
+        .map((el) => el.parentElement as HTMLElement)
+        .find((el) => within(el).queryByText('Posted') !== null);
+    await waitFor(() => expect(drawerHeader()).toBeDefined());
+    expect(within(drawerHeader() as HTMLElement).getByText('Correction')).toBeInTheDocument();
+    expect(screen.getAllByText('Correction')).toHaveLength(2);
+    expect(screen.queryByText(/staff (correction|reclassification)/i)).not.toBeInTheDocument();
+  });
+});

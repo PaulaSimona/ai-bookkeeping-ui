@@ -1,7 +1,7 @@
 // Staff account-ledger drill-down (UI2-U3, O-S84-1 / D-S85-13): the drawer
 // shows the entry's chain, "Open JE-xxxx" re-targets it through the STAFF
 // detail endpoint, and the staff writes appear on the live entry only.
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
@@ -181,5 +181,54 @@ describe('staff account ledger — writes on the live entry only (D-S85-13)', ()
     expect(urls()).toContain(DETAIL_URL('e-102'));
     // The staff lane never reads an entry through the owner endpoint.
     expect(urls().filter((url) => url.startsWith('/api/accounting/entries/'))).toEqual([]);
+  });
+});
+
+// S98 P1d item 8 (P-7): staff read the two staff sources apart.
+describe('staff account ledger — the source of a staff entry', () => {
+  beforeEach(() => {
+    const ledger = {
+      ...LEDGER,
+      lines: {
+        ...LEDGER.lines,
+        results: [
+          line({ entry_id: 'e-201', entry_number: 201, description: 'Invented correction line', source: 'staff_correction' }),
+          line({ entry_id: 'e-202', entry_number: 202, description: 'Invented reclassification line', source: 'staff_reclassification' }),
+        ],
+      },
+    };
+    const reclassified = detail({
+      id: 'e-202',
+      entry_number: 202,
+      entry_number_display: 'JE-0202',
+      source: 'staff_reclassification',
+      display_status: 'posted',
+      corrected_by: null,
+      live_entry: { id: 'e-202', number: 'JE-0202' },
+      chain_root: { id: 'e-202', number: 'JE-0202' },
+      chain: [{ id: 'e-202', number: 'JE-0202', date: '2026-09-30', role: 'original', display_status: 'posted' }],
+    });
+    get.mockImplementation(async (url) => {
+      if (url === LEDGER_URL) return { status: 200, data: ledger };
+      if (url === DETAIL_URL('e-202')) return { status: 200, data: reclassified };
+      return { status: 200, data: { count: 0, next: null, previous: null, results: [] } };
+    });
+  });
+
+  const sourceCell = (description: string): HTMLElement => {
+    const row = screen.getByText(description).closest('tr') as HTMLElement;
+    return within(row).getAllByRole('cell')[4];
+  };
+
+  it('the Source column and the drawer keep the distinct values', async () => {
+    renderPage();
+    await screen.findByText('Invented correction line');
+
+    expect(sourceCell('Invented correction line')).toHaveTextContent(/^Staff correction$/);
+    expect(sourceCell('Invented reclassification line')).toHaveTextContent(/^Staff reclassification$/);
+
+    await userEvent.click(screen.getByText('Invented reclassification line'));
+    const header = (await screen.findAllByText('JE-0202'))[0].parentElement as HTMLElement;
+    expect(within(header).getByText('Staff reclassification')).toBeInTheDocument();
   });
 });

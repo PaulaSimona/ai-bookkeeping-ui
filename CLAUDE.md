@@ -17,17 +17,17 @@ This is the UI for a production fintech SaaS with live users and real Stripe pay
 
 ## Deploy Model (important)
 
-This repo is **not** watched by Railway directly. The backend's Dockerfile clones it during build. To ship a frontend change:
+This repo is **not** watched by Railway directly. The backend's Dockerfile fetches **one exact commit** of it during the build: the commit named by the Railway Variable `UI_SHA` (O-S48-2). A push or a merge here changes nothing in production until `UI_SHA` is changed. To release a frontend change:
 
-1. Push to this repo (`ai-bookkeeping-ui`, branch `main`).
-2. Push a trivial commit to the backend repo (`ai-bookkeeping`) to trigger a Railway build.
-3. Increment `CACHE_BUST` in Railway Variables — this forces a fresh clone of this repo during the Docker build (otherwise Docker caches the old frontend).
+1. Merge into this repo's `main` (after the owner's yes). Nothing changes in production.
+2. In Railway Variables, read the live `UI_SHA` and confirm it is the SHA you expect to replace.
+3. Set `UI_SHA` to the **full 40-character SHA of the UI merge commit** and redeploy the backend service.
 
-Skipping step 3 means your change won't appear in production.
+`CACHE_BUST` is **retired** (O-S48-2) — do not set it, increment it or mention it in a release plan. No trivial backend commit is needed: changing `UI_SHA` is what makes the build fetch a different frontend.
 
-**CACHE_BUST discipline:** always **read the live value in Railway Variables and increment that** — do NOT trust the number written in any marketing/planning `.md` doc; those drift out of sync (conflicting values have shown up). After deploy, **hard-refresh (Cmd+Shift+R) and smoke-test the live homepage** before relying on the change — and before clicking any external "Verify" button on a directory/badge site.
+**UI_SHA discipline:** always **read the live value in Railway Variables** — do NOT trust a SHA written in any marketing/planning `.md` doc; those drift out of sync. Use the full 40 characters, never a short SHA or a branch name. After the deploy, **hard-refresh (Cmd+Shift+R) and smoke-test the live homepage** before relying on the change — and before clicking any external "Verify" button on a directory/badge site.
 
-**End-of-task deliverables:** at the end of a build task, provide (1) a ready-to-use commit message and (2) a post-deploy verification checklist (push → backend trigger → CACHE_BUST bump → wait for green → live smoke test).
+**End-of-task deliverables:** at the end of a build task, provide (1) a ready-to-use commit message and (2) a release checklist (merge → read the live `UI_SHA` → set it to the full merge SHA and redeploy → wait for green → live smoke test).
 
 ---
 

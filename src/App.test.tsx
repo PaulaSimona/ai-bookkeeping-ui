@@ -33,6 +33,16 @@ vi.mock('@/views/internal/InternalBankRows', () => ({
 vi.mock('@/views/internal/InternalClientNoDocumentAccounts', () => ({
   InternalClientNoDocumentAccounts: () => <p>no-document accounts page</p>,
 }));
+// S98 P1d: the tax-review list, one row's file, and a client's account purposes.
+vi.mock('@/views/internal/InternalTaxReview', () => ({
+  InternalTaxReview: () => <p>tax review list page</p>,
+}));
+vi.mock('@/views/internal/InternalTaxReviewFile', () => ({
+  InternalTaxReviewFile: () => <p>tax review file page</p>,
+}));
+vi.mock('@/views/internal/InternalClientAccountPurposes', () => ({
+  InternalClientAccountPurposes: () => <p>account purposes page</p>,
+}));
 vi.mock('@/views/dashboard', () => ({ Dashboard: () => <p>client dashboard page</p> }));
 vi.mock('@/views/settings', () => ({ Settings: () => <p>settings page</p> }));
 vi.mock('@/views/reviewer', () => ({
@@ -174,5 +184,63 @@ describe('/internal/clients/:orgId/no-document-accounts', () => {
 
     expect(await screen.findByText('no-document accounts page')).toBeInTheDocument();
     expect(location()).toBe(path);
+  });
+});
+
+// S98 P1d (U1, U7): the tax-review list, a row's tax-review file and a client's
+// account purposes are pages of the internal console. Reviewers and super
+// users reach each; nobody else does — a customer never lands on one.
+describe('S98 P1d staff routes', () => {
+  const ROUTES: [string, string][] = [
+    ['/internal/tax-review', 'tax review list page'],
+    ['/internal/tax-review/33333333-3333-4333-8333-333333333333', 'tax review file page'],
+    [
+      '/internal/clients/11111111-1111-4111-8111-111111111111/account-purposes',
+      'account purposes page',
+    ],
+  ];
+  const staffAs = (isSuperUser: boolean) =>
+    get.mockImplementation((url) =>
+      Promise.resolve(
+        url === '/api/accounting/staff/me/'
+          ? {
+              status: 200,
+              data: {
+                is_staff_member: true,
+                is_super_user: isSuperUser,
+                role_type: isSuperUser ? 'super_user' : 'reviewer',
+              },
+            }
+          : { status: 404, data: {} },
+      ),
+    );
+
+  it.each(ROUTES)('%s opens for a reviewer', async (path, page) => {
+    staffAs(false);
+    renderAt(path);
+    expect(await screen.findByText(page)).toBeInTheDocument();
+    expect(location()).toBe(path);
+  });
+
+  it.each(ROUTES)('%s opens for a super user', async (path, page) => {
+    staffAs(true);
+    renderAt(path);
+    expect(await screen.findByText(page)).toBeInTheDocument();
+    expect(location()).toBe(path);
+  });
+
+  it.each(ROUTES)('%s sends a visitor who is not internal staff to the client app', async (path, page) => {
+    get.mockResolvedValue({ status: 404, data: { detail: 'Not found.' } });
+    renderAt(path);
+    expect(await screen.findByText('client dashboard page')).toBeInTheDocument();
+    expect(location()).toBe('/dashboard');
+    expect(screen.queryByText(page)).not.toBeInTheDocument();
+  });
+
+  it.each(ROUTES)('%s stays closed when the staff check fails', async (path, page) => {
+    get.mockResolvedValue({ status: 500, data: {} });
+    renderAt(path);
+    expect(await screen.findByText('client dashboard page')).toBeInTheDocument();
+    expect(screen.queryByText(page)).not.toBeInTheDocument();
   });
 });

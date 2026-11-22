@@ -1,7 +1,7 @@
 // Owner account-ledger drill-down (UI2-U3, O-S84-1): the drawer gets the
 // registry fields, shows the entry's chain, and "Open JE-xxxx" re-targets it
 // through the owner detail endpoint. Read-only: no writes on any entry.
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
@@ -165,5 +165,72 @@ describe('owner account ledger — the drawer', () => {
 
     expect(screen.queryByRole('button', { name: 'Adjust this entry' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Void entry' })).not.toBeInTheDocument();
+  });
+});
+
+// S98 P1d item 8 (P-7): an owner reads both staff sources as "Correction".
+describe('owner account ledger — the source of a staff entry', () => {
+  const staffLine = (id: string, number: number, description: string, source: string) => ({
+    ...LEDGER.lines.results[0],
+    entry_id: id,
+    entry_number: number,
+    description,
+    source,
+  });
+
+  beforeEach(() => {
+    const ledger = {
+      ...LEDGER,
+      lines: {
+        ...LEDGER.lines,
+        count: 3,
+        results: [
+          staffLine('e-201', 201, 'Invented correction line', 'staff_correction'),
+          staffLine('e-202', 202, 'Invented reclassification line', 'staff_reclassification'),
+          staffLine('e-203', 203, 'Invented adjustment line', 'accountant_adjustment'),
+        ],
+      },
+    };
+    const reclassified = detail({
+      id: 'e-202',
+      entry_number: 202,
+      entry_number_display: 'JE-0202',
+      source: 'staff_reclassification',
+      display_status: 'posted',
+      corrected_by: null,
+      live_entry: { id: 'e-202', number: 'JE-0202' },
+      chain_root: { id: 'e-202', number: 'JE-0202' },
+      chain: [{ id: 'e-202', number: 'JE-0202', date: '2026-09-30', role: 'original', display_status: 'posted' }],
+    });
+    get.mockImplementation(async (url) => {
+      if (url === LEDGER_URL) return { status: 200, data: ledger };
+      if (url === DETAIL_URL('e-202')) return { status: 200, data: reclassified };
+      return { status: 404, data: { detail: 'Not found.' } };
+    });
+  });
+
+  const sourceCell = (description: string): HTMLElement => {
+    const row = screen.getByText(description).closest('tr') as HTMLElement;
+    return within(row).getAllByRole('cell')[4];
+  };
+
+  it('the Source column reads "Correction" for both; another source keeps its text', async () => {
+    renderPage();
+    await screen.findByText('Invented correction line');
+
+    expect(sourceCell('Invented correction line')).toHaveTextContent(/^Correction$/);
+    expect(sourceCell('Invented reclassification line')).toHaveTextContent(/^Correction$/);
+    expect(sourceCell('Invented adjustment line')).toHaveTextContent(/^Accountant adjustment$/);
+    expect(screen.queryByText(/staff/i)).not.toBeInTheDocument();
+  });
+
+  it('the drawer badge reads "Correction" too', async () => {
+    renderPage();
+    await userEvent.click(await screen.findByText('Invented reclassification line'));
+
+    // Scoped to the drawer's header: the chain panel prints roles of its own.
+    const header = (await screen.findAllByText('JE-0202'))[0].parentElement as HTMLElement;
+    expect(within(header).getByText('Correction')).toBeInTheDocument();
+    expect(screen.queryByText(/staff/i)).not.toBeInTheDocument();
   });
 });

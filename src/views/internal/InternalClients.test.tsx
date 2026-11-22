@@ -74,8 +74,9 @@ describe('assigned clients', () => {
       'Reports',
       'Cards',
       'No-document accounts',
+      'Account purposes',
     ]);
-    expect(within(acme).getAllByRole('cell')).toHaveLength(5);
+    expect(within(acme).getAllByRole('cell')).toHaveLength(6);
 
     // The link goes to that client's page — not to its entries, which is
     // where a click anywhere else on the row goes.
