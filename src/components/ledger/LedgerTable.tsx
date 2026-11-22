@@ -13,7 +13,7 @@ import { type AccountantLedgerRow } from '@/views/accountant/hooks/useAccountant
 import { Spinner } from '@/views/settings/ui';
 import { formatIsoDate } from '@/utils/dates';
 import { type LedgerLine } from '@/hooks/useReports';
-import { type EntryRef } from '@/utils/entryStatus';
+import { entrySourceLabel, type EntryRef, type SourceLane } from '@/utils/entryStatus';
 import { fmtMoney, MONO } from '@/views/accounting/reports/format';
 
 export const humanize = (s: string): string => {
@@ -50,6 +50,9 @@ export interface LedgerTableProps {
   // UI2-U3: threaded to EntryDrawer — "Open JE-xxxx" in the chain panel. The
   // page re-targets `entry` through its lane's detail endpoint.
   onOpenEntry?: (entry: EntryRef) => void;
+  // S98 P1d (P-7): how the Source column and the drawer name a staff source.
+  // Absent → the customer label ("Correction"); a staff page passes "staff".
+  lane?: SourceLane;
 }
 
 export const LedgerTable: FC<LedgerTableProps> = ({
@@ -68,6 +71,7 @@ export const LedgerTable: FC<LedgerTableProps> = ({
   drawerActions = null,
   documentUrl,
   onOpenEntry,
+  lane = 'customer',
 }) => (
             <Card>
               {lines.length === 0 ? (
@@ -104,7 +108,7 @@ export const LedgerTable: FC<LedgerTableProps> = ({
                               <td className={`${cellCls} ${MONO}`}>{l.entry_number != null ? `#${l.entry_number}` : '—'}</td>
                               <td className="truncate px-4 py-3 text-gray-700" title={l.description}>{l.description || '—'}</td>
                               <td className={`${cellCls} truncate`} title={l.counterparty?.name ?? '—'}>{l.counterparty?.name ?? '—'}</td>
-                              <td className={`${cellCls} truncate`} title={humanize(l.source)}>{humanize(l.source)}</td>
+                              <td className={`${cellCls} truncate`} title={entrySourceLabel(l.source, lane)}>{entrySourceLabel(l.source, lane)}</td>
                               <td className={moneyCls}>{fmtMoney(l.debit)}</td>
                               <td className={moneyCls}>{fmtMoney(l.credit)}</td>
                               <td className={`${moneyCls} font-semibold`}>{fmtMoney(l.running_balance)}</td>
@@ -125,6 +129,7 @@ export const LedgerTable: FC<LedgerTableProps> = ({
                                       readOnly={readOnly}
                                       documentUrl={documentUrl}
                                       onOpenEntry={onOpenEntry}
+                                      lane={lane}
                                       adjustOpen={false}
                                       onToggleAdjust={() => undefined}
                                       onPosted={() => undefined}

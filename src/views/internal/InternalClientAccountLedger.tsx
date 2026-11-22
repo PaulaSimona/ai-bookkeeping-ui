@@ -166,6 +166,7 @@ export const InternalClientAccountLedger: FC = () => {
               />
             ) : null}
             documentUrl={() => null}   // O-S69-17: no owner-lane call from the staff drawer
+            lane="staff"   // P-7: staff read the two staff sources apart
           />
 
           <Link to={backHref} state={linkState} className="inline-block text-[13px] font-medium text-[#4DA6FF] hover:underline">

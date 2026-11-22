@@ -19,11 +19,13 @@ import {
   canAct,
   effectiveTotals,
   entryDisplayStatus,
+  entrySourceLabel,
   entryStatusLabel,
   isOwnLine,
   isReversingLine,
   nonLiveNote,
   type EntryRef,
+  type SourceLane,
 } from '@/utils/entryStatus';
 
 const CAD = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' });
@@ -37,11 +39,6 @@ const fmtDateTime = (iso: string): string =>
   });
 
 const MONO = 'font-[var(--font-family-mono)] tabular-nums';
-
-const humanizeSource = (s: string): string => {
-  const t = s.replace(/_/g, ' ').trim();
-  return t.length === 0 ? '—' : t.charAt(0).toUpperCase() + t.slice(1);
-};
 
 const statusVariant = (status: string): 'neutral' | 'info' | 'success' | 'voided' => {
   if (status === 'posted') return 'success';
@@ -70,6 +67,9 @@ interface EntryDrawerProps {
   // read — it re-targets this drawer through its lane's detail endpoint.
   // Absent → the live entry is named but not linked.
   onOpenEntry?: (entry: EntryRef) => void;
+  // S98 P1d (P-7): how the source badge names a staff source. Absent → the
+  // customer label ("Correction"); a staff surface passes "staff".
+  lane?: SourceLane;
 }
 
 const defaultDocumentUrl = (docId: string): string =>
@@ -77,7 +77,7 @@ const defaultDocumentUrl = (docId: string): string =>
 
 export const EntryDrawer: FC<EntryDrawerProps> = ({
   row, adjustOpen, onToggleAdjust, onPosted, onVoided, readOnly = false,
-  documentUrl = defaultDocumentUrl, onOpenEntry,
+  documentUrl = defaultDocumentUrl, onOpenEntry, lane = 'customer',
 }) => {
   const docUrl = row.source_document_id == null ? null : documentUrl(String(row.source_document_id));
   const { showToast } = useToast();
@@ -206,7 +206,7 @@ export const EntryDrawer: FC<EntryDrawerProps> = ({
         <span className="text-gray-300">·</span>
         <span className="text-[13px] text-gray-600">{fmtDate(row.entry_date)}</span>
         <span className="text-gray-300">·</span>
-        <StatusBadge variant="neutral">{humanizeSource(row.source)}</StatusBadge>
+        <StatusBadge variant="neutral">{entrySourceLabel(row.source, lane)}</StatusBadge>
         {/* D-S84-4: the registry's display status — Posted, Corrected, Reversed
             (info tone) or Reversal — labelled by the shared rule module. No
             review flag is ever shown here. */}

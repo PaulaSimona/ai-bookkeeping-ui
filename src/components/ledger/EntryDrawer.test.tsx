@@ -1,6 +1,6 @@
 // EntryDrawer — the shared entry panel (accountant ledger and both
 // account-ledger drill-downs).
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import api from '@/utils/api';
@@ -364,5 +364,54 @@ describe('EntryDrawer — "Adjust this entry" seed rows (UI2-U8, F-S85-15)', () 
       '5100 — Office Supplies',
       '1000 — Cash',
     ]);
+  });
+});
+
+// S98 P1d item 8 (P-7): the source badge. Scoped to the drawer's header — the
+// chain panel also prints "Correction", as a role.
+describe('EntryDrawer — the source badge', () => {
+  const header = (): HTMLElement => screen.getAllByText('JE-0068')[0].parentElement as HTMLElement;
+
+  it.each(['staff_correction', 'staff_reclassification'])(
+    'with no lane, %s reads "Correction"',
+    (source) => {
+      renderDrawer(row({ source }));
+
+      expect(within(header()).getByText('Correction')).toBeInTheDocument();
+      expect(within(header()).queryByText(/staff/i)).not.toBeInTheDocument();
+    },
+  );
+
+  it('with lane="staff", the two staff sources read apart', () => {
+    const base = {
+      adjustOpen: false,
+      onToggleAdjust: vi.fn(),
+      onPosted: vi.fn(),
+      readOnly: true,
+    };
+    const first = render(<EntryDrawer row={row({ source: 'staff_correction' })} lane="staff" {...base} />);
+    expect(within(header()).getByText('Staff correction')).toBeInTheDocument();
+    first.unmount();
+
+    render(<EntryDrawer row={row({ source: 'staff_reclassification' })} lane="staff" {...base} />);
+    expect(within(header()).getByText('Staff reclassification')).toBeInTheDocument();
+  });
+
+  it('every other source keeps its text', () => {
+    renderDrawer(row({ source: 'accountant_adjustment' }));
+
+    expect(within(header()).getByText('Accountant adjustment')).toBeInTheDocument();
+  });
+
+  it('Void is still keyed on the raw source, never on the label', () => {
+    // The current user's own posted adjustment: Void is offered.
+    const own = renderDrawer(row({ source: 'accountant_adjustment', created_by: 'user-1' }));
+    expect(screen.getByRole('button', { name: 'Void entry' })).toBeInTheDocument();
+    own.unmount();
+
+    // The same entry with a staff source: no Void, whatever the badge reads.
+    renderDrawer(row({ source: 'staff_correction', created_by: 'user-1' }));
+    expect(within(header()).getByText('Correction')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Void entry' })).not.toBeInTheDocument();
   });
 });

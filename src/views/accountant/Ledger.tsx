@@ -23,6 +23,7 @@ import {
   canAct,
   effectiveTotal,
   entryDisplayStatus,
+  entrySourceLabel,
   entryStatusLabel,
 } from '@/utils/entryStatus';
 
@@ -33,13 +34,6 @@ const fmtDate = (iso: string): string => formatIsoDate(iso);
 
 const MONO = 'font-[var(--font-family-mono)] tabular-nums';
 const GRID = 'grid grid-cols-[1fr_0.8fr_2.6fr_1fr_0.9fr_1.1fr] items-center gap-4';
-
-// Humanize the raw source enum for display — a calm neutral badge; the raw value
-// never leaks beyond this transform.
-const humanizeSource = (s: string): string => {
-  const t = s.replace(/_/g, ' ').trim();
-  return t.length === 0 ? '—' : t.charAt(0).toUpperCase() + t.slice(1);
-};
 
 const PageShell: FC<{ children: ReactNode }> = ({ children }) => (
   <div className="min-h-screen bg-gray-50 text-gray-900">
@@ -229,7 +223,7 @@ const LedgerInner: FC = () => {
                           <StatusBadge variant="voided">Voided</StatusBadge>
                         ) : (
                           <>
-                            <StatusBadge variant="neutral">{humanizeSource(row.source)}</StatusBadge>
+                            <StatusBadge variant="neutral">{entrySourceLabel(row.source)}</StatusBadge>
                             {/* D-S84-4: an entry that is no longer plain
                                 "Posted" says what it is — Corrected, Reversed
                                 (info tone, as the drawer) or Reversal. */}
